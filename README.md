@@ -1,14 +1,12 @@
 # MWFinance
 
-Personal finance PWA — links your bank via **Enable Banking**, pulls transactions,
+Personal finance PWA - links your bank via **Enable Banking**, pulls transactions,
 auto-categorizes them (rules → Gemini → learned merchant cache), tracks per-category
 monthly budgets, and pushes budget alerts to your phone via **ntfy**.
 
 **Stack:** Next.js 15 (App Router) · Drizzle ORM · Neon Postgres · jose (RS256 JWT) ·
 Gemini · ntfy · Tailwind · deploy on Vercel.
 
-> This VM that generated the code is air-gapped — run all `npm`/build commands on your
-> Windows host (PowerShell).
 
 ---
 
