@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0b0f14;
+  color: #e5edf5;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-edge bg-panel p-5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-edge bg-panel2 px-4 py-2 text-sm font-medium text-white transition hover:border-accent/60 hover:bg-panel disabled:opacity-40;
+  }
+  .btn-accent {
+    @apply border-accent/40 bg-accent/10 text-accent hover:bg-accent/20;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-edge bg-panel2 px-2.5 py-1 text-xs text-muted;
+  }
+  .input {
+    @apply rounded-lg border border-edge bg-ink px-3 py-2 text-sm text-white outline-none focus:border-accent2/60;
+  }
+}
+
+/* progress bar fill uses inline width; smooth it */
+.bar-fill {
+  transition: width 300ms ease;
+}

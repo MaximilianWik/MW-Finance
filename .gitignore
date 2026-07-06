@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+build/
+next-env.d.ts.bak
+
+# env
+.env
+.env.local
+.env*.local
+
+# secrets — Enable Banking RSA private key
+*.pem
+private_key*
+keys/
+
+# drizzle
+drizzle/
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*
+.vercel
+.turbo
+*.tsbuildinfo
