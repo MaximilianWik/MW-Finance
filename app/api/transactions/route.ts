@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         flaggedReason: transactions.flaggedReason,
         categoryName: categories.name,
         categoryColor: categories.color,
-        recurring: sql<boolean>`exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant})`,
+        recurring: sql<number>`(exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant}))::int`,
       })
       .from(transactions)
       .leftJoin(categories, eq(transactions.categoryId, categories.id))
@@ -98,8 +98,9 @@ export async function GET(req: NextRequest) {
       .where(where),
   ]);
 
+  const transactionsOut = rows.map((r) => ({ ...r, recurring: Number(r.recurring) === 1 }));
   const tookMs = Math.round(performance.now() - t0);
-  return NextResponse.json({ transactions: rows, totals, tookMs });
+  return NextResponse.json({ transactions: transactionsOut, totals, tookMs });
 }
 
 // Manual category override + merchant-cache update.

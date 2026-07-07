@@ -167,3 +167,35 @@ export function MarkRecurring({ txId, merchant }: { txId: number; merchant: stri
     </button>
   );
 }
+
+
+/**
+ * Recurring indicator for ledger rows. Renders the [check] RECURRING tag as a
+ * button; clicking soft-deletes the recurring entry for that merchant so an
+ * accidental mark can be undone straight from the ledger.
+ */
+export function UnmarkRecurring({ merchant }: { merchant: string | null }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+
+  async function unmark() {
+    if (!merchant || busy) return;
+    if (!confirm(`Stop tracking "${merchant}" as recurring?`)) return;
+    await fetch(`/api/recurring?merchant=${encodeURIComponent(merchant)}`, {
+      method: "DELETE",
+    });
+    start(() => router.refresh());
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={unmark}
+      disabled={busy || !merchant}
+      title={merchant ? `Click to unmark "${merchant}" as recurring` : "recurring"}
+      className="tag tag-ok hover:border-danger hover:text-danger"
+    >
+      {"[\u2713] RECURRING"}
+    </button>
+  );
+}

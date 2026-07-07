@@ -104,7 +104,7 @@ export async function listTransactions(f: TxFilter = {}) {
       categoryId: transactions.categoryId,
       categorySource: transactions.categorySource,
       flaggedReason: transactions.flaggedReason,
-      recurring: sql<boolean>`exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant})`,
+      recurring: sql<number>`(exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant}))::int`,
     })
     .from(transactions)
     .where(where)
@@ -121,5 +121,8 @@ export async function listTransactions(f: TxFilter = {}) {
     .from(transactions)
     .where(where);
 
-  return { rows, totals };
+  // Coerce the exists()::int to a real boolean (the neon-http server path can
+  // otherwise hand back a truthy string for every row).
+  const mapped = rows.map((r) => ({ ...r, recurring: Number(r.recurring) === 1 }));
+  return { rows: mapped, totals };
 }

@@ -1,6 +1,6 @@
 import { krSigned, shortDate } from "@/lib/format";
 import { CategoryCommand, type CatOption } from "./CategoryCommand";
-import { MarkRecurring } from "./RecurringActions";
+import { MarkRecurring, UnmarkRecurring } from "./RecurringActions";
 
 export interface TxRowData {
   id: number;
@@ -41,9 +41,7 @@ export function TxRow({ tx, options }: { tx: TxRowData; options: CatOption[] }) 
           otherwise offer to mark DBIT rows as recurring. */}
       <td className="w-24 text-center">
         {tx.recurring ? (
-          <span className="tag tag-ok" title="Matches an active recurring payment">
-            {"[\u2713] RECURRING"}
-          </span>
+          <UnmarkRecurring merchant={tx.merchant} />
         ) : tx.direction === "DBIT" ? (
           <MarkRecurring txId={tx.id} merchant={displayName} />
         ) : null}

@@ -137,13 +137,18 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ recurring: updated });
 }
 
-/** Soft-delete: set active=false. */
+/** Soft-delete: set active=false. Accepts ?id= or ?merchant= (the ledger
+ *  unmark passes the normalized merchant since it has no recurring row id). */
 export async function DELETE(req: NextRequest) {
-  const id = new URL(req.url).searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const sp = new URL(req.url).searchParams;
+  const id = sp.get("id");
+  const merchant = sp.get("merchant");
+  if (!id && !merchant) {
+    return NextResponse.json({ error: "id or merchant required" }, { status: 400 });
+  }
   await db
     .update(recurringPayments)
     .set({ active: false, updatedAt: new Date() })
-    .where(eq(recurringPayments.id, Number(id)));
+    .where(id ? eq(recurringPayments.id, Number(id)) : eq(recurringPayments.merchant, merchant!));
   return NextResponse.json({ ok: true });
 }

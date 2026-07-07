@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { kr, krSigned, shortDate } from "@/lib/format";
 import { CategoryCommand, type CatOption } from "./CategoryCommand";
-import { MarkRecurring } from "./RecurringActions";
+import { MarkRecurring, UnmarkRecurring } from "./RecurringActions";
 
 interface TxRow {
   id: number;
@@ -301,9 +301,7 @@ export function LedgerPanel({ options, initialMonth = "" }: Props) {
                       </td>
                       <td className="w-24 text-center">
                         {t.recurring ? (
-                          <span className="tag tag-ok" title="Matches an active recurring payment">
-                            {"[\u2713] RECURRING"}
-                          </span>
+                          <UnmarkRecurring merchant={t.merchant} />
                         ) : t.direction === "DBIT" ? (
                           <MarkRecurring txId={t.id} merchant={displayName} />
                         ) : null}
