@@ -62,7 +62,6 @@ function daysLeftInMonth(month: string): number {
 interface CategoryState {
   categoryId: number;
   name: string;
-  emoji: string;
   base: number; // categories.budget_monthly (nullable → 0 treated as unbudgeted)
   adj: number; // sum(budget_adjustments.delta) for this month
   spent: number;
@@ -80,7 +79,6 @@ export async function loadCategoryState(month: string): Promise<CategoryState[]>
     .select({
       categoryId: categories.id,
       name: categories.name,
-      emoji: categories.emoji,
       base: sql<number | null>`${categories.budgetMonthly}::float`,
       spent: spentExpr,
     })
@@ -113,7 +111,6 @@ export async function loadCategoryState(month: string): Promise<CategoryState[]>
     return {
       categoryId: r.categoryId,
       name: r.name,
-      emoji: r.emoji,
       base,
       adj,
       spent: r.spent ?? 0,
@@ -208,7 +205,7 @@ export async function runAdaptiveRedistribution(
   });
 
   await sendNtfy(
-    `${target.emoji} ${target.name} +${kr(totalMoved)} · redistributed from ${moves
+    `${target.name} +${kr(totalMoved)} · redistributed from ${moves
       .map((m) => m.fromName)
       .join(", ")}`,
     {

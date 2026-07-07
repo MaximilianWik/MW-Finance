@@ -20,7 +20,6 @@ export interface SimulateInput {
 export interface SimulatedCategory {
   categoryId: number;
   name: string;
-  emoji: string;
   color: string;
   base: number;
   currentAdjust: number;
@@ -72,7 +71,6 @@ export async function simulate(input: SimulateInput): Promise<SimulateResult> {
     .select({
       categoryId: categories.id,
       name: categories.name,
-      emoji: categories.emoji,
       color: categories.color,
       base: sql<number | null>`${categories.budgetMonthly}::float`,
       spent: spentExpr,
@@ -105,7 +103,6 @@ export async function simulate(input: SimulateInput): Promise<SimulateResult> {
     return {
       categoryId: r.categoryId,
       name: r.name,
-      emoji: r.emoji,
       color: r.color,
       base,
       adj,
@@ -173,7 +170,6 @@ export async function simulate(input: SimulateInput): Promise<SimulateResult> {
     return {
       categoryId: c.categoryId,
       name: c.name,
-      emoji: c.emoji,
       color: c.color,
       base: c.base,
       currentAdjust: c.adj,

@@ -1,29 +1,69 @@
-import { getMonthlyBudgetStatus } from "@/lib/budget";
+import { getMonthlyBudgetStatus, getWeeklyBudgetStatus } from "@/lib/budget";
 import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
+import { BudgetBar } from "../ui/BudgetBar";
+import { Panel } from "../ui/Panel";
 import { getCategories } from "@/lib/queries";
+import { kr } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function BudgetsPage() {
-  const [cats, status] = await Promise.all([getCategories(), getMonthlyBudgetStatus()]);
+  const [cats, status, weekly] = await Promise.all([
+    getCategories(),
+    getMonthlyBudgetStatus(),
+    getWeeklyBudgetStatus(),
+  ]);
   const spentByCat = new Map(status.rows.map((r) => [r.categoryId, r.spent]));
 
   const rows: EditableCategory[] = cats.map((c) => ({
     id: c.id,
     name: c.name,
-    emoji: c.emoji,
     color: c.color,
     budgetMonthly: c.budgetMonthly,
+    budgetWeekly: c.budgetWeekly,
     spent: spentByCat.get(c.id) ?? 0,
   }));
 
+  const monthlyRows = status.rows.filter((r) => r.budget != null || r.spent > 0);
+
   return (
     <main className="flex flex-col gap-4">
-      <header>
-        <h1 className="text-xl font-semibold">Budgets</h1>
-        <p className="text-xs text-muted">{status.label} · edit monthly limits</p>
-      </header>
-      <BudgetEditor categories={rows} />
+      <Panel title="MONTHLY BUDGET" right={`${kr(status.totalSpent)} / ${kr(status.totalBudget)}`}>
+        <p className="mb-2 text-[0.7rem] uppercase tracking-term text-faint">{status.label}</p>
+        <div className="divide-y divide-grid">
+          {monthlyRows.map((r) => (
+            <BudgetBar key={r.categoryId} row={r} />
+          ))}
+        </div>
+      </Panel>
+
+      {weekly.rows.length > 0 && (
+        <Panel title="WEEKLY BUDGET" right={`${kr(weekly.totalSpent)} / ${kr(weekly.totalBudget)}`}>
+          <p className="mb-2 text-[0.7rem] uppercase tracking-term text-faint">{weekly.label}</p>
+          <div className="divide-y divide-grid">
+            {weekly.rows.map((r) => (
+              <BudgetBar
+                key={r.categoryId}
+                row={{
+                  categoryId: r.categoryId,
+                  name: r.name,
+                  color: r.color,
+                  budget: r.budget,
+                  baseBudget: r.budget,
+                  adjustment: 0,
+                  spent: r.spent,
+                  remaining: r.remaining,
+                  pct: r.pct,
+                }}
+              />
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      <Panel title="EDIT LIMITS">
+        <BudgetEditor categories={rows} />
+      </Panel>
     </main>
   );
 }

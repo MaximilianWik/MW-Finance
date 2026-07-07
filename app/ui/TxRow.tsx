@@ -1,5 +1,5 @@
 import { krSigned, shortDate } from "@/lib/format";
-import { CategorySelect, type CatOption } from "./CategorySelect";
+import { CategoryCommand, type CatOption } from "./CategoryCommand";
 
 export interface TxRowData {
   id: number;
@@ -9,24 +9,34 @@ export interface TxRowData {
   remittance: string | null;
   bookingDate: string | null;
   categoryId: number | null;
+  flaggedReason?: string | null;
 }
 
+/** One row of the terminal ledger table. Expects a <tbody> parent. */
 export function TxRow({ tx, options }: { tx: TxRowData; options: CatOption[] }) {
   const inflow = tx.signed >= 0;
+  const flagged = !!tx.flaggedReason;
   return (
-    <li className="flex items-center gap-3 border-b border-edge/60 py-3 last:border-0">
-      <div className="w-10 shrink-0 text-center text-[11px] text-muted">
-        {shortDate(tx.bookingDate)}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-white">
-          {tx.counterpartyName ?? tx.remittance ?? "Transaction"}
+    <tr className={flagged ? "bg-danger/5" : undefined}>
+      <td className="w-16 whitespace-nowrap text-muted">{shortDate(tx.bookingDate)}</td>
+      <td className="max-w-0">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-ink2">
+            {tx.counterpartyName ?? tx.remittance ?? "—"}
+          </span>
+          {flagged && (
+            <span className="tag tag-danger shrink-0" title={tx.flaggedReason ?? ""}>
+              [!] ANOMALY
+            </span>
+          )}
         </div>
-        <CategorySelect txId={tx.id} categoryId={tx.categoryId} options={options} />
-      </div>
-      <div className={`shrink-0 text-sm tabular-nums ${inflow ? "text-accent" : "text-white"}`}>
+      </td>
+      <td className="w-40">
+        <CategoryCommand txId={tx.id} categoryId={tx.categoryId} options={options} />
+      </td>
+      <td className={`w-28 text-right ${inflow ? "text-accent" : "text-ink2"}`}>
         {krSigned(tx.signed)}
-      </div>
-    </li>
+      </td>
+    </tr>
   );
 }

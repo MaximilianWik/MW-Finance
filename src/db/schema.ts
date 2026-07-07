@@ -43,13 +43,13 @@ export const accounts = pgTable("accounts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ─── Categories (with optional monthly budget) ──────────────────────────────
+// ─── Categories (with optional monthly + weekly budget) ─────────────────────
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
-  emoji: text("emoji").notNull().default("💸"),
-  color: text("color").notNull().default("#8a97a6"),
+  color: text("color").notNull().default("#6f926f"),
   budgetMonthly: numeric("budget_monthly", { precision: 14, scale: 2 }),
+  budgetWeekly: numeric("budget_weekly", { precision: 14, scale: 2 }),
   sort: integer("sort").notNull().default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

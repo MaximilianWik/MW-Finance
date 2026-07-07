@@ -53,7 +53,6 @@ export async function GET(req: NextRequest) {
       categoryId: transactions.categoryId,
       categorySource: transactions.categorySource,
       categoryName: categories.name,
-      categoryEmoji: categories.emoji,
       categoryColor: categories.color,
     })
     .from(transactions)

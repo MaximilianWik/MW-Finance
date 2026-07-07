@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { kr } from "@/lib/format";
+import { AsciiBar } from "./AsciiBar";
 
 export function NewGoalForm() {
   const router = useRouter();
@@ -42,52 +43,54 @@ export function NewGoalForm() {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="btn btn-accent w-full">
-        + Add goal
+      <button onClick={() => setOpen(true)} className="btn btn-accent self-start">
+        $ new goal
       </button>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="card flex flex-col gap-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-2 border border-edge bg-panel2 p-3">
       <input
         required
-        placeholder="Goal name (e.g. Tattoo)"
+        placeholder="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="input"
+        className="input uppercase tracking-term"
       />
-      <input
-        required
-        type="number"
-        min="0"
-        step="1"
-        placeholder="Target (kr)"
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        className="input"
-      />
-      <input
-        type="date"
-        value={targetDate}
-        onChange={(e) => setTargetDate(e.target.value)}
-        className="input"
-      />
-      <label className="flex items-center gap-2 text-xs text-muted">
+      <div className="flex gap-2">
+        <input
+          required
+          type="number"
+          min="0"
+          placeholder="target kr"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          className="input flex-1 tabular-nums"
+        />
+        <input
+          type="date"
+          value={targetDate}
+          onChange={(e) => setTargetDate(e.target.value)}
+          className="input flex-1"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-xs uppercase tracking-term text-muted">
         <input
           type="checkbox"
           checked={isPrimary}
           onChange={(e) => setIsPrimary(e.target.checked)}
+          className="accent-[#4ee06a]"
         />
-        Primary goal (receives auto-sweep)
+        primary — receives auto-sweep
       </label>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && <p className="text-sm text-danger">[ FAIL ] {error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={busy} className="btn btn-accent flex-1">
-          {busy ? "Saving…" : "Create"}
+          {busy ? "…" : "create"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="btn">
-          Cancel
+          cancel
         </button>
       </div>
     </form>
@@ -108,58 +111,40 @@ export function GoalRow(props: {
 }) {
   const { id, name, imageUrl, current, target, progressPct, velocity, monthsToGoal, isPrimary, paused } = props;
   return (
-    <a
-      href={`/goals/${id}`}
-      className="card flex gap-4 transition hover:border-accent/40"
-    >
-      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-panel2">
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={name}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl text-muted">
-            ◇
+    <a href={`/goals/${id}`} className="panel block transition-colors hover:border-edge2">
+      <span className="panel-title">[ GOAL: {name.toUpperCase()} ]</span>
+      {isPrimary && (
+        <span className="absolute -top-[0.62rem] right-3 bg-ink px-2 text-[0.7rem] uppercase tracking-term text-accent">
+          PRIMARY
+        </span>
+      )}
+      <div className="flex gap-4">
+        <div className="h-20 w-20 shrink-0 border border-edge bg-panel2">
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl text-edge2">
+              ◈
+            </div>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+          <AsciiBar ratio={progressPct} width={20} tone="accent2" />
+          <div className="flex justify-between text-xs text-muted">
+            <span className="tabular-nums">
+              {kr(current)} / {kr(target)}
+            </span>
+            <span>
+              {paused
+                ? "[ PAUSED ]"
+                : velocity > 0
+                ? `${kr(velocity)}/mo · ${
+                    monthsToGoal != null && monthsToGoal < 240 ? Math.ceil(monthsToGoal) + "mo" : "—"
+                  }`
+                : "no velocity"}
+            </span>
           </div>
-        )}
-        {isPrimary && (
-          <span className="absolute left-1 top-1 rounded bg-accent/80 px-1 text-[10px] font-medium uppercase text-black">
-            Primary
-          </span>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-        <div className="flex items-baseline justify-between">
-          <h3 className="truncate font-medium">
-            {name}
-            {paused && <span className="ml-2 text-xs text-muted">(paused)</span>}
-          </h3>
-          <span className="text-xs text-muted">
-            {Math.round(progressPct * 100)}%
-          </span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-edge">
-          <div
-            className="h-full rounded-full bg-accent"
-            style={{ width: `${Math.max(progressPct * 100, 2)}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-[11px] text-muted">
-          <span className="tabular-nums">
-            {kr(current)} / {kr(target)}
-          </span>
-          <span>
-            {velocity > 0
-              ? `${kr(velocity)}/mo · ${
-                  monthsToGoal != null && monthsToGoal < 240
-                    ? Math.ceil(monthsToGoal) + " months"
-                    : "—"
-                }`
-              : "no velocity yet"}
-          </span>
         </div>
       </div>
     </a>

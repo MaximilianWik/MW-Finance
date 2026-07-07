@@ -2,6 +2,7 @@ import { listTransactions, getCategories } from "@/lib/queries";
 import { Suspense } from "react";
 import { TxRow } from "../ui/TxRow";
 import { TxFilters } from "../ui/TxFilters";
+import { Panel } from "../ui/Panel";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +13,7 @@ export default async function TransactionsPage({
 }) {
   const sp = await searchParams;
   const cats = await getCategories();
-  const options = cats.map((c) => ({
-    id: c.id,
-    name: c.name,
-    emoji: c.emoji,
-    color: c.color,
-  }));
+  const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
 
   const txs = await listTransactions({
     limit: 300,
@@ -27,26 +23,31 @@ export default async function TransactionsPage({
 
   return (
     <main className="flex flex-col gap-4">
-      <header>
-        <h1 className="text-xl font-semibold">Activity</h1>
-        <p className="text-xs text-muted">{txs.length} transactions</p>
-      </header>
-
-      <Suspense fallback={<div className="h-10" />}>
+      <Suspense fallback={<div className="h-8" />}>
         <TxFilters options={options} />
       </Suspense>
 
-      <section className="card">
+      <Panel title="LEDGER" right={`${txs.length} ROWS`}>
         {txs.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">No transactions match.</p>
         ) : (
-          <ul>
-            {txs.map((t) => (
-              <TxRow key={t.id} tx={t} options={options} />
-            ))}
-          </ul>
+          <table className="term-table">
+            <thead>
+              <tr>
+                <th>DATE</th>
+                <th>MERCHANT</th>
+                <th>CATEGORY</th>
+                <th className="text-right">AMOUNT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {txs.map((t) => (
+                <TxRow key={t.id} tx={t} options={options} />
+              ))}
+            </tbody>
+          </table>
         )}
-      </section>
+      </Panel>
     </main>
   );
 }

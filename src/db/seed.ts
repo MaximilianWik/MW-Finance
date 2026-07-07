@@ -10,25 +10,25 @@ import * as schema from "./schema";
 const client = neon(process.env.DATABASE_URL!);
 const db = drizzle(client, { schema });
 
-// name, emoji, color, monthly budget (SEK, null = no budget)
+// name, color, monthly budget, weekly budget (SEK, null = no budget)
 const DEFAULTS: Array<{
   name: string;
-  emoji: string;
   color: string;
-  budget: string | null;
+  monthly: string | null;
+  weekly: string | null;
   sort: number;
 }> = [
-  { name: "Groceries", emoji: "🛒", color: "#4ade80", budget: "4000", sort: 10 },
-  { name: "Restaurants", emoji: "🍕", color: "#fbbf24", budget: "1500", sort: 20 },
-  { name: "Transport", emoji: "🚇", color: "#38bdf8", budget: "900", sort: 30 },
-  { name: "Shopping", emoji: "🛍️", color: "#f472b6", budget: "1500", sort: 40 },
-  { name: "Bills & Utilities", emoji: "🧾", color: "#a78bfa", budget: "3000", sort: 50 },
-  { name: "Entertainment", emoji: "🎬", color: "#fb7185", budget: "600", sort: 60 },
-  { name: "Health", emoji: "💊", color: "#34d399", budget: "500", sort: 70 },
-  { name: "Cash & ATM", emoji: "💵", color: "#94a3b8", budget: null, sort: 80 },
-  { name: "Income", emoji: "💰", color: "#22c55e", budget: null, sort: 90 },
-  { name: "Transfers", emoji: "🔁", color: "#64748b", budget: null, sort: 100 },
-  { name: "Uncategorized", emoji: "❓", color: "#8a97a6", budget: null, sort: 999 },
+  { name: "Groceries", color: "#4ee06a", monthly: "4000", weekly: "1000", sort: 10 },
+  { name: "Restaurants", color: "#e0b23f", monthly: "1500", weekly: "375", sort: 20 },
+  { name: "Transport", color: "#3fd0c0", monthly: "900", weekly: null, sort: 30 },
+  { name: "Shopping", color: "#c98be0", monthly: "1500", weekly: null, sort: 40 },
+  { name: "Bills & Utilities", color: "#8ba3e0", monthly: "3000", weekly: null, sort: 50 },
+  { name: "Entertainment", color: "#e08b9e", monthly: "600", weekly: null, sort: 60 },
+  { name: "Health", color: "#5ee0a0", monthly: "500", weekly: null, sort: 70 },
+  { name: "Cash & ATM", color: "#8faf8f", monthly: null, weekly: null, sort: 80 },
+  { name: "Income", color: "#4ee06a", monthly: null, weekly: null, sort: 90 },
+  { name: "Transfers", color: "#6f926f", monthly: null, weekly: null, sort: 100 },
+  { name: "Uncategorized", color: "#6f926f", monthly: null, weekly: null, sort: 999 },
 ];
 
 async function main() {
@@ -38,16 +38,16 @@ async function main() {
       .insert(schema.categories)
       .values({
         name: c.name,
-        emoji: c.emoji,
         color: c.color,
-        budgetMonthly: c.budget,
+        budgetMonthly: c.monthly,
+        budgetWeekly: c.weekly,
         sort: c.sort,
       })
       .onConflictDoUpdate({
         target: schema.categories.name,
-        set: { emoji: c.emoji, color: c.color, sort: c.sort },
+        set: { color: c.color, sort: c.sort },
       });
-    console.log(`  ✓ ${c.emoji} ${c.name}`);
+    console.log(`  [OK] ${c.name}`);
   }
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })

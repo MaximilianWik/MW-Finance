@@ -19,7 +19,6 @@ const PROJECTED_OVER = 1.1; // 110 %
 interface TrajectoryWarning {
   categoryId: number;
   name: string;
-  emoji: string;
   spent: number;
   projected: number;
   effective: number;
@@ -49,7 +48,6 @@ export async function checkTrajectory(today = new Date()): Promise<TrajectoryWar
     warnings.push({
       categoryId: s.categoryId,
       name: s.name,
-      emoji: s.emoji,
       spent: s.spent,
       projected,
       effective: s.effective,
@@ -60,7 +58,7 @@ export async function checkTrajectory(today = new Date()): Promise<TrajectoryWar
     alertedToday.add(key);
 
     await sendNtfy(
-      `${s.emoji} ${s.name} on pace for ${kr(projected)} · budget ${kr(s.effective)}`,
+      `${s.name} on pace for ${kr(projected)} · budget ${kr(s.effective)}`,
       {
         title: "Trajectory warning",
         tags: ["chart_with_upwards_trend"],

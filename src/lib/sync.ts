@@ -263,7 +263,7 @@ async function notifyBudgets(rows: NewTransaction[]) {
         category: s.name,
       }),
       {
-        title: `${s.emoji} ${s.name}`,
+        title: s.name,
         tags: s.remaining < 0 ? ["rotating_light"] : ["money_with_wings"],
         priority: s.remaining < 0 ? 4 : 3,
         click: env.appUrl,

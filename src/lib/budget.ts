@@ -5,7 +5,6 @@ import { and, gte, lte, eq, sql } from "drizzle-orm";
 export interface CategoryBudget {
   categoryId: number;
   name: string;
-  emoji: string;
   color: string;
   budget: number | null; // effective budget (base + adjustments), null when unbudgeted
   baseBudget: number | null; // raw categories.budget_monthly
@@ -50,7 +49,6 @@ export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
     .select({
       categoryId: categories.id,
       name: categories.name,
-      emoji: categories.emoji,
       color: categories.color,
       budget: sql<number | null>`${categories.budgetMonthly}::float`,
       spent: spentExpr,
@@ -89,7 +87,6 @@ export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
     return {
       categoryId: r.categoryId,
       name: r.name,
-      emoji: r.emoji,
       color: r.color,
       budget,
       baseBudget,
@@ -103,4 +100,76 @@ export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
   const totalSpent = out.reduce((s, r) => s + r.spent, 0);
   const totalBudget = out.reduce((s, r) => s + (r.budget ?? 0), 0);
   return { label, ym, rows: out, totalSpent, totalBudget };
+}
+
+/** Current ISO week (Mon–Sun) as YYYY-MM-DD bounds + a compact label. */
+export function weekRange(d = new Date()): { from: string; to: string; label: string } {
+  const day = d.getUTCDay(); // 0=Sun..6=Sat
+  const diffToMon = (day + 6) % 7; // days since Monday
+  const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diffToMon));
+  const sun = new Date(mon.getTime() + 6 * 86400_000);
+  const iso = (x: Date) => x.toISOString().slice(0, 10);
+  const fmt = (x: Date) =>
+    x.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  return { from: iso(mon), to: iso(sun), label: `${fmt(mon)} – ${fmt(sun)}` };
+}
+
+export interface WeeklyBudget {
+  categoryId: number;
+  name: string;
+  color: string;
+  budget: number | null; // weekly budget
+  spent: number;
+  remaining: number | null;
+  pct: number | null;
+}
+
+/**
+ * Per-category spending vs WEEKLY budget for the current ISO week. Only
+ * categories with a weekly budget set are returned (others have no weekly
+ * cadence to track).
+ */
+export async function getWeeklyBudgetStatus(week = new Date()): Promise<{
+  label: string;
+  rows: WeeklyBudget[];
+  totalSpent: number;
+  totalBudget: number;
+}> {
+  const { from, to, label } = weekRange(week);
+
+  const spentExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
+
+  const rows = await db
+    .select({
+      categoryId: categories.id,
+      name: categories.name,
+      color: categories.color,
+      budget: sql<number | null>`${categories.budgetWeekly}::float`,
+      spent: spentExpr,
+    })
+    .from(categories)
+    .leftJoin(
+      transactions,
+      and(
+        eq(transactions.categoryId, categories.id),
+        gte(transactions.bookingDate, from),
+        lte(transactions.bookingDate, to)
+      )
+    )
+    .groupBy(categories.id)
+    .orderBy(categories.sort);
+
+  const out: WeeklyBudget[] = rows
+    .filter((r) => r.budget != null)
+    .map((r) => {
+      const budget = r.budget ?? null;
+      const spent = r.spent ?? 0;
+      const remaining = budget == null ? null : budget - spent;
+      const pct = budget == null || budget === 0 ? null : spent / budget;
+      return { categoryId: r.categoryId, name: r.name, color: r.color, budget, spent, remaining, pct };
+    });
+
+  const totalSpent = out.reduce((s, r) => s + r.spent, 0);
+  const totalBudget = out.reduce((s, r) => s + (r.budget ?? 0), 0);
+  return { label, rows: out, totalSpent, totalBudget };
 }

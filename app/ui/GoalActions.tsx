@@ -70,10 +70,7 @@ export function GoalActions({
       const scaled = await downscaleImage(file);
       const form = new FormData();
       form.append("file", scaled, file.name.replace(/\.[^.]+$/, "") + ".jpg");
-      const res = await fetch(`/api/goals/${goalId}/image`, {
-        method: "POST",
-        body: form,
-      });
+      const res = await fetch(`/api/goals/${goalId}/image`, { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "upload failed");
@@ -108,52 +105,51 @@ export function GoalActions({
 
   return (
     <div className="flex flex-col gap-3">
-      <form onSubmit={onContribute} className="card flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Add contribution</h3>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          required
-          placeholder="Amount (kr)"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="input"
-        />
-        <input
-          placeholder="Note (optional)"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="input"
-        />
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <button type="submit" disabled={busy} className="btn btn-accent">
-          {busy ? "Adding…" : `Add ${amount ? kr(Number(amount)) : ""}`}
-        </button>
+      <form onSubmit={onContribute} className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min="0"
+            required
+            placeholder="amount kr"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="input w-28 tabular-nums"
+          />
+          <input
+            placeholder="note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="input flex-1"
+          />
+          <button type="submit" disabled={busy} className="btn btn-accent">
+            + add {amount ? kr(Number(amount)) : ""}
+          </button>
+        </div>
+        {error && <p className="text-sm text-danger">[ FAIL ] {error}</p>}
       </form>
 
-      <div className="card flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Image</h3>
+      <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
         <input
           ref={inputRef}
           type="file"
           accept="image/*"
           onChange={onImage}
           disabled={uploading}
-          className="text-xs text-muted file:mr-3 file:rounded file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:text-black"
+          className="text-xs text-muted file:mr-3 file:border file:border-edge file:bg-panel2 file:px-3 file:py-1.5 file:text-xs file:uppercase file:tracking-widest file:text-accent"
         />
-        {uploading && <p className="text-xs text-muted">Uploading…</p>}
+        {uploading && <span className="text-xs text-muted">uploading…</span>}
       </div>
 
-      <div className="card flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2 border-t border-edge pt-3">
         <button onClick={() => toggle("isPrimary")} className="btn">
-          {isPrimary ? "Remove as primary" : "Make primary (receives sweep)"}
+          {isPrimary ? "unset primary" : "set primary"}
         </button>
         <button onClick={() => toggle("paused")} className="btn">
-          {paused ? "Resume" : "Pause"}
+          {paused ? "resume" : "pause"}
         </button>
-        <button onClick={onDelete} className="btn text-danger">
-          Delete goal
+        <button onClick={onDelete} className="btn btn-danger">
+          delete
         </button>
       </div>
     </div>

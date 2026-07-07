@@ -6,9 +6,17 @@ import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
 import { TxRow } from "./ui/TxRow";
+import { Panel } from "./ui/Panel";
+import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
 
 export const dynamic = "force-dynamic";
+
+function syncFresh(iso: string | Date | null): boolean {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  return Date.now() - t < 8 * 3600_000; // synced within 8h
+}
 
 export default async function Home({
   searchParams,
@@ -19,15 +27,14 @@ export default async function Home({
 
   if (!process.env.DATABASE_URL) {
     return (
-      <div className="card mt-8">
-        <h1 className="text-lg font-semibold">Setup needed</h1>
-        <p className="mt-2 text-sm text-muted">
-          Copy <code className="text-accent2">.env.example</code> to{" "}
-          <code className="text-accent2">.env.local</code>, fill it in, run{" "}
-          <code className="text-accent2">npm run db:push</code> and{" "}
-          <code className="text-accent2">npm run db:seed</code>, then reload.
+      <Panel title="SETUP REQUIRED" className="mt-2">
+        <p className="text-sm text-muted">
+          Copy <code className="text-accent">.env.example</code> → {" "}
+          <code className="text-accent">.env.local</code>, then run{" "}
+          <code className="text-accent">npm run db:push</code> and{" "}
+          <code className="text-accent">npm run db:seed</code>.
         </p>
-      </div>
+      </Panel>
     );
   }
 
@@ -58,145 +65,121 @@ export default async function Home({
 
   if (dbError) {
     return (
-      <div className="card mt-8">
-        <h1 className="text-lg font-semibold text-danger">Database error</h1>
-        <p className="mt-2 text-sm text-muted">
-          Tables likely don&apos;t exist yet. Run these locally (with your production{" "}
-          <code className="text-accent2">DATABASE_URL</code>) then redeploy:
+      <Panel title="DATABASE ERROR" className="mt-2">
+        <p className="text-sm text-muted">
+          Tables likely don&apos;t exist. Run{" "}
+          <code className="text-accent">npm run db:push</code> then{" "}
+          <code className="text-accent">npm run db:seed</code>.
         </p>
-        <pre className="mt-3 overflow-x-auto rounded-lg bg-ink p-3 text-xs text-accent2">
-          npm run db:push{"\n"}npm run db:seed
+        <pre className="mt-2 overflow-x-auto border border-edge bg-ink p-2 text-[0.7rem] text-danger">
+          {dbError}
         </pre>
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs text-muted">Error detail</summary>
-          <pre className="mt-1 overflow-x-auto rounded bg-ink p-2 text-[11px] text-danger/80">
-            {dbError}
-          </pre>
-        </details>
-      </div>
+      </Panel>
     );
   }
 
-  const options = cats.map((c) => ({
-    id: c.id,
-    name: c.name,
-    emoji: c.emoji,
-    color: c.color,
-  }));
+  const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
   const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);
   const budgetRows = budget.rows.filter((r) => r.budget != null || r.spent > 0);
 
   return (
-    <main className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">MWFinance</h1>
-          <p className="text-xs text-muted">{budget.label}</p>
-        </div>
-        {accs.length > 0 ? (
-          <SyncButton />
-        ) : (
-          <Link href="/api/auth/start" className="btn btn-accent">
-            Link bank
-          </Link>
-        )}
-      </header>
-
+    <main className="flex flex-col gap-4">
       {sp.linked && (
-        <div className="rounded-xl border border-accent/40 bg-accent/10 px-4 py-2 text-sm text-accent">
-          Linked {sp.linked} account{sp.linked === "1" ? "" : "s"}. Hit “Sync now”.
+        <div className="border border-accent/50 bg-accent/10 px-3 py-1.5 text-xs uppercase tracking-term text-accent">
+          [ OK ] linked {sp.linked} account(s) — run $ sync now
         </div>
       )}
       {sp.error && (
-        <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
-          {sp.error}
+        <div className="border border-danger/50 bg-danger/10 px-3 py-1.5 text-xs uppercase tracking-term text-danger">
+          [ FAIL ] {sp.error}
         </div>
       )}
 
       {accs.length === 0 ? (
-        <div className="card">
-          <h2 className="font-medium">No bank linked yet</h2>
-          <p className="mt-1 text-sm text-muted">
-            Connect your bank via Enable Banking to pull in accounts and transactions.
-          </p>
-          <Link href="/api/auth/start" className="btn btn-accent mt-4">
-            Link a bank
+        <Panel title="ACCOUNT SYNC">
+          <p className="text-sm text-muted">No bank linked. Connect via Enable Banking.</p>
+          <Link href="/api/auth/start" className="btn btn-accent mt-3">
+            $ link bank
           </Link>
-        </div>
+        </Panel>
       ) : (
-        <section className="card">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted">Total balance</span>
-            <span className="text-2xl font-semibold tabular-nums">{kr(totalBalance)}</span>
-          </div>
-          <div className="mt-4 flex flex-col gap-2">
-            {accs.map((a) => (
-              <div
-                key={a.uid}
-                className="flex items-center justify-between rounded-lg bg-panel2 px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-white">
-                    {a.name ?? a.product ?? a.aspspName}
-                  </div>
-                  <div className="truncate text-[11px] text-muted">{a.iban ?? a.aspspName}</div>
-                </div>
-                <span className="tabular-nums text-white">
-                  {kr(a.balance)} <span className="text-muted">{a.currency}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Panel title="ACCOUNT SYNC" right={kr(totalBalance)}>
+            <table className="term-table">
+              <tbody>
+                {accs.map((a) => (
+                  <tr key={a.uid}>
+                    <td>
+                      <div className="truncate text-ink2">
+                        {a.name ?? a.product ?? a.aspspName}
+                      </div>
+                      <div className="truncate text-[0.7rem] text-faint">
+                        {a.iban ?? a.aspspName}
+                      </div>
+                    </td>
+                    <td className="w-20 text-center">
+                      {syncFresh(a.balanceUpdatedAt) ? (
+                        <StatusTag tone="ok">[ OK ]</StatusTag>
+                      ) : (
+                        <StatusTag tone="warn">[ STALE ]</StatusTag>
+                      )}
+                    </td>
+                    <td className="w-28 text-right text-ink2">{kr(a.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-3">
+              <SyncButton />
+            </div>
+          </Panel>
+
+          {primaryGoal ? (
+            <PrimaryGoalCard goal={primaryGoal} />
+          ) : (
+            <Panel title="GOALS">
+              <p className="text-sm text-muted">No primary goal set.</p>
+              <Link href="/goals" className="btn mt-3">
+                » goals
+              </Link>
+            </Panel>
+          )}
+        </div>
       )}
 
+      <FlaggedCard />
+
       {budgetRows.length > 0 && (
-        <section className="card">
-          <div className="mb-1 flex items-baseline justify-between">
-            <h2 className="font-medium">Budgets</h2>
-            <span className="text-xs text-muted">
-              {kr(budget.totalSpent)} / {kr(budget.totalBudget)}
-            </span>
-          </div>
-          <div className="divide-y divide-edge/40">
+        <Panel title="MONTHLY BUDGET" right={`${kr(budget.totalSpent)} / ${kr(budget.totalBudget)}`}>
+          <div className="divide-y divide-grid">
             {budgetRows.map((r) => (
               <BudgetBar key={r.categoryId} row={r} />
             ))}
           </div>
-          <div className="mt-4 flex gap-2">
-            <Link href="/budgets" className="btn flex-1">
-              Edit budgets
+          <div className="mt-3 flex gap-2">
+            <Link href="/budgets" className="btn">
+              » budgets
             </Link>
-            <Link href="/simulate" className="btn flex-1">
-              What-if
+            <Link href="/simulate" className="btn">
+              » what-if
             </Link>
           </div>
-        </section>
+        </Panel>
       )}
 
-      {primaryGoal && <PrimaryGoalCard goal={primaryGoal} />}
-
-      <FlaggedCard />
-
-      <section className="card">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="font-medium">Recent</h2>
-          <Link href="/transactions" className="text-xs text-accent2 hover:underline">
-            View all
-          </Link>
-        </div>
+      <Panel title="RECENT LEDGER" right={<Link href="/transactions" className="text-accent2 hover:underline">» all</Link>}>
         {txs.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted">
-            No transactions yet. Link a bank and sync.
-          </p>
+          <p className="py-6 text-center text-sm text-muted">No transactions yet.</p>
         ) : (
-          <ul>
-            {txs.map((t) => (
-              <TxRow key={t.id} tx={t} options={options} />
-            ))}
-          </ul>
+          <table className="term-table">
+            <tbody>
+              {txs.map((t) => (
+                <TxRow key={t.id} tx={t} options={options} />
+              ))}
+            </tbody>
+          </table>
         )}
-      </section>
+      </Panel>
     </main>
   );
 }

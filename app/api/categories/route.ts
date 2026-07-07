@@ -11,13 +11,13 @@ export async function GET() {
   return NextResponse.json({ categories: rows });
 }
 
-// Update a category — primarily its monthly budget.
+// Update a category — primarily its monthly/weekly budget.
 export async function PATCH(req: NextRequest) {
   const body = (await req.json()) as {
     id?: number;
     budgetMonthly?: string | number | null;
+    budgetWeekly?: string | number | null;
     name?: string;
-    emoji?: string;
     color?: string;
   };
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -29,8 +29,13 @@ export async function PATCH(req: NextRequest) {
         ? null
         : String(body.budgetMonthly);
   }
+  if (body.budgetWeekly !== undefined) {
+    set.budgetWeekly =
+      body.budgetWeekly === null || body.budgetWeekly === ""
+        ? null
+        : String(body.budgetWeekly);
+  }
   if (body.name !== undefined) set.name = body.name;
-  if (body.emoji !== undefined) set.emoji = body.emoji;
   if (body.color !== undefined) set.color = body.color;
 
   if (Object.keys(set).length === 0) {
@@ -51,9 +56,9 @@ export async function PATCH(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     name?: string;
-    emoji?: string;
     color?: string;
     budgetMonthly?: string | number | null;
+    budgetWeekly?: string | number | null;
     sort?: number;
   };
   if (!body.name) return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -62,12 +67,15 @@ export async function POST(req: NextRequest) {
     .insert(categories)
     .values({
       name: body.name,
-      emoji: body.emoji ?? "💸",
-      color: body.color ?? "#8a97a6",
+      color: body.color ?? "#6f926f",
       budgetMonthly:
         body.budgetMonthly == null || body.budgetMonthly === ""
           ? null
           : String(body.budgetMonthly),
+      budgetWeekly:
+        body.budgetWeekly == null || body.budgetWeekly === ""
+          ? null
+          : String(body.budgetWeekly),
       sort: body.sort ?? 100,
     })
     .returning();

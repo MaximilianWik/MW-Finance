@@ -62,10 +62,17 @@ This same console styling extends to the conversational AI assistant (Phase 3) �
 
 | Variable | Value / Notes |
 |---|---|
-| `ENABLE_BANKING_PRIVATE_KEY` | Full PEM content of the RSA private key (already in Vercel) |
+| `DATABASE_URL` | Neon Postgres connection string |
+| `ENABLE_BANKING_PRIVATE_KEY_BASE64` | Base64 of the RSA private key PEM |
 | `ENABLE_BANKING_APP_ID` | `secret` |
-| `ENABLE_BANKING_REDIRECT_URI` | `https://mw-finance-six.vercel.app/api/callback` |
+| `ENABLE_BANKING_REDIRECT_URL` | `https://mw-finance-six.vercel.app/api/callback` |
+| `ENABLE_BANKING_ASPSP_NAME` / `ENABLE_BANKING_ASPSP_COUNTRY` | e.g. `Länsförsäkringar` / `SE` |
 | `GEMINI_API_KEY` | From [aistudio.google.com](https://aistudio.google.com) — free, no billing required |
+| `GEMINI_MODEL` | defaults to `gemini-2.0-flash` |
+| `NTFY_SERVER` / `NTFY_TOPIC` | push notifications (server defaults to `https://ntfy.sh`) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob — auto-injected when a Blob store is connected to the project |
+| `CRON_SECRET` | Bearer token guarding `/api/sync` (Vercel cron) |
+| `APP_URL` | public base URL, used in ntfy click-through links |
 
 ---
 
@@ -109,49 +116,126 @@ This same console styling extends to the conversational AI assistant (Phase 3) �
 
 ## Data Architecture
 
+ORM: **Drizzle** (`src/db/schema.ts`). DB: **Neon Postgres** (serverless HTTP driver). Money stored as `numeric(14,2)`; API/query layers cast to float for the client. All category "icons" removed — the terminal aesthetic uses status glyphs + a per-category color swatch (`■`), never emoji.
+
+### Live SQL schema (as deployed)
+
+```sql
+-- Bank consent sessions (one per successful Enable Banking consent)
+bank_sessions(
+  session_id text PK, aspsp_name text, aspsp_country text,
+  psu_type text default 'personal', valid_until timestamptz, created_at timestamptz)
+
+-- Linked accounts (keyed by Enable Banking account uid)
+accounts(
+  uid text PK, session_id text FK→bank_sessions,
+  name text, iban text, currency text default 'SEK', product text,
+  cash_account_type text, usage text, aspsp_name text, aspsp_country text,
+  balance numeric(14,2), balance_type text, balance_updated_at timestamptz,
+  created_at timestamptz)
+
+-- Categories (NO emoji column — color swatch only)
+categories(
+  id serial PK, name text UNIQUE, color text default '#6f926f',
+  budget_monthly numeric(14,2), budget_weekly numeric(14,2),
+  sort int default 100, created_at timestamptz)
+
+-- Transactions
+transactions(
+  id serial PK, account_uid text FK→accounts,
+  dedupe_key text, bank_transaction_id text, entry_reference text,
+  status text, direction text ('CRDT'|'DBIT'),
+  amount numeric(14,2), signed numeric(14,2), currency text,
+  booking_date date, value_date date, remittance text,
+  counterparty_name text, merchant text, mcc text,
+  category_id int FK→categories, category_source text,
+  flagged_reason text,          -- suspicious-payment rule that fired
+  raw jsonb, created_at timestamptz,
+  UNIQUE(account_uid, dedupe_key),
+  INDEX(booking_date), INDEX(category_id), INDEX(merchant))
+
+-- Learned merchant→category cache
+merchant_categories(
+  merchant text PK, category_id int FK→categories,
+  source text default 'gemini', updated_at timestamptz)
+
+-- Recurring payments (detected from history)
+recurring_payments(
+  id serial PK, merchant text UNIQUE, amount numeric(14,2),
+  currency text default 'SEK', cadence text default 'monthly',
+  cadence_days int, last_date date, next_date date, occurrences int default 0,
+  category_id int FK→categories, last_alerted_at timestamptz,
+  created_at timestamptz, updated_at timestamptz)
+
+-- Savings goals + contributions
+savings_goals(
+  id serial PK, name text, target_amount numeric(14,2),
+  current_amount numeric(14,2) default 0, currency text default 'SEK',
+  target_date date, image_url text,          -- Vercel Blob public URL
+  is_primary boolean default false,           -- receives the monthly sweep
+  paused boolean default false, created_at timestamptz)
+
+savings_contributions(
+  id serial PK, goal_id int FK→savings_goals, amount numeric(14,2),
+  source text default 'manual' ('manual'|'sweep'), month text (YYYY-MM),
+  note text, created_at timestamptz,
+  INDEX(goal_id), INDEX(month))
+
+-- Adaptive budgeting: signed per-month deltas; effective budget =
+-- categories.budget_monthly + SUM(budget_adjustments.delta) for that month
+budget_adjustments(
+  id serial PK, category_id int FK→categories, month text (YYYY-MM),
+  delta numeric(14,2), reason text, created_at timestamptz,
+  INDEX(category_id, month), INDEX(month))
+
+-- Single-row settings (sweep %, adaptive cap %, adaptive trigger %)
+settings(
+  key text PK default 'singleton',
+  sweep_percent numeric(5,2) default 80,
+  adaptive_cap_percent numeric(5,2) default 20,
+  adaptive_trigger_percent numeric(5,2) default 90,
+  updated_at timestamptz)
+
+-- Sync audit log (also drives the monthly-sweep rollover check)
+sync_runs(
+  id serial PK, started_at timestamptz, finished_at timestamptz,
+  new_transactions int default 0, ok int default 1, error text)
 ```
-transactions
-  id, account_id, amount, currency, date, description, merchant_name,
-  category_id, is_recurring, recurring_fingerprint, raw_json, created_at
 
-accounts
-  id, iban, bank_name, balance, last_synced_at
+Migrations: `npm run db:push` (Drizzle) for a fresh DB. Incremental Phase-2 changes are captured in `drizzle/migrations/phase2.sql` (idempotent). The emoji-removal change is a one-off `ALTER TABLE categories DROP COLUMN emoji;` (see below).
 
-categories
-  id, name, icon, budget_monthly, budget_weekly
+### Blob storage (goal images)
 
-savings_goals
-  id, name, target_amount, current_amount, image_url, deadline
+Vercel Blob (`@vercel/blob`). Uploads via `POST /api/goals/:id/image` (multipart). The client downscales to ≤1024px JPEG before upload; the server caps at 5 MB and rejects non-images.
 
-recurring_payments
-  id, merchant_name, expected_amount, expected_interval_days, last_seen_at
-```
+- Key convention: `goals/{goalId}-{timestamp}.{ext}` (public access, no random suffix)
+- The returned public URL is persisted to `savings_goals.image_url`
+- Requires env `BLOB_READ_WRITE_TOKEN` (auto-injected when a Blob store is connected to the Vercel project)
 
-Categorization pipeline: rule-based first (merchant name + amount pattern), fall back to Gemini API for ambiguous cases, cache per merchant — avoid burning free-tier rate limits on the same merchant twice.
+Categorization pipeline: rule-based first (MCC + merchant/remittance keyword rules), fall back to Gemini 2.0 Flash for ambiguous merchants, cache the result per merchant in `merchant_categories` — avoids burning free-tier rate limits on the same merchant twice. Manual overrides write `category_source='manual'` and update the cache so future occurrences auto-apply.
 
 ---
 
 ## Feature Roadmap
 
-### Phase 1 — Core Loop (build first)
-- Enable Banking sync: poll transactions every 4–6h via Vercel cron, store in Postgres. Renders as terminal-panel `[ ACCOUNT SYNC ]` with `[ OK ]`/`[ FAIL ]` status per account.
-- Auto-categorization: food, shopping, drinks, phone, games, etc.
-- Manual override for uncategorized transactions — system remembers and auto-matches future occurrences. Override UI as a `>` command-style row action, not a dropdown menu.
-- Weekly and monthly budget per category — rendered as ASCII progress bars per category panel.
-- Real-time spend notifications: "Pizza –100 kr → 400 kr left of 500 kr food budget" (ntfy/Pushover)
+### Phase 1 — Core Loop (build first) — ✅ DONE
+- ✅ Enable Banking sync: poll transactions every 4–6h via Vercel cron, store in Postgres. Renders as terminal-panel `[ ACCOUNT SYNC ]` with `[ OK ]`/`[ STALE ]` status per account.
+- ✅ Auto-categorization: MCC + keyword rules → Gemini fallback → per-merchant cache.
+- ✅ Manual override for uncategorized transactions — remembers + auto-matches future occurrences. Override UI is a `>` command-style row action (`CategoryCommand`), not a dropdown.
+- ✅ Weekly and monthly budget per category — rendered as ASCII progress bars (`[████████░░░░] 67%`) per category.
+- ✅ Real-time spend notifications via ntfy: "Pizza –100 kr → 400 kr left of 500 kr food budget".
 
-### Phase 2 — Behavior Layer
-- Recurring payment detection + alert if an expected payment doesn't appear — styled as a checklist panel with `[✓]`/`[ ]`/`[!]` glyphs
-- Suspicious payment flagging — `[!] ANOMALY` tag, red accent
-- Savings goals with attached images, auto-sweep (whatever you come in under budget sweeps to savings) — image sits inside a titled ASCII frame with progress bar beneath
-- Time-to-goal projections
-- **Live/adaptive budgeting**: a large one-off purchase automatically tightens other categories to keep the overall budget on track
-- "What-if" simulation: model budget restructure for a hypothetical purchase — rendered as a diff view, terminal-style (`- groceries: 500kr` / `+ groceries: 420kr`)
-- Early-warning when spending trajectory is on pace to blow the budget — `[WARN] TRAJECTORY` tag
-- Month-over-month and week-over-week comparisons (% and kr per category) — terminal table with aligned +/- columns
-- Receipt ingestion: digital (Kivra, ICA), photographed paper receipts
-- Email parsing for order confirmations matched against purchases
-- Checklist for recurring payments to see if the monthly stuff has been handled or if anything has been forgotten/unpaid — same `[✓]`/`[!]` checklist styling as above
+### Phase 2 — Behavior Layer — ✅ DONE (ingestion deferred)
+- ✅ Recurring payment detection (amount + cadence consistency) + missing-payment alert — bills checklist panel with `[✓]`/`[ ]`/`[!]` glyphs on `/insights`.
+- ✅ Suspicious payment flagging — `[!] ANOMALY` tag, red accent, priority-5 push; persisted to `transactions.flagged_reason`.
+- ✅ Savings goals with attached images (Vercel Blob), auto-sweep of prior-month slack → primary goal — image in a titled ASCII frame with progress bar beneath.
+- ✅ Time-to-goal projections (3-month rolling velocity).
+- ✅ Live/adaptive budgeting: a large purchase tightens other categories (`budget_adjustments`, net-zero redistribution).
+- ✅ "What-if" simulation — rendered as a terminal diff view (`- groceries: 500kr` / `+ groceries: 420kr`) on `/simulate`.
+- ✅ Early-warning trajectory — `[WARN] TRAJECTORY` push past day 10 when projected > 110% of budget.
+- ✅ Month-over-month and week-over-week comparisons — terminal tables with aligned Δkr / Δ% columns on `/insights`.
+- ✅ Checklist for recurring payments (paid / due / overdue / upcoming this month) — `[✓]`/`[!]` styling.
+- ⏸ Receipt ingestion (Kivra/ICA/photo) and email parsing — **deferred**. No public consumer API for Kivra/ICA; photo OCR + email parsing intentionally out of scope for now.
 
 ### Phase 3 — Intelligence (Gemini API)
 - Conversational assistant: explains the app, walks through your finances — rendered as terminal console output with `>` prompt for input, monospace response text, no chat bubbles

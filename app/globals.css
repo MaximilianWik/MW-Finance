@@ -8,30 +8,146 @@
 
 html,
 body {
-  background: #0b0f14;
-  color: #e5edf5;
+  background: #0a0e0a;
+  color: #cfe8cf;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, "SFMono-Regular",
+    Menlo, monospace;
   -webkit-font-smoothing: antialiased;
+  font-variant-ligatures: none;
+}
+
+/* Optional CRT scanline + vignette overlay. Kept low-opacity so it never
+   compromises legibility. Fixed layer above the background, below content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(78, 224, 106, 0.03) 0px,
+      rgba(78, 224, 106, 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(120% 120% at 50% 0%, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
+}
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 @layer components {
-  .card {
-    @apply rounded-2xl border border-edge bg-panel p-5;
+  /* ─── Panel: terminal window with a titled ASCII frame ─────────────────
+     border + bracket-legend title + corner glyphs to sell the ┌─[ TITLE ]─┐
+     look while staying fully responsive. Use <Panel title="…"> in React. */
+  .panel {
+    @apply relative border border-edge bg-panel px-4 pb-4 pt-5;
   }
+  .panel > .panel-title {
+    @apply absolute -top-[0.62rem] left-3 bg-ink px-2 text-[0.7rem] font-medium uppercase tracking-term text-accent;
+  }
+  /* corner glyphs */
+  .panel::before,
+  .panel::after {
+    content: "";
+    position: absolute;
+    width: 0.5rem;
+    height: 0.5rem;
+    color: theme("colors.edge2");
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+  .panel::before {
+    content: "┌";
+    top: -0.55rem;
+    left: -0.09rem;
+    background: theme("colors.ink");
+  }
+  .panel::after {
+    content: "┐";
+    top: -0.55rem;
+    right: -0.09rem;
+    background: theme("colors.ink");
+  }
+
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-edge bg-panel2 px-4 py-2 text-sm font-medium text-white transition hover:border-accent/60 hover:bg-panel disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 border border-edge bg-panel2 px-3 py-1.5 text-xs uppercase tracking-term text-ink2 transition-colors hover:border-accent hover:text-accent disabled:opacity-40;
   }
   .btn-accent {
-    @apply border-accent/40 bg-accent/10 text-accent hover:bg-accent/20;
+    @apply border-accent/60 bg-accent/10 text-accent hover:bg-accent/20;
   }
-  .chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-edge bg-panel2 px-2.5 py-1 text-xs text-muted;
+  .btn-danger {
+    @apply hover:border-danger hover:text-danger;
   }
+
+  /* Command-style input: `>` prompt prefix + blinking caret feel. */
   .input {
-    @apply rounded-lg border border-edge bg-ink px-3 py-2 text-sm text-white outline-none focus:border-accent2/60;
+    @apply border border-edge bg-panel2 px-2.5 py-1.5 text-sm text-ink2 caret-accent outline-none placeholder:text-faint focus:border-accent;
+  }
+  .prompt {
+    @apply flex items-center gap-2 border border-edge bg-panel2 px-2.5 py-1.5 focus-within:border-accent;
+  }
+  .prompt > span.sigil {
+    @apply select-none text-accent;
+  }
+  .prompt > input {
+    @apply w-full bg-transparent text-sm text-ink2 caret-accent outline-none placeholder:text-faint;
+  }
+
+  /* Diagnostic status tag: [ ON TRACK ] [ OVER BUDGET ] [!] ANOMALY … */
+  .tag {
+    @apply inline-flex items-center whitespace-nowrap border px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-term;
+  }
+  .tag-ok {
+    @apply border-ok/50 text-ok;
+  }
+  .tag-warn {
+    @apply border-amber/50 text-amber;
+  }
+  .tag-danger {
+    @apply border-danger/50 text-danger;
+  }
+  .tag-muted {
+    @apply border-edge text-muted;
+  }
+
+  /* Terminal table: monospace alignment, hairline rules, no card rows. */
+  .term-table {
+    @apply w-full border-collapse text-sm tabular-nums;
+  }
+  .term-table th {
+    @apply border-b border-edge px-2 py-1.5 text-left text-[0.7rem] font-medium uppercase tracking-term text-muted;
+  }
+  .term-table td {
+    @apply border-b border-grid px-2 py-1.5 align-middle;
+  }
+  .term-table tr:last-child td {
+    @apply border-0;
   }
 }
 
-/* progress bar fill uses inline width; smooth it */
-.bar-fill {
-  transition: width 300ms ease;
+@layer utilities {
+  .caret::after {
+    content: "▊";
+    @apply ml-0.5 text-accent;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  .glow {
+    text-shadow: 0 0 6px rgba(78, 224, 106, 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    background:
+      radial-gradient(120% 120% at 50% 0%, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
+  }
+  .caret::after,
+  .animate-blink,
+  .animate-flicker {
+    animation: none !important;
+  }
 }

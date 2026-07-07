@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { getGoal, getGoals, getGoalContributions } from "@/lib/savings";
 import { kr, shortDate } from "@/lib/format";
 import { GoalActions } from "../../ui/GoalActions";
+import { Panel } from "../../ui/Panel";
+import { AsciiBar } from "../../ui/AsciiBar";
+import { StatusTag } from "../../ui/StatusTag";
 
 export const dynamic = "force-dynamic";
 
@@ -28,97 +31,71 @@ export default async function GoalDetail({
 
   return (
     <main className="flex flex-col gap-4">
-      <header>
-        <a href="/goals" className="text-xs text-muted hover:text-white">
-          ← Goals
-        </a>
-        <h1 className="mt-1 text-xl font-semibold">{row.name}</h1>
-        {row.targetDate && (
-          <p className="text-xs text-muted">target date · {shortDate(row.targetDate)}</p>
-        )}
-      </header>
+      <a href="/goals" className="text-xs uppercase tracking-term text-muted hover:text-accent">
+        « goals
+      </a>
 
-      {row.imageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={row.imageUrl}
-          alt={row.name}
-          className="h-48 w-full rounded-xl object-cover"
-        />
-      )}
-
-      <section className="card">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted">Progress</span>
-          <span className="text-lg font-semibold tabular-nums">
-            {kr(current)} / {kr(target)}
-          </span>
-        </div>
-        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-edge">
-          <div
-            className="h-full rounded-full bg-accent"
-            style={{ width: `${Math.max(progressPct * 100, 2)}%` }}
-          />
-        </div>
-        <div className="mt-2 flex justify-between text-[11px] text-muted">
-          <span>{Math.round(progressPct * 100)}% funded</span>
-          {summary && summary.velocity > 0 ? (
-            <span>
-              {kr(summary.velocity)}/mo ·{" "}
-              {summary.monthsToGoal != null && summary.monthsToGoal < 240
-                ? Math.ceil(summary.monthsToGoal) + " months to go"
-                : "—"}
-            </span>
-          ) : (
-            <span>No velocity yet — add a contribution</span>
+      <Panel
+        title={`GOAL: ${row.name.toUpperCase()}`}
+        right={row.isPrimary ? "PRIMARY" : undefined}
+      >
+        <div className="flex flex-col gap-4 md:flex-row">
+          {row.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={row.imageUrl}
+              alt={row.name}
+              className="h-40 w-full border border-edge object-cover md:w-56"
+            />
           )}
+          <div className="flex flex-1 flex-col justify-center gap-2">
+            <div className="text-lg tabular-nums text-ink2">
+              {kr(current)} <span className="text-faint">/ {kr(target)}</span>
+            </div>
+            <AsciiBar ratio={progressPct} width={28} tone="accent2" />
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              {row.targetDate && <span>target {shortDate(row.targetDate)}</span>}
+              {summary && summary.velocity > 0 ? (
+                <StatusTag tone="ok">
+                  {kr(summary.velocity)}/MO ·{" "}
+                  {summary.monthsToGoal != null && summary.monthsToGoal < 240
+                    ? Math.ceil(summary.monthsToGoal) + "MO LEFT"
+                    : "—"}
+                </StatusTag>
+              ) : (
+                <StatusTag tone="muted">NO VELOCITY</StatusTag>
+              )}
+            </div>
+          </div>
         </div>
-      </section>
+      </Panel>
 
-      <GoalActions
-        goalId={row.id}
-        isPrimary={row.isPrimary}
-        paused={row.paused}
-      />
+      <Panel title="ACTIONS">
+        <GoalActions goalId={row.id} isPrimary={row.isPrimary} paused={row.paused} />
+      </Panel>
 
-      <section className="card">
-        <h2 className="mb-2 font-medium">Contributions</h2>
+      <Panel title="CONTRIBUTIONS" right={`${contribs.length}`}>
         {contribs.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted">Nothing yet.</p>
+          <p className="py-4 text-center text-sm text-muted">Nothing yet.</p>
         ) : (
-          <ul className="divide-y divide-edge/40">
-            {contribs.map((c) => (
-              <li key={c.id} className="py-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>
-                    +{kr(c.amount)}
-                    <span
-                      className={
-                        "ml-2 rounded px-1 text-[10px] uppercase " +
-                        (c.source === "sweep"
-                          ? "bg-emerald-400/20 text-emerald-400"
-                          : "bg-accent/20 text-accent")
-                      }
-                    >
-                      {c.source}
-                    </span>
-                  </span>
-                  <span className="text-[11px] text-muted">
-                    {c.createdAt
-                      ? new Date(c.createdAt).toLocaleDateString("en-GB", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
-                      : ""}
-                  </span>
-                </div>
-                {c.note && <p className="text-[11px] text-muted">{c.note}</p>}
-              </li>
-            ))}
-          </ul>
+          <table className="term-table">
+            <tbody>
+              {contribs.map((c) => (
+                <tr key={c.id}>
+                  <td className="w-24 text-accent">+{kr(c.amount)}</td>
+                  <td className="w-20">
+                    <StatusTag tone={c.source === "sweep" ? "ok" : "muted"}>{c.source}</StatusTag>
+                  </td>
+                  <td className="text-muted">{c.note}</td>
+                  <td className="w-20 text-right text-faint">
+                    {c.createdAt ? shortDate(new Date(c.createdAt).toISOString().slice(0, 10)) : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-      </section>
+      </Panel>
     </main>
   );
 }

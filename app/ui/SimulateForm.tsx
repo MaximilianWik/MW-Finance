@@ -7,7 +7,6 @@ import { kr, krSigned } from "@/lib/format";
 interface CatOption {
   id: number;
   name: string;
-  emoji: string;
 }
 
 export function SimulateForm({ categories }: { categories: CatOption[] }) {
@@ -28,9 +27,9 @@ export function SimulateForm({ categories }: { categories: CatOption[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: Number(amount), categoryId }),
       });
-      const data = (await res.json()) as SimulateResult;
+      const data = (await res.json()) as SimulateResult & { reason?: string; error?: string };
       if (!res.ok || !data.ok) {
-        setError((data as { reason?: string; error?: string }).reason ?? (data as { error?: string }).error ?? "failed");
+        setError(data.reason ?? data.error ?? "failed");
         setResult(null);
       } else {
         setResult(data);
@@ -43,120 +42,86 @@ export function SimulateForm({ categories }: { categories: CatOption[] }) {
   }
 
   const changed = result
-    ? result.rows.filter((r) => Math.abs(r.simulatedDelta) > 0.5 || r.categoryId === result.input.categoryId)
+    ? result.rows.filter(
+        (r) => Math.abs(r.simulatedDelta) > 0.5 || r.categoryId === result.input.categoryId
+      )
     : [];
+  const catName = (id: number) => categories.find((c) => c.id === id)?.name ?? `#${id}`;
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={onSubmit} className="card flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Amount (kr)
+      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
+        <label className="prompt !py-1 flex-1">
+          <span className="sigil text-xs">$ spend</span>
           <input
             type="number"
             inputMode="decimal"
-            step="1"
             min="0"
             required
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="input"
-            placeholder="e.g. 1500"
+            placeholder="amount kr"
+            className="tabular-nums"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Category
+        <label className="prompt !py-1">
+          <span className="sigil text-xs">on</span>
           <select
             required
             value={categoryId}
             onChange={(e) => setCategoryId(Number(e.target.value))}
-            className="input"
+            className="bg-transparent text-sm uppercase tracking-term text-ink2 outline-none"
           >
-            <option value="">— pick a category —</option>
+            <option value="" className="bg-panel">
+              category…
+            </option>
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.emoji} {c.name}
+              <option key={c.id} value={c.id} className="bg-panel">
+                {c.name}
               </option>
             ))}
           </select>
         </label>
         <button type="submit" disabled={loading} className="btn btn-accent">
-          {loading ? "Simulating…" : "Simulate"}
+          {loading ? "…" : "simulate"}
         </button>
-        {error && <p className="text-sm text-danger">{error}</p>}
       </form>
+      {error && <p className="text-sm text-danger">[ FAIL ] {error}</p>}
 
       {result && (
-        <section className="card">
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-medium">Impact · {result.month}</h2>
-            <span className="text-xs text-muted">{result.rows.length} categories</span>
+        <pre className="overflow-x-auto border border-edge bg-ink p-3 text-[0.8rem] leading-relaxed">
+          <div className="text-faint">
+            @@ hypothetical: {krSigned(-result.input.amount)} on {catName(result.input.categoryId)} · {result.month} @@
           </div>
-
-          <div className="mt-3 rounded-lg bg-panel2 p-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted">Projected sweep before</span>
-              <span className="tabular-nums">{kr(result.sweepBefore)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Projected sweep after</span>
-              <span className="tabular-nums">{kr(result.sweepAfter)}</span>
-            </div>
-            <div className="mt-1 flex justify-between border-t border-edge pt-1">
-              <span className="text-muted">Change to savings</span>
-              <span
-                className={
-                  "tabular-nums " +
-                  (result.sweepDelta >= 0 ? "text-emerald-400" : "text-danger")
-                }
-              >
-                {krSigned(result.sweepDelta)}
-              </span>
-            </div>
+          {changed.map((r) => {
+            if (Math.abs(r.effectiveAfter - r.effectiveBefore) < 0.5) {
+              // unchanged budget line (the target itself if no redistribution)
+              return (
+                <div key={r.categoryId} className="text-muted">
+                  {"  "}
+                  {r.name.toLowerCase()}: {kr(r.effectiveBefore)}
+                </div>
+              );
+            }
+            return (
+              <div key={r.categoryId}>
+                <div className="text-danger">
+                  - {r.name.toLowerCase()}: {kr(r.effectiveBefore)}
+                </div>
+                <div className="text-accent">
+                  + {r.name.toLowerCase()}: {kr(r.effectiveAfter)}{" "}
+                  <span className="text-faint">({krSigned(r.simulatedDelta)})</span>
+                </div>
+              </div>
+            );
+          })}
+          <div className="mt-2 border-t border-edge pt-2 text-faint">
+            savings sweep: {kr(result.sweepBefore)} →{" "}
+            <span className={result.sweepDelta >= 0 ? "text-accent" : "text-danger"}>
+              {kr(result.sweepAfter)} ({krSigned(result.sweepDelta)})
+            </span>
           </div>
-
-          {changed.length > 0 && (
-            <div className="mt-4">
-              <h3 className="mb-2 text-xs uppercase tracking-wide text-muted">
-                Redistribution
-              </h3>
-              <ul className="divide-y divide-edge/40">
-                {changed.map((r) => {
-                  const isTarget = r.categoryId === result.input.categoryId;
-                  const dcolor =
-                    r.simulatedDelta === 0
-                      ? "text-muted"
-                      : r.simulatedDelta > 0
-                      ? "text-emerald-400"
-                      : "text-amber-400";
-                  return (
-                    <li
-                      key={r.categoryId}
-                      className="flex items-center justify-between py-2 text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span>{r.emoji}</span>
-                        <span className={isTarget ? "text-white" : "text-muted"}>
-                          {r.name}
-                        </span>
-                        {isTarget && (
-                          <span className="rounded bg-accent/20 px-1 text-[10px] uppercase text-accent">
-                            target
-                          </span>
-                        )}
-                      </span>
-                      <span className="flex items-baseline gap-2 tabular-nums">
-                        <span className="text-muted">{kr(r.effectiveBefore)}</span>
-                        <span>→</span>
-                        <span>{kr(r.effectiveAfter)}</span>
-                        <span className={dcolor}>{krSigned(r.simulatedDelta)}</span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </section>
+        </pre>
       )}
     </div>
   );

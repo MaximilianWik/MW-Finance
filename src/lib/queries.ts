@@ -57,6 +57,7 @@ export async function listTransactions(f: TxFilter = {}) {
       remittance: transactions.remittance,
       categoryId: transactions.categoryId,
       categorySource: transactions.categorySource,
+      flaggedReason: transactions.flaggedReason,
     })
     .from(transactions)
     .where(conds.length ? and(...conds) : undefined)
