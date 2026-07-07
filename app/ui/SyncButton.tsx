@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { syncNow } from "../actions";
 
 export function SyncButton() {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  function run() {
+  async function run() {
+    setPending(true);
     setMsg(null);
-    start(async () => {
-      const r = await syncNow();
+    try {
+      const res = await fetch("/api/sync/manual", { method: "POST" });
+      const r = await res.json();
       setMsg(
         r.ok
           ? r.newTransactions > 0
@@ -21,7 +22,11 @@ export function SyncButton() {
           : `Error: ${r.error ?? "failed"}`
       );
       router.refresh();
-    });
+    } catch {
+      setMsg("Network error");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
