@@ -16,12 +16,22 @@ import { runBehaviorPipeline } from "@/lib/behavior";
 import { env } from "@/lib/env";
 import type { NewTransaction } from "@/db/schema";
 
-const OVERLAP_DAYS = 7; // re-fetch a small window to catch late-booked items
-const DEFAULT_BACKFILL_DAYS = 90;
-const MAX_NOTIFY = 40; // skip per-tx notifications on large backfills
+const OVERLAP_DAYS = 7;          // re-fetch a small window to catch late-booked items
+const DEFAULT_BACKFILL_DAYS = 89; // stay under the 90-day ASPSP limit
+const MAX_NOTIFY = 40;            // skip per-tx notifications on large backfills
 
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Returns yesterday's date as YYYY-MM-DD.
+ *
+ * Swedish ASPSPs (including Länsförsäkringar) only serve booked transactions
+ * through T-1 and return ASPSP_ERROR when date_to >= today.
+ */
+function isoYesterday(): string {
+  return isoDaysAgo(1);
 }
 
 export interface SyncResult {
@@ -49,7 +59,9 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
       return { ok: true, newTransactions: 0, accountsSynced: 0 };
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    // date_to = yesterday: LF Bank and most Swedish ASPSPs only serve T-1 data.
+    // date_to = today causes ASPSP_ERROR on the transactions endpoint.
+    const dateTo = isoYesterday();
     const inserted: NewTransaction[] = [];
 
     for (const acc of accs) {
@@ -83,7 +95,7 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
       }
 
       // Transactions.
-      const raw = await getTransactions(acc.uid, from, today);
+      const raw = await getTransactions(acc.uid, from, dateTo);
       for (const tx of raw) {
         const row = mapTransaction(acc.uid, tx);
         const res = await db
