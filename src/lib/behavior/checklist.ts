@@ -30,6 +30,13 @@ function isoYm(d: Date): string {
   return d.toISOString().slice(0, 7);
 }
 
+function monthBoundsFromYm(ym: string): { from: string; to: string } {
+  const [y, m] = ym.split("-").map(Number);
+  const from = new Date(Date.UTC(y, m - 1, 1));
+  const to   = new Date(Date.UTC(y, m, 0));
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
 export type BillState = "paid" | "due" | "overdue" | "upcoming" | "missed";
 
 export interface BillItem {
