@@ -128,8 +128,15 @@ export default async function Home({
                 ))}
               </tbody>
             </table>
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <SyncButton />
+              <Link
+                href="/api/auth/start"
+                className="btn text-[0.65rem]"
+                title="Re-authorise with Länsförsäkringar (required every 90 days)"
+              >
+                $ re-link bank
+              </Link>
             </div>
           </Panel>
 

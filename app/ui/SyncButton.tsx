@@ -61,6 +61,8 @@ export function SyncButton() {
     return "text-muted";
   }
 
+  const consentExpired = log.some((l) => l.includes("consent expired"));
+
   return (
     <div className="flex flex-col gap-2">
       <button
@@ -71,16 +73,26 @@ export function SyncButton() {
         {pending ? "syncing…" : "$ sync now"}
       </button>
       {log.length > 0 && (
-        <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed">
-          {log.map((l, i) => (
-            <div key={i} className={lineColor(l)}>
-              {l}
-              {pending && i === log.length - 1 && (
-                <span className="caret" />
-              )}
-            </div>
-          ))}
-        </pre>
+        <>
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed">
+            {log.map((l, i) => (
+              <div key={i} className={lineColor(l)}>
+                {l}
+                {pending && i === log.length - 1 && (
+                  <span className="caret" />
+                )}
+              </div>
+            ))}
+          </pre>
+          {consentExpired && (
+            <a
+              href="/api/auth/start"
+              className="btn btn-accent self-start"
+            >
+              $ re-link bank → re-authorise now
+            </a>
+          )}
+        </>
       )}
     </div>
   );
