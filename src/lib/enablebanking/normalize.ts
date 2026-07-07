@@ -12,24 +12,58 @@ export function counterparty(tx: EbTransaction): string | undefined {
 
 /**
  * Normalize a raw counterparty/remittance string into a stable merchant key
- * suitable for the merchant→category cache. Strips card-transaction noise,
- * dates, reference numbers, and store IDs.
+ * suitable for the merchant→category cache.
+ *
+ * Strategy:
+ *   1. Standard pass: strip noise (prefixes, dates, long digit runs, store IDs)
+ *      and return if something useful remains.
+ *   2. Reference pass: if nothing meaningful was left after the standard pass,
+ *      treat the string as a payment-reference identifier (Bankgiro, Plusgiro,
+ *      invoice refs, etc.). Return the original with minimal cleaning so the
+ *      reference number itself becomes the stable key.
+ *
+ * This matters for Swedish bank payments where the counterparty is identified
+ * only by a BG/PG reference number like "6162-839725531".
  */
 export function normalizeMerchant(raw: string | undefined): string | null {
   if (!raw) return null;
+
   let s = raw.toUpperCase();
-  // Common Nordic card-purchase prefixes / noise.
-  s = s.replace(/\b(KORTK[ÖO]P|KORTBETALNING|BG|PG|SWISH|AUTOGIRO|KLARNA)\b/g, " ");
-  // Dates like 2024-01-02, 24/01, 01.02.
-  s = s.replace(/\d{2,4}[-/.]\d{1,2}([-/.]\d{1,4})?/g, " ");
-  // Long digit runs (card/ref numbers), trailing store numbers.
-  s = s.replace(/\d{4,}/g, " ");
-  s = s.replace(/\*+/g, " ");
-  // Collapse to letters, spaces, and a few separators.
-  s = s.replace(/[^A-ZÅÄÖ0-9 &.-]/g, " ").replace(/\s+/g, " ").trim();
-  if (!s) return null;
-  // Cap length; keep the leading meaningful tokens.
-  return s.slice(0, 60);
+
+  // ── Standard pass ──────────────────────────────────────────────────────────
+  // Strip common Nordic card-purchase label words.
+  let clean = s.replace(/\b(KORTK[ÖO]P|KORTBETALNING|BG|PG|SWISH|AUTOGIRO|KLARNA)\b/g, " ");
+  // Strip date-like patterns: 2024-01-02, 24/01, 01.02
+  clean = clean.replace(/\d{2,4}[-/.]\d{1,2}([-/.]\d{1,4})?/g, " ");
+  // Strip long digit runs (card numbers, reference appendages) ≥ 4 digits.
+  clean = clean.replace(/\d{4,}/g, " ");
+  // Strip asterisks (obfuscated card numbers like "REVOLUT**4590*")
+  clean = clean.replace(/\*+/g, " ");
+  // Keep letters, digits ≤3, spaces, and a few separators; collapse whitespace.
+  clean = clean.replace(/[^A-ZÅÄÖ0-9 &.-]/g, " ").replace(/\s+/g, " ").trim();
+
+  if (clean.length >= 2) {
+    return clean.slice(0, 60);
+  }
+
+  // ── Reference pass (fallback) ───────────────────────────────────────────────
+  // The raw string has no useful text tokens — it's a reference/identifier
+  // (e.g., Bankgiro "6162-839725531", Plusgiro "5862-8082", invoice ref).
+  // Strip only the noisiest label words and keep the rest as-is.
+  let ref = s
+    .replace(/\b(KORTK[ÖO]P|KORTBETALNING|AUTOGIRO|KLARNA)\b/g, " ")
+    // Strip card-length digit runs (≥ 13 digits) only — keep shorter refs.
+    .replace(/\d{13,}/g, " ")
+    .replace(/\*+/g, " ")
+    .replace(/[^A-ZÅÄÖ0-9 &./-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (ref.length >= 2) {
+    return ref.slice(0, 60);
+  }
+
+  return null;
 }
 
 function dedupeKey(uid: string, tx: EbTransaction): string {

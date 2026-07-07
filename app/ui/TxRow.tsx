@@ -36,9 +36,9 @@ export function TxRow({ tx, options }: { tx: TxRowData; options: CatOption[] }) 
       <td className="w-40">
         <CategoryCommand txId={tx.id} categoryId={tx.categoryId} options={options} />
       </td>
-      {/* Mark-as-recurring: only for DBIT */}
+      {/* Mark-as-recurring: all DBIT rows, with or without a normalized merchant */}
       <td className="w-24 text-center">
-        {tx.direction === "DBIT" && tx.merchant && (
+        {tx.direction === "DBIT" && (
           <MarkRecurring txId={tx.id} merchant={displayName} />
         )}
       </td>
