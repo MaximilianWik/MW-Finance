@@ -170,7 +170,7 @@ export default async function InsightsPage({
                 <th className="text-right">AMOUNT</th>
                 <th className="w-20 text-center">STATUS</th>
                 <th className="w-20 text-right">EXPECTED</th>
-                <th className="w-20 text-right">MANAGE</th>
+                <th className="text-right">MANAGE</th>
               </tr>
             </thead>
             <tbody>

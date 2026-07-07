@@ -6,7 +6,7 @@ import { Glyph, StatusTag } from "./StatusTag";
 import type { BillItem } from "@/lib/behavior/checklist";
 import { kr, shortDate } from "@/lib/format";
 
-/** One row in the bills checklist with inline notes edit and soft-delete. */
+/** One row in the bills checklist with inline notes edit, mark-paid, and delete. */
 export function BillRow({ item }: { item: BillItem }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -30,21 +30,46 @@ export function BillRow({ item }: { item: BillItem }) {
     start(() => router.refresh());
   }
 
+  /**
+   * Manually mark as paid: advance nextDate by one cadence so the entry stops
+   * showing as OVERDUE. Used when the bank transaction matched a different
+   * merchant key and wasn't auto-detected.
+   */
+  async function markPaid() {
+    if (!item.advancedNextDate) return;
+    await fetch("/api/recurring", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.id, nextDate: item.advancedNextDate }),
+    });
+    start(() => router.refresh());
+  }
+
   async function del() {
     if (!confirm(`Remove "${item.displayName}" from the checklist?`)) return;
     await fetch(`/api/recurring?id=${item.id}`, { method: "DELETE" });
     start(() => router.refresh());
   }
 
+  const isAlert = item.state === "overdue" || item.state === "missed";
+
   return (
-    <tr className={item.state === "overdue" || item.state === "missed" ? "bg-danger/5" : undefined}>
+    <tr className={isAlert ? "bg-danger/5" : undefined}>
       <td className="w-7">
         <Glyph state={stateGlyph[item.state]} />
       </td>
       <td>
         <div className="flex flex-col gap-0.5">
           <span className="uppercase tracking-term text-ink2">{item.displayName}</span>
-          {item.notes && item.merchant !== item.notes && (
+          {/* Show actual payment date when auto-detected */}
+          {item.state === "paid" && item.paidOnDate && item.paidOnDate !== item.expectedOn && (
+            <span className="text-[0.68rem] text-ok">
+              paid {shortDate(item.paidOnDate)}
+              {item.expectedOn && ` · expected ${shortDate(item.expectedOn)}`}
+            </span>
+          )}
+          {/* Show alias source */}
+          {item.notes && item.notes !== item.merchant && (
             <span className="text-[0.68rem] text-muted">alias for: {item.merchant}</span>
           )}
           {editing && (
@@ -60,8 +85,12 @@ export function BillRow({ item }: { item: BillItem }) {
                   if (e.key === "Escape") setEditing(false);
                 }}
               />
-              <button onClick={saveNotes} disabled={busy} className="btn !py-0.5 btn-accent">save</button>
-              <button onClick={() => setEditing(false)} className="btn !py-0.5">esc</button>
+              <button onClick={saveNotes} disabled={busy} className="btn !py-0.5 btn-accent">
+                save
+              </button>
+              <button onClick={() => setEditing(false)} className="btn !py-0.5">
+                esc
+              </button>
             </div>
           )}
         </div>
@@ -71,8 +100,19 @@ export function BillRow({ item }: { item: BillItem }) {
         <StatusTag tone={stateTone[item.state]}>{item.state}</StatusTag>
       </td>
       <td className="w-20 text-right text-faint">{shortDate(item.expectedOn)}</td>
-      <td className="w-20 text-right">
-        <div className="flex justify-end gap-1">
+      <td className="text-right">
+        <div className="flex flex-wrap justify-end gap-1">
+          {/* Manual "mark paid" — shown for overdue/missed when auto-detect didn't fire */}
+          {(item.state === "overdue" || item.state === "missed") && item.advancedNextDate && (
+            <button
+              onClick={markPaid}
+              disabled={busy}
+              className="btn border-ok/40 text-ok !px-1.5 !py-0.5 text-[0.65rem] hover:border-ok hover:bg-ok/10"
+              title={`Advance next date to ${item.advancedNextDate}`}
+            >
+              [✓] paid
+            </button>
+          )}
           {!editing && (
             <button
               onClick={() => setEditing(true)}
