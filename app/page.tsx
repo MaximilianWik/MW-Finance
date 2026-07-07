@@ -29,12 +29,48 @@ export default async function Home({
     );
   }
 
-  const [accs, budget, txs, cats] = await Promise.all([
-    getAccounts(),
-    getMonthlyBudgetStatus(),
-    listTransactions({ limit: 12 }),
-    getCategories(),
-  ]);
+  let accs: Awaited<ReturnType<typeof getAccounts>> = [];
+  let budget: Awaited<ReturnType<typeof getMonthlyBudgetStatus>> = {
+    label: "",
+    rows: [],
+    totalSpent: 0,
+    totalBudget: 0,
+  };
+  let txs: Awaited<ReturnType<typeof listTransactions>> = [];
+  let cats: Awaited<ReturnType<typeof getCategories>> = [];
+  let dbError: string | null = null;
+
+  try {
+    [accs, budget, txs, cats] = await Promise.all([
+      getAccounts(),
+      getMonthlyBudgetStatus(),
+      listTransactions({ limit: 12 }),
+      getCategories(),
+    ]);
+  } catch (e) {
+    dbError = e instanceof Error ? e.message : String(e);
+  }
+
+  if (dbError) {
+    return (
+      <div className="card mt-8">
+        <h1 className="text-lg font-semibold text-danger">Database error</h1>
+        <p className="mt-2 text-sm text-muted">
+          Tables likely don&apos;t exist yet. Run these locally (with your production{" "}
+          <code className="text-accent2">DATABASE_URL</code>) then redeploy:
+        </p>
+        <pre className="mt-3 overflow-x-auto rounded-lg bg-ink p-3 text-xs text-accent2">
+          npm run db:push{"\n"}npm run db:seed
+        </pre>
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs text-muted">Error detail</summary>
+          <pre className="mt-1 overflow-x-auto rounded bg-ink p-2 text-[11px] text-danger/80">
+            {dbError}
+          </pre>
+        </details>
+      </div>
+    );
+  }
 
   const options = cats.map((c) => ({
     id: c.id,
