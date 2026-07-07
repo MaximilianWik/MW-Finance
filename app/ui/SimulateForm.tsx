@@ -108,7 +108,7 @@ export function SimulateForm({ categories }: { categories: CatOption[] }) {
                 <div className="text-danger">
                   - {r.name.toLowerCase()}: {kr(r.effectiveBefore)}
                 </div>
-                <div className="text-accent">
+                <div className="text-ok">
                   + {r.name.toLowerCase()}: {kr(r.effectiveAfter)}{" "}
                   <span className="text-faint">({krSigned(r.simulatedDelta)})</span>
                 </div>
@@ -117,7 +117,7 @@ export function SimulateForm({ categories }: { categories: CatOption[] }) {
           })}
           <div className="mt-2 border-t border-edge pt-2 text-faint">
             savings sweep: {kr(result.sweepBefore)} →{" "}
-            <span className={result.sweepDelta >= 0 ? "text-accent" : "text-danger"}>
+            <span className={result.sweepDelta >= 0 ? "text-ok" : "text-danger"}>
               {kr(result.sweepAfter)} ({krSigned(result.sweepDelta)})
             </span>
           </div>

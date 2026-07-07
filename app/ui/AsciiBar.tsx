@@ -27,15 +27,12 @@ export function AsciiBar({
     ratio > 1 ? "danger" : ratio >= 0.85 ? "warn" : "ok";
   const t = tone ?? derived;
   const color =
-    t === "danger"
-      ? "text-danger"
-      : t === "warn"
-      ? "text-amber"
-      : t === "muted"
-      ? "text-muted"
-      : t === "accent2"
-      ? "text-accent2"
-      : "text-accent";
+    t === "danger"  ? "text-danger"
+    : t === "warn"  ? "text-amber"
+    : t === "ok"    ? "text-ok"
+    : t === "muted" ? "text-muted"
+    : t === "accent2" ? "text-accent2"
+    : "text-accent"; // default / accent
 
   return (
     <span className={`whitespace-nowrap tabular-nums ${className}`}>

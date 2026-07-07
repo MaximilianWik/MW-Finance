@@ -7,23 +7,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Terminal / diagnostic palette. Near-black green-tinted bg, phosphor
-        // green accent, desaturated status colors. Diagnostic honesty over
-        // reassurance.
-        ink: "#0a0e0a", // page background
-        panel: "#0c110c", // panel surface (barely lifted)
-        panel2: "#111811", // nested / input surface
-        edge: "#234523", // dim phosphor border
-        edge2: "#2f5e2f", // brighter border (hover / active)
-        grid: "#152015", // hairline rules inside tables
-        ink2: "#cfe8cf", // primary text (light phosphor)
-        muted: "#6f926f", // secondary text (dim phosphor, ≥4.5:1 on ink)
-        faint: "#476247", // tertiary / disabled
-        accent: "#4ee06a", // phosphor green — primary action / highlight
-        accent2: "#3fd0c0", // cyan — links / secondary highlight
-        amber: "#e0b23f", // warnings
-        danger: "#e8564e", // over-budget / failed / anomaly
-        ok: "#4ee06a", // on-track
+        // Neutral terminal palette. True dark (no green tint). Amber phosphor as
+        // the single accent — green reserved for success / ok states only.
+        ink:    "#0c0c0f", // page background
+        panel:  "#101014", // panel surface
+        panel2: "#161619", // nested / input surface
+        edge:   "#252530", // dim border
+        edge2:  "#363644", // active border / hover
+        grid:   "#18181c", // hairline table rules
+        ink2:   "#d8d8e0", // primary text (cool off-white)
+        muted:  "#72728a", // secondary text (neutral grey, ≥4.5:1 on ink)
+        faint:  "#454552", // tertiary / disabled
+        // Accent
+        accent:  "#d4a843", // amber phosphor — primary actions, glyphs, sigils
+        accent2: "#5cc8e8", // cyan — links / secondary highlight
+        // Status
+        amber:  "#e8c545", // warnings (brighter amber than accent)
+        danger: "#e85252", // over-budget / failed / anomaly
+        ok:     "#4ec96a", // success / on-track (green, used ONLY for [✓] states)
       },
       fontFamily: {
         mono: [
@@ -36,16 +37,12 @@ export default {
         ],
       },
       letterSpacing: {
-        term: "0.08em", // system-label tracking
+        term: "0.08em",
       },
       keyframes: {
         blink: {
           "0%, 49%": { opacity: "1" },
           "50%, 100%": { opacity: "0" },
-        },
-        "bar-load": {
-          from: { transform: "scaleX(0)" },
-          to: { transform: "scaleX(1)" },
         },
         flicker: {
           "0%, 100%": { opacity: "1" },

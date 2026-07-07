@@ -7,18 +7,16 @@ export function StatusTag({
   children,
   className = "",
 }: {
-  tone?: "ok" | "warn" | "danger" | "muted";
+  tone?: "ok" | "warn" | "danger" | "muted" | "accent";
   children: React.ReactNode;
   className?: string;
 }) {
   const cls =
-    tone === "ok"
-      ? "tag-ok"
-      : tone === "warn"
-      ? "tag-warn"
-      : tone === "danger"
-      ? "tag-danger"
-      : "tag-muted";
+    tone === "ok"     ? "tag-ok"
+    : tone === "warn"   ? "tag-warn"
+    : tone === "danger" ? "tag-danger"
+    : tone === "accent" ? "tag-accent"
+    : "tag-muted";
   return <span className={`tag ${cls} ${className}`}>{children}</span>;
 }
 

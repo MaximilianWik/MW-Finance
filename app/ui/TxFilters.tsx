@@ -6,8 +6,6 @@ import type { CatOption } from "./CategoryCommand";
 export function TxFilters({ options }: { options: CatOption[] }) {
   const router = useRouter();
   const sp = useSearchParams();
-  const month = sp.get("month") ?? "";
-  const categoryId = sp.get("categoryId") ?? "";
 
   function update(next: Record<string, string>) {
     const params = new URLSearchParams(sp.toString());
@@ -18,41 +16,85 @@ export function TxFilters({ options }: { options: CatOption[] }) {
     router.push(`/transactions?${params.toString()}`);
   }
 
+  const month      = sp.get("month") ?? "";
+  const categoryId = sp.get("categoryId") ?? "";
+  const q          = sp.get("q") ?? "";
+  const minAmount  = sp.get("minAmount") ?? "";
+  const maxAmount  = sp.get("maxAmount") ?? "";
+  const hasFilters = month || categoryId || q || minAmount || maxAmount;
+
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-term text-muted">
-      <span className="text-accent">$ filter</span>
+    <div className="flex flex-wrap items-end gap-2 text-xs uppercase tracking-term text-muted">
+      <span className="self-center text-accent">$ filter</span>
+
       <label className="prompt !py-1">
         <span className="sigil text-xs">--month</span>
         <input
           type="month"
           value={month}
           onChange={(e) => update({ month: e.target.value })}
-          className="!w-36 bg-transparent text-xs uppercase tracking-term text-ink2 caret-accent outline-none"
+          className="!w-36 text-xs uppercase tracking-term"
           aria-label="Month"
         />
       </label>
+
       <label className="prompt !py-1">
         <span className="sigil text-xs">--cat</span>
         <select
           value={categoryId}
           onChange={(e) => update({ categoryId: e.target.value })}
-          className="bg-transparent text-xs uppercase tracking-term text-ink2 outline-none"
-          aria-label="Category filter"
+          className="text-xs uppercase tracking-term"
+          aria-label="Category"
         >
-          <option value="" className="bg-panel">
-            all
-          </option>
+          <option value="">all</option>
           {options.map((o) => (
-            <option key={o.id} value={o.id} className="bg-panel">
-              {o.name}
-            </option>
+            <option key={o.id} value={o.id}>{o.name}</option>
           ))}
         </select>
       </label>
-      {(month || categoryId) && (
+
+      <label className="prompt !py-1 flex-1 min-w-[10rem]">
+        <span className="sigil text-xs">--search</span>
+        <input
+          type="text"
+          value={q}
+          placeholder="name / merchant…"
+          onChange={(e) => update({ q: e.target.value })}
+          className="!w-full text-xs"
+          aria-label="Text search"
+        />
+      </label>
+
+      <label className="prompt !py-1 w-28">
+        <span className="sigil text-xs">≥</span>
+        <input
+          type="number"
+          min="0"
+          value={minAmount}
+          placeholder="min kr"
+          onChange={(e) => update({ minAmount: e.target.value })}
+          className="!w-full tabular-nums text-xs"
+          aria-label="Min amount"
+        />
+      </label>
+
+      <label className="prompt !py-1 w-28">
+        <span className="sigil text-xs">≤</span>
+        <input
+          type="number"
+          min="0"
+          value={maxAmount}
+          placeholder="max kr"
+          onChange={(e) => update({ maxAmount: e.target.value })}
+          className="!w-full tabular-nums text-xs"
+          aria-label="Max amount"
+        />
+      </label>
+
+      {hasFilters && (
         <button
           onClick={() => router.push("/transactions")}
-          className="text-faint hover:text-danger"
+          className="btn btn-danger !py-1 text-[0.65rem]"
         >
           [ clear ]
         </button>

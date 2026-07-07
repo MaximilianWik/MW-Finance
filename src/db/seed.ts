@@ -18,17 +18,17 @@ const DEFAULTS: Array<{
   weekly: string | null;
   sort: number;
 }> = [
-  { name: "Groceries", color: "#4ee06a", monthly: "4000", weekly: "1000", sort: 10 },
-  { name: "Restaurants", color: "#e0b23f", monthly: "1500", weekly: "375", sort: 20 },
-  { name: "Transport", color: "#3fd0c0", monthly: "900", weekly: null, sort: 30 },
-  { name: "Shopping", color: "#c98be0", monthly: "1500", weekly: null, sort: 40 },
-  { name: "Bills & Utilities", color: "#8ba3e0", monthly: "3000", weekly: null, sort: 50 },
-  { name: "Entertainment", color: "#e08b9e", monthly: "600", weekly: null, sort: 60 },
-  { name: "Health", color: "#5ee0a0", monthly: "500", weekly: null, sort: 70 },
-  { name: "Cash & ATM", color: "#8faf8f", monthly: null, weekly: null, sort: 80 },
-  { name: "Income", color: "#4ee06a", monthly: null, weekly: null, sort: 90 },
-  { name: "Transfers", color: "#6f926f", monthly: null, weekly: null, sort: 100 },
-  { name: "Uncategorized", color: "#6f926f", monthly: null, weekly: null, sort: 999 },
+  { name: "Groceries",       color: "#4ec96a", monthly: "4000", weekly: "1000", sort: 10 },
+  { name: "Restaurants",     color: "#d4a843", monthly: "1500", weekly: "375",  sort: 20 },
+  { name: "Transport",       color: "#5cc8e8", monthly: "900",  weekly: null,   sort: 30 },
+  { name: "Shopping",        color: "#c080e0", monthly: "1500", weekly: null,   sort: 40 },
+  { name: "Bills & Utilities",color: "#7080c8", monthly: "3000", weekly: null,  sort: 50 },
+  { name: "Entertainment",   color: "#e06880", monthly: "600",  weekly: null,   sort: 60 },
+  { name: "Health",          color: "#60c8a0", monthly: "500",  weekly: null,   sort: 70 },
+  { name: "Cash & ATM",      color: "#8888a0", monthly: null,   weekly: null,   sort: 80 },
+  { name: "Income",          color: "#4ec96a", monthly: null,   weekly: null,   sort: 90 },
+  { name: "Transfers",       color: "#606070", monthly: null,   weekly: null,   sort: 100 },
+  { name: "Uncategorized",   color: "#72728a", monthly: null,   weekly: null,   sort: 999 },
 ];
 
 async function main() {

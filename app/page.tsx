@@ -40,19 +40,18 @@ export default async function Home({
 
   let accs: Awaited<ReturnType<typeof getAccounts>> = [];
   let budget: Awaited<ReturnType<typeof getMonthlyBudgetStatus>> = {
-    label: "",
-    ym: "",
-    rows: [],
-    totalSpent: 0,
-    totalBudget: 0,
+    label: "", ym: "", rows: [], totalSpent: 0, totalBudget: 0,
   };
-  let txs: Awaited<ReturnType<typeof listTransactions>> = [];
+  let txResult: Awaited<ReturnType<typeof listTransactions>> = {
+    rows: [],
+    totals: { totalIn: 0, totalOut: 0, count: 0 },
+  };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
   let dbError: string | null = null;
 
   try {
-    [accs, budget, txs, cats, primaryGoal] = await Promise.all([
+    [accs, budget, txResult, cats, primaryGoal] = await Promise.all([
       getAccounts(),
       getMonthlyBudgetStatus(),
       listTransactions({ limit: 12 }),
@@ -168,12 +167,21 @@ export default async function Home({
       )}
 
       <Panel title="RECENT LEDGER" right={<Link href="/transactions" className="text-accent2 hover:underline">» all</Link>}>
-        {txs.length === 0 ? (
+        {txResult.rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">No transactions yet.</p>
         ) : (
           <table className="term-table">
+            <thead>
+              <tr>
+                <th>DATE</th>
+                <th>MERCHANT</th>
+                <th>CATEGORY</th>
+                <th></th>
+                <th className="text-right">AMOUNT</th>
+              </tr>
+            </thead>
             <tbody>
-              {txs.map((t) => (
+              {txResult.rows.map((t) => (
                 <TxRow key={t.id} tx={t} options={options} />
               ))}
             </tbody>

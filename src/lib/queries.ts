@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { accounts, transactions, categories } from "@/db/schema";
-import { and, desc, eq, gte, lte, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql, ilike, or, type SQL } from "drizzle-orm";
 
 export async function getAccounts() {
   return db
@@ -24,20 +24,24 @@ export async function getCategories() {
 
 export interface TxFilter {
   limit?: number;
-  month?: string; // YYYY-MM
+  month?: string;       // YYYY-MM
   categoryId?: number;
   accountUid?: string;
+  q?: string;           // text search: counterpartyName | remittance | merchant
+  minAmount?: number;   // absolute kr
+  maxAmount?: number;   // absolute kr
 }
 
 export async function listTransactions(f: TxFilter = {}) {
   const conds: SQL[] = [];
+
   if (f.month) {
     const m = /^(\d{4})-(\d{2})$/.exec(f.month);
     if (m) {
       const y = Number(m[1]);
       const mo = Number(m[2]);
       const from = new Date(Date.UTC(y, mo - 1, 1)).toISOString().slice(0, 10);
-      const to = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+      const to   = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
       conds.push(gte(transactions.bookingDate, from));
       conds.push(lte(transactions.bookingDate, to));
     }
@@ -45,7 +49,26 @@ export async function listTransactions(f: TxFilter = {}) {
   if (f.categoryId) conds.push(eq(transactions.categoryId, f.categoryId));
   if (f.accountUid) conds.push(eq(transactions.accountUid, f.accountUid));
 
-  return db
+  if (f.q?.trim()) {
+    const pat = `%${f.q.trim()}%`;
+    conds.push(
+      or(
+        ilike(transactions.counterpartyName, pat),
+        ilike(transactions.remittance, pat),
+        ilike(transactions.merchant, pat)
+      )!
+    );
+  }
+  if (f.minAmount != null) {
+    conds.push(sql`${transactions.amount}::float >= ${f.minAmount}`);
+  }
+  if (f.maxAmount != null) {
+    conds.push(sql`${transactions.amount}::float <= ${f.maxAmount}`);
+  }
+
+  const where = conds.length ? and(...conds) : undefined;
+
+  const rows = await db
     .select({
       id: transactions.id,
       direction: transactions.direction,
@@ -55,12 +78,25 @@ export async function listTransactions(f: TxFilter = {}) {
       bookingDate: transactions.bookingDate,
       counterpartyName: transactions.counterpartyName,
       remittance: transactions.remittance,
+      merchant: transactions.merchant,
       categoryId: transactions.categoryId,
       categorySource: transactions.categorySource,
       flaggedReason: transactions.flaggedReason,
     })
     .from(transactions)
-    .where(conds.length ? and(...conds) : undefined)
+    .where(where)
     .orderBy(desc(transactions.bookingDate), desc(transactions.id))
     .limit(f.limit ?? 100);
+
+  // Compute totals over the full filtered set.
+  const [totals] = await db
+    .select({
+      totalIn:  sql<number>`coalesce(sum(case when ${transactions.direction}='CRDT' then ${transactions.amount}::float else 0 end),0)::float`,
+      totalOut: sql<number>`coalesce(sum(case when ${transactions.direction}='DBIT' then ${transactions.amount}::float else 0 end),0)::float`,
+      count:    sql<number>`count(*)::int`,
+    })
+    .from(transactions)
+    .where(where);
+
+  return { rows, totals };
 }

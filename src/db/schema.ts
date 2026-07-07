@@ -47,7 +47,7 @@ export const accounts = pgTable("accounts", {
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
-  color: text("color").notNull().default("#6f926f"),
+  color: text("color").notNull().default("#72728a"),
   budgetMonthly: numeric("budget_monthly", { precision: 14, scale: 2 }),
   budgetWeekly: numeric("budget_weekly", { precision: 14, scale: 2 }),
   sort: integer("sort").notNull().default(100),
@@ -174,10 +174,11 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ─── Recurring payments (Phase 2 — detected from history) ───────────────────
+// ─── Recurring payments (Phase 2 — detected from history + manual) ──────────
 export const recurringPayments = pgTable("recurring_payments", {
   id: serial("id").primaryKey(),
   merchant: text("merchant").notNull().unique(),
+  notes: text("notes"), // user-supplied display name / memo
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   currency: text("currency").notNull().default("SEK"),
   cadence: text("cadence").notNull().default("monthly"), // weekly | monthly | yearly
@@ -188,6 +189,8 @@ export const recurringPayments = pgTable("recurring_payments", {
   categoryId: integer("category_id").references(() => categories.id, {
     onDelete: "set null",
   }),
+  manual: boolean("manual").notNull().default(false), // true = user-created, not auto-detected
+  active: boolean("active").notNull().default(true),  // false = soft-deleted by user
   lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

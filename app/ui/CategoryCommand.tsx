@@ -58,7 +58,7 @@ export function CategoryCommand({
         onClick={() => setOpen(true)}
         disabled={pending}
         className="group inline-flex items-center gap-1 text-xs uppercase tracking-term hover:text-accent"
-        style={{ color: current?.color ?? "#6f926f" }}
+        style={{ color: current?.color ?? "#72728a" }}
         aria-label="Override category"
       >
         <span className="text-faint group-hover:text-accent">»</span>

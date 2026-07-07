@@ -1,24 +1,28 @@
+import { Suspense } from "react";
 import { db } from "@/db";
 import { recurringPayments } from "@/db/schema";
-import { desc, sql } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { getMonthComparison, getWeekComparison, type CategoryComparison } from "@/lib/comparison";
 import { getBillsChecklist } from "@/lib/behavior/checklist";
 import { monthRange } from "@/lib/budget";
 import { kr, krSigned, pct, shortDate } from "@/lib/format";
 import { Panel } from "../ui/Panel";
-import { StatusTag, Glyph } from "../ui/StatusTag";
+import { StatusTag } from "../ui/StatusTag";
+import { BillRow } from "../ui/RecurringActions";
+import { ChecklistMonthNav } from "../ui/ChecklistMonthNav";
 
 export const dynamic = "force-dynamic";
 
 function trendColor(delta: number): string {
   if (Math.abs(delta) < 1) return "text-muted";
-  return delta > 0 ? "text-amber" : "text-accent";
+  return delta > 0 ? "text-amber" : "text-ok";
 }
 
 function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
   const changed = rows
     .filter((r) => r.spentThis > 0 || r.spentPrev > 0)
     .sort((a, b) => Math.abs(b.deltaKr) - Math.abs(a.deltaKr));
+
   if (changed.length === 0) {
     return <p className="py-4 text-center text-sm text-muted">No spending recorded.</p>;
   }
@@ -37,16 +41,16 @@ function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
         {changed.map((r) => (
           <tr key={r.categoryId}>
             <td className="uppercase tracking-term">
-              <span className="mr-2" style={{ color: r.color }}>
-                ■
-              </span>
+              <span className="mr-2" style={{ color: r.color }}>■</span>
               {r.name}
             </td>
             <td className="text-right text-muted">{kr(r.spentPrev)}</td>
             <td className="text-right text-ink2">{kr(r.spentThis)}</td>
             <td className={`text-right ${trendColor(r.deltaKr)}`}>{krSigned(r.deltaKr)}</td>
             <td className={`text-right ${trendColor(r.deltaKr)}`}>
-              {r.deltaPct != null ? `${r.deltaPct >= 0 ? "+" : ""}${pct(r.deltaPct)}` : "—"}
+              {r.deltaPct != null
+                ? `${r.deltaPct >= 0 ? "+" : ""}${pct(r.deltaPct)}`
+                : "—"}
             </td>
           </tr>
         ))}
@@ -55,40 +59,45 @@ function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
   );
 }
 
-export default async function InsightsPage() {
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-US", {
+    month: "short", year: "numeric", timeZone: "UTC",
+  });
+}
+
+export default async function InsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   const { ym, label } = monthRange();
+  const billsMonth = sp.billsMonth ?? ym;
 
   const [mom, wow, bills, recurrings] = await Promise.all([
     getMonthComparison(ym),
     getWeekComparison(),
-    getBillsChecklist(),
+    getBillsChecklist(billsMonth),
     db
       .select({
         id: recurringPayments.id,
         merchant: recurringPayments.merchant,
+        notes: recurringPayments.notes,
         amount: sql<number>`${recurringPayments.amount}::float`,
         cadence: recurringPayments.cadence,
         cadenceDays: recurringPayments.cadenceDays,
         nextDate: recurringPayments.nextDate,
         lastDate: recurringPayments.lastDate,
         occurrences: recurringPayments.occurrences,
+        manual: recurringPayments.manual,
       })
       .from(recurringPayments)
+      .where(eq(recurringPayments.active, true))
       .orderBy(desc(recurringPayments.amount)),
   ]);
 
-  const billGlyph = {
-    paid: "ok",
-    due: "empty",
-    overdue: "warn",
-    upcoming: "empty",
-  } as const;
-  const billTone = {
-    paid: "ok",
-    due: "muted",
-    overdue: "danger",
-    upcoming: "muted",
-  } as const;
+  const billMonthLabel = monthLabel(billsMonth);
 
   return (
     <main className="flex flex-col gap-4">
@@ -98,7 +107,8 @@ export default async function InsightsPage() {
           right={
             <span className={trendColor(mom.totalDelta)}>
               {krSigned(mom.totalDelta)}
-              {mom.totalDeltaPct != null && ` ${mom.totalDeltaPct >= 0 ? "+" : ""}${pct(mom.totalDeltaPct)}`}
+              {mom.totalDeltaPct != null &&
+                ` ${mom.totalDeltaPct >= 0 ? "+" : ""}${pct(mom.totalDeltaPct)}`}
             </span>
           }
         >
@@ -113,7 +123,8 @@ export default async function InsightsPage() {
           right={
             <span className={trendColor(wow.totalDelta)}>
               {krSigned(wow.totalDelta)}
-              {wow.totalDeltaPct != null && ` ${wow.totalDeltaPct >= 0 ? "+" : ""}${pct(wow.totalDeltaPct)}`}
+              {wow.totalDeltaPct != null &&
+                ` ${wow.totalDeltaPct >= 0 ? "+" : ""}${pct(wow.totalDeltaPct)}`}
             </span>
           }
         >
@@ -124,45 +135,69 @@ export default async function InsightsPage() {
         </Panel>
       </div>
 
-      <Panel title="BILLS CHECKLIST" right={`${bills.paid}/${bills.total} PAID`}>
+      {/* Bills checklist with month nav */}
+      <Panel
+        title="BILLS CHECKLIST"
+        right={
+          <span className="text-muted">
+            {bills.paid}/{bills.total} PAID
+          </span>
+        }
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Suspense>
+            <ChecklistMonthNav
+              currentMonth={billsMonth}
+              label={billMonthLabel}
+              isHistorical={bills.isHistorical}
+            />
+          </Suspense>
+          {bills.isHistorical && (
+            <StatusTag tone="muted">HISTORICAL</StatusTag>
+          )}
+        </div>
+
         {bills.items.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted">
-            No recurring bills detected yet.
+            No recurring bills detected yet. Mark transactions as recurring from the ledger.
           </p>
         ) : (
           <table className="term-table">
+            <thead>
+              <tr>
+                <th className="w-7"></th>
+                <th>MERCHANT</th>
+                <th className="text-right">AMOUNT</th>
+                <th className="w-20 text-center">STATUS</th>
+                <th className="w-20 text-right">EXPECTED</th>
+                <th className="w-20 text-right">MANAGE</th>
+              </tr>
+            </thead>
             <tbody>
-              {bills.items.map((b) => (
-                <tr key={b.id}>
-                  <td className="w-8">
-                    <Glyph state={billGlyph[b.state]} />
-                  </td>
-                  <td className="uppercase tracking-term text-ink2">{b.merchant}</td>
-                  <td className="w-24 text-right text-muted">−{kr(b.amount)}</td>
-                  <td className="w-24 text-center">
-                    <StatusTag tone={billTone[b.state]}>{b.state}</StatusTag>
-                  </td>
-                  <td className="w-20 text-right text-faint">{shortDate(b.expectedOn)}</td>
-                </tr>
+              {bills.items.map((item) => (
+                <BillRow key={item.id} item={item} />
               ))}
             </tbody>
           </table>
         )}
       </Panel>
 
-      <Panel title="RECURRING PAYMENTS" right={`${recurrings.length}`}>
+      {/* Detected recurring payments */}
+      <Panel title="RECURRING PAYMENTS" right={`${recurrings.length} DETECTED`}>
         {recurrings.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted">
-            Nothing detected — need ≥3 charges from one merchant.
+            Nothing detected — need ≥3 charges from one merchant,
+            or mark a transaction manually from the ledger.
           </p>
         ) : (
           <table className="term-table">
             <thead>
               <tr>
                 <th>MERCHANT</th>
+                <th>NOTES / ALIAS</th>
                 <th className="text-right">AMOUNT</th>
                 <th>CADENCE</th>
-                <th className="text-right">SEEN</th>
+                <th className="text-center">TYPE</th>
                 <th className="text-right">NEXT</th>
               </tr>
             </thead>
@@ -170,12 +205,18 @@ export default async function InsightsPage() {
               {recurrings.map((r) => (
                 <tr key={r.id}>
                   <td className="uppercase tracking-term text-ink2">{r.merchant}</td>
+                  <td className="text-muted italic">
+                    {r.notes ?? <span className="text-faint">—</span>}
+                  </td>
                   <td className="text-right text-muted">−{kr(r.amount)}</td>
                   <td className="text-muted">
-                    {r.cadence}
-                    {r.cadenceDays ? ` ~${r.cadenceDays}d` : ""}
+                    {r.cadence}{r.cadenceDays ? ` ~${r.cadenceDays}d` : ""}
                   </td>
-                  <td className="text-right text-muted">{r.occurrences}</td>
+                  <td className="text-center">
+                    <StatusTag tone={r.manual ? "accent" : "muted"}>
+                      {r.manual ? "manual" : "auto"}
+                    </StatusTag>
+                  </td>
                   <td className="text-right text-faint">{shortDate(r.nextDate)}</td>
                 </tr>
               ))}

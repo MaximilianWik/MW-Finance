@@ -54,6 +54,7 @@ export async function checkMissingRecurrings(): Promise<MissedRecurring[]> {
     .from(recurringPayments)
     .where(
       and(
+        eq(recurringPayments.active, true),
         isNotNull(recurringPayments.nextDate),
         lte(recurringPayments.nextDate, cutoff)
       )

@@ -80,7 +80,7 @@ export function NewGoalForm() {
           type="checkbox"
           checked={isPrimary}
           onChange={(e) => setIsPrimary(e.target.checked)}
-          className="accent-[#4ee06a]"
+          className="accent-accent"
         />
         primary — receives auto-sweep
       </label>

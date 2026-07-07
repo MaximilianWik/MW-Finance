@@ -199,6 +199,7 @@ export async function detectAndPersistRecurrings(): Promise<DetectedRecurring[]>
           nextDate: d.nextDate,
           occurrences: d.occurrences,
           categoryId: d.categoryId,
+          // NOTE: do NOT touch `active` or `notes` — user may have customised them.
           updatedAt: new Date(),
         },
       });
