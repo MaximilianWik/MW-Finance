@@ -17,6 +17,7 @@ interface TxRow {
   merchant: string | null;
   categoryId: number | null;
   flaggedReason: string | null;
+  recurring: boolean;
   categoryName: string | null;
   categoryColor: string | null;
 }
@@ -299,9 +300,13 @@ export function LedgerPanel({ options, initialMonth = "" }: Props) {
                         />
                       </td>
                       <td className="w-24 text-center">
-                        {t.direction === "DBIT" && (
+                        {t.recurring ? (
+                          <span className="tag tag-ok" title="Matches an active recurring payment">
+                            {"[\u2713] RECURRING"}
+                          </span>
+                        ) : t.direction === "DBIT" ? (
                           <MarkRecurring txId={t.id} merchant={displayName} />
-                        )}
+                        ) : null}
                       </td>
                       <td className={`w-28 text-right ${inflow ? "text-accent" : "text-ink2"}`}>
                         {krSigned(t.signed)}

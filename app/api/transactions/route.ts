@@ -31,6 +31,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Explicit date range (used by the category drill-down). Additive to `month`.
+  const from = sp.get("from");
+  if (from) conds.push(gte(transactions.bookingDate, from));
+  const to = sp.get("to");
+  if (to) conds.push(lte(transactions.bookingDate, to));
+
   const categoryId = sp.get("categoryId");
   if (categoryId) conds.push(eq(transactions.categoryId, Number(categoryId)));
 
@@ -74,6 +80,7 @@ export async function GET(req: NextRequest) {
         flaggedReason: transactions.flaggedReason,
         categoryName: categories.name,
         categoryColor: categories.color,
+        recurring: sql<boolean>`exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant})`,
       })
       .from(transactions)
       .leftJoin(categories, eq(transactions.categoryId, categories.id))

@@ -104,6 +104,7 @@ export async function listTransactions(f: TxFilter = {}) {
       categoryId: transactions.categoryId,
       categorySource: transactions.categorySource,
       flaggedReason: transactions.flaggedReason,
+      recurring: sql<boolean>`exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant})`,
     })
     .from(transactions)
     .where(where)

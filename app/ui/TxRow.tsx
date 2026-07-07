@@ -12,6 +12,7 @@ export interface TxRowData {
   bookingDate: string | null;
   categoryId: number | null;
   flaggedReason?: string | null;
+  recurring?: boolean;
 }
 
 /** One row of the terminal ledger table. Expects a <tbody> parent. */
@@ -36,11 +37,16 @@ export function TxRow({ tx, options }: { tx: TxRowData; options: CatOption[] }) 
       <td className="w-40">
         <CategoryCommand txId={tx.id} categoryId={tx.categoryId} options={options} />
       </td>
-      {/* Mark-as-recurring: all DBIT rows, with or without a normalized merchant */}
+      {/* Recurring: tag when merchant matches an active recurring payment,
+          otherwise offer to mark DBIT rows as recurring. */}
       <td className="w-24 text-center">
-        {tx.direction === "DBIT" && (
+        {tx.recurring ? (
+          <span className="tag tag-ok" title="Matches an active recurring payment">
+            {"[\u2713] RECURRING"}
+          </span>
+        ) : tx.direction === "DBIT" ? (
           <MarkRecurring txId={tx.id} merchant={displayName} />
-        )}
+        ) : null}
       </td>
       <td className={`w-28 text-right ${inflow ? "text-accent" : "text-ink2"}`}>
         {krSigned(tx.signed)}

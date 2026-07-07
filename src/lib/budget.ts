@@ -97,7 +97,8 @@ export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
     };
   });
 
-  const totalSpent = out.reduce((s, r) => s + r.spent, 0);
+  // Transfers between own accounts are not spending -> excluded from the total.
+  const totalSpent = out.reduce((s, r) => s + (r.name === "Transfers" ? 0 : r.spent), 0);
   const totalBudget = out.reduce((s, r) => s + (r.budget ?? 0), 0);
   return { label, ym, rows: out, totalSpent, totalBudget };
 }

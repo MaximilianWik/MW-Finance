@@ -7,6 +7,7 @@ import {
   categories,
   transactions,
   budgetAdjustments,
+  savingsEntries,
 } from "@/db/schema";
 import { and, desc, eq, inArray, sql, gte, lte } from "drizzle-orm";
 import { sendNtfy } from "@/lib/notify";
@@ -299,4 +300,87 @@ export async function runMonthlySweep(now = new Date()): Promise<{
 export async function getPrimaryGoal(): Promise<GoalSummary | null> {
   const all = await getGoals();
   return all.find((g) => g.isPrimary) ?? null;
+}
+
+
+// --- Savings total (Phase 2) -------------------------------------------------
+export interface SavingsEntryRow {
+  id: number;
+  amount: number;
+  note: string | null;
+  occurredOn: string | null;
+  kind: "manual";
+}
+
+export interface SavingsTotal {
+  fromTransactions: number; // sum of outflows categorized "Savings"
+  fromManual: number;       // sum of manual savings_entries
+  total: number;
+  recentEntries: SavingsEntryRow[];
+}
+
+/**
+ * All-time savings total = outflows categorized "Savings" + manual entries.
+ * Returns the two components, the combined total, and the latest manual rows.
+ */
+export async function getSavingsTotal(): Promise<SavingsTotal> {
+  const [txAgg] = await db
+    .select({
+      total: sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`,
+    })
+    .from(transactions)
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(eq(categories.name, "Savings"));
+  const fromTransactions = txAgg?.total ?? 0;
+
+  const [manualAgg] = await db
+    .select({ total: sql<number>`coalesce(sum(${savingsEntries.amount}::float), 0)::float` })
+    .from(savingsEntries);
+  const fromManual = manualAgg?.total ?? 0;
+
+  const recent = await db
+    .select({
+      id: savingsEntries.id,
+      amount: sql<number>`${savingsEntries.amount}::float`,
+      note: savingsEntries.note,
+      occurredOn: savingsEntries.occurredOn,
+    })
+    .from(savingsEntries)
+    .orderBy(desc(savingsEntries.occurredOn), desc(savingsEntries.id))
+    .limit(10);
+
+  const recentEntries: SavingsEntryRow[] = recent.map((e) => ({
+    ...e,
+    kind: "manual" as const,
+  }));
+
+  return {
+    fromTransactions,
+    fromManual,
+    total: fromTransactions + fromManual,
+    recentEntries,
+  };
+}
+
+/** Add a manual savings entry. */
+export async function addSavingsEntry(params: {
+  amount: number;
+  note?: string | null;
+  occurredOn?: string;
+}) {
+  if (params.amount <= 0) throw new Error("amount must be > 0");
+  const [row] = await db
+    .insert(savingsEntries)
+    .values({
+      amount: params.amount.toFixed(2),
+      note: params.note ?? null,
+      occurredOn: params.occurredOn ?? new Date().toISOString().slice(0, 10),
+    })
+    .returning();
+  return row;
+}
+
+/** Delete a manual savings entry by id. */
+export async function deleteSavingsEntry(id: number) {
+  await db.delete(savingsEntries).where(eq(savingsEntries.id, id));
 }

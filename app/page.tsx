@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getAccounts, listTransactions, getCategories } from "@/lib/queries";
-import { getMonthlyBudgetStatus } from "@/lib/budget";
-import { getPrimaryGoal } from "@/lib/savings";
+import { getMonthlyBudgetStatus, monthRange } from "@/lib/budget";
+import { getPrimaryGoal, getSavingsTotal } from "@/lib/savings";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
@@ -9,6 +9,7 @@ import { TxRow } from "./ui/TxRow";
 import { Panel } from "./ui/Panel";
 import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
+import { SavingsPanel } from "./ui/SavingsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -48,15 +49,19 @@ export default async function Home({
   };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
+  let savings: Awaited<ReturnType<typeof getSavingsTotal>> = {
+    fromTransactions: 0, fromManual: 0, total: 0, recentEntries: [],
+  };
   let dbError: string | null = null;
 
   try {
-    [accs, budget, txResult, cats, primaryGoal] = await Promise.all([
+    [accs, budget, txResult, cats, primaryGoal, savings] = await Promise.all([
       getAccounts(),
       getMonthlyBudgetStatus(),
       listTransactions({ limit: 12 }),
       getCategories(),
       getPrimaryGoal(),
+      getSavingsTotal(),
     ]);
   } catch (e) {
     dbError = e instanceof Error ? e.message : String(e);
@@ -80,6 +85,7 @@ export default async function Home({
   const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
   const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);
   const budgetRows = budget.rows.filter((r) => r.budget != null || r.spent > 0);
+  const mr = monthRange();
 
   return (
     <main className="flex flex-col gap-4">
@@ -157,11 +163,13 @@ export default async function Home({
 
       <FlaggedCard />
 
+      <SavingsPanel initial={savings} />
+
       {budgetRows.length > 0 && (
         <Panel title="MONTHLY BUDGET" right={`${kr(budget.totalSpent)} / ${kr(budget.totalBudget)}`}>
           <div className="divide-y divide-grid">
             {budgetRows.map((r) => (
-              <BudgetBar key={r.categoryId} row={r} />
+              <BudgetBar key={r.categoryId} row={r} range={{ from: mr.from, to: mr.to }} />
             ))}
           </div>
           <div className="mt-3 flex gap-2">

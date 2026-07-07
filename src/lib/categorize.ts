@@ -12,6 +12,7 @@ export const CATEGORY_NAMES = [
   "Health",
   "Cash & ATM",
   "Income",
+  "Savings",
   "Transfers",
   "Uncategorized",
 ] as const;
@@ -45,6 +46,7 @@ function mccCategory(mcc: string | null): CategoryName | null {
 
 // ─── Keyword rules on the normalized merchant / remittance ──────────────────
 const RULES: Array<{ re: RegExp; cat: CategoryName }> = [
+  { re: /\bLYSA\b/, cat: "Savings" },
   { re: /\b(ICA|COOP|HEMK[ÖO]P|WILLYS|LIDL|CITY ?GROSS|MAXI|TEMPO|MATHEM|HEMKOP)\b/, cat: "Groceries" },
   { re: /\b(MCDONALD|BURGER KING|MAX|SUBWAY|PIZZA|SUSHI|O.?LEARYS|ESPRESSO|BARISTA|CAF[EÉ]|RESTAURANG|FOODORA|WOLT|UBER ?EATS)\b/, cat: "Restaurants" },
   { re: /\b(SL |SL$|V[AÄ]STTRAFIK|SK[AÅ]NETRAFIKEN|SJ |SJ$|MTR|UBER|BOLT|TAXI|CIRCLE ?K|OKQ8|PREEM|ST1|INGO|SHELL|TESLA SUPERCHARGER)\b/, cat: "Transport" },

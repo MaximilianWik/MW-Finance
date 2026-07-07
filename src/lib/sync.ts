@@ -11,6 +11,7 @@ import { eq, sql, inArray } from "drizzle-orm";
 import { getTransactions, getBalances } from "@/lib/enablebanking/client";
 import { mapTransaction } from "@/lib/enablebanking/normalize";
 import { ruleCategory, geminiCategorize } from "@/lib/categorize";
+import { isSelfTransfer } from "@/lib/transfers";
 import { sendNtfy, budgetMessage } from "@/lib/notify";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { runBehaviorPipeline } from "@/lib/behavior";
@@ -273,6 +274,20 @@ async function categorizeInserted(rows: NewTransaction[], useGemini: boolean) {
   const decided = new Map<number, { catId: number; source: string }>(); // tx id → decision
   for (const r of rows) {
     if (!r.id) continue;
+    // Highest priority: transfers between the user's own accounts.
+    if (
+      isSelfTransfer({
+        counterpartyName: r.counterpartyName ?? null,
+        remittance: r.remittance ?? null,
+        merchant: r.merchant ?? null,
+      })
+    ) {
+      const transfersId = nameToId.get("Transfers");
+      if (transfersId) {
+        decided.set(r.id, { catId: transfersId, source: "rule" });
+        continue;
+      }
+    }
     const ruleName = ruleCategory({
       merchant: r.merchant ?? null,
       mcc: r.mcc ?? null,

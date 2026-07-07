@@ -206,6 +206,21 @@ export const syncRuns = pgTable("sync_runs", {
   error: text("error"),
 });
 
+// --- Savings entries (Phase 2 - manual additions to the all-time savings total) ---
+export const savingsEntries = pgTable(
+  "savings_entries",
+  {
+    id: serial("id").primaryKey(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    note: text("note"),
+    occurredOn: date("occurred_on").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    occurredIdx: index("se_occurred_idx").on(t.occurredOn),
+  })
+);
+
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Category = typeof categories.$inferSelect;
@@ -216,3 +231,5 @@ export type SavingsContribution = typeof savingsContributions.$inferSelect;
 export type BudgetAdjustment = typeof budgetAdjustments.$inferSelect;
 export type RecurringPayment = typeof recurringPayments.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
+export type SavingsEntry = typeof savingsEntries.$inferSelect;
+export type NewSavingsEntry = typeof savingsEntries.$inferInsert;

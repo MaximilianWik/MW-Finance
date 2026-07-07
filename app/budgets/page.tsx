@@ -1,4 +1,4 @@
-import { getMonthlyBudgetStatus, getWeeklyBudgetStatus } from "@/lib/budget";
+import { getMonthlyBudgetStatus, getWeeklyBudgetStatus, monthRange, weekRange } from "@/lib/budget";
 import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
 import { BudgetBar } from "../ui/BudgetBar";
 import { Panel } from "../ui/Panel";
@@ -25,6 +25,8 @@ export default async function BudgetsPage() {
   }));
 
   const monthlyRows = status.rows.filter((r) => r.budget != null || r.spent > 0);
+  const mr = monthRange();
+  const wr = weekRange();
 
   return (
     <main className="flex flex-col gap-4">
@@ -32,7 +34,7 @@ export default async function BudgetsPage() {
         <p className="mb-2 text-[0.7rem] uppercase tracking-term text-faint">{status.label}</p>
         <div className="divide-y divide-grid">
           {monthlyRows.map((r) => (
-            <BudgetBar key={r.categoryId} row={r} />
+            <BudgetBar key={r.categoryId} row={r} range={{ from: mr.from, to: mr.to }} />
           ))}
         </div>
       </Panel>
@@ -44,6 +46,7 @@ export default async function BudgetsPage() {
             {weekly.rows.map((r) => (
               <BudgetBar
                 key={r.categoryId}
+                range={{ from: wr.from, to: wr.to }}
                 row={{
                   categoryId: r.categoryId,
                   name: r.name,
