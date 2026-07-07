@@ -77,22 +77,48 @@ export async function getBillsChecklist(
     .where(eq(recurringPayments.active, true))
     .orderBy(recurringPayments.merchant);
 
-  // Build items with per-recurring window-based paid detection.
+  // Pre-compute month bounds for historical checks (same for every recurring).
+  const monthBounds = isHistorical ? monthBoundsFromYm(month) : null;
+
+  // Build items with paid detection per recurring.
   const items: BillItem[] = [];
 
   for (const r of recs) {
     let state: BillState;
     let paidOnDate: string | null = null;
 
-    if (r.nextDate) {
-      // Look for a matching DBIT within ±MATCH_WINDOW_DAYS of the expected date.
+    if (isHistorical && monthBounds) {
+      // ── Historical month ──────────────────────────────────────────────────
+      // nextDate has already been advanced beyond this month, so window-based
+      // detection would look in the wrong period. Just check whether any DBIT
+      // from this merchant landed inside the target month's calendar bounds.
+      const [hit] = await db
+        .select({ bookingDate: transactions.bookingDate })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.merchant, r.merchant),
+            eq(transactions.direction, "DBIT"),
+            gte(transactions.bookingDate, monthBounds.from),
+            lte(transactions.bookingDate, monthBounds.to)
+          )
+        )
+        .orderBy(transactions.bookingDate)
+        .limit(1);
+
+      paidOnDate = hit?.bookingDate ?? null;
+      state = paidOnDate ? "paid" : "missed";
+
+    } else if (r.nextDate) {
+      // ── Current / upcoming month ──────────────────────────────────────────
+      // Check within ±MATCH_WINDOW_DAYS of the expected date so slightly
+      // early or late payments (like "expected 28 Jun, paid 30 Jun") are
+      // correctly detected.
       const wFrom = addDays(r.nextDate, -MATCH_WINDOW_DAYS);
       const wTo   = addDays(r.nextDate,  MATCH_WINDOW_DAYS);
 
       const [hit] = await db
-        .select({
-          bookingDate: transactions.bookingDate,
-        })
+        .select({ bookingDate: transactions.bookingDate })
         .from(transactions)
         .where(
           and(
@@ -108,8 +134,6 @@ export async function getBillsChecklist(
       if (hit?.bookingDate) {
         paidOnDate = hit.bookingDate;
         state = "paid";
-      } else if (isHistorical) {
-        state = "missed";
       } else if (r.nextDate.slice(0, 7) > month) {
         state = "upcoming";
       } else if (r.nextDate <= graceCutoff) {
@@ -117,9 +141,9 @@ export async function getBillsChecklist(
       } else {
         state = "due";
       }
+
     } else {
-      // No nextDate: only show as DUE in current month.
-      state = isHistorical ? "missed" : "due";
+      state = "due";
     }
 
     // Compute what nextDate would be if advanced by one cadence.
