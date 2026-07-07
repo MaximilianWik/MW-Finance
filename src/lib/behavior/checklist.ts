@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { recurringPayments, transactions } from "@/db/schema";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, or, sql } from "drizzle-orm";
 
 /**
  * Monthly bills checklist.
@@ -97,14 +97,20 @@ export async function getBillsChecklist(
     if (isHistorical && monthBounds) {
       // ── Historical month ──────────────────────────────────────────────────
       // nextDate has already been advanced beyond this month, so window-based
-      // detection would look in the wrong period. Just check whether any DBIT
-      // from this merchant landed inside the target month's calendar bounds.
+      // detection would look in the wrong period. Check calendar bounds only.
+      //
+      // Also match on counterpartyName as fallback: transactions synced before
+      // the merchant-normalization fix have merchant = null but a matching
+      // counterpartyName (e.g. "6162-839725531" rent payments).
       const [hit] = await db
         .select({ bookingDate: transactions.bookingDate })
         .from(transactions)
         .where(
           and(
-            eq(transactions.merchant, r.merchant),
+            or(
+              eq(transactions.merchant, r.merchant),
+              eq(transactions.counterpartyName, r.merchant)
+            )!,
             eq(transactions.direction, "DBIT"),
             gte(transactions.bookingDate, monthBounds.from),
             lte(transactions.bookingDate, monthBounds.to)
@@ -154,14 +160,19 @@ export async function getBillsChecklist(
     }
 
     // Compute what nextDate would be if advanced by one cadence.
+    const cadenceFallback = r.cadence === "weekly" ? 7 : r.cadence === "yearly" ? 365 : 30;
+    const cadenceStep = r.cadenceDays ?? cadenceFallback;
+
     let advancedNextDate: string | null = null;
-    if (r.nextDate && r.cadenceDays) {
-      advancedNextDate = addDays(r.nextDate, r.cadenceDays);
-    } else if (r.nextDate) {
-      // Fallback: advance by cadence default (monthly = 30, weekly = 7, yearly = 365)
-      const fallback = r.cadence === "weekly" ? 7 : r.cadence === "yearly" ? 365 : 30;
-      advancedNextDate = addDays(r.nextDate, fallback);
+    if (r.nextDate) {
+      advancedNextDate = addDays(r.nextDate, cadenceStep);
     }
+
+    // For historical views, show the prior-cycle expected date (nextDate minus
+    // one cadence) so the "expected" column reflects when payment was due in
+    // the viewed month, not the current upcoming date.
+    const historicalExpectedOn =
+      isHistorical && r.nextDate ? addDays(r.nextDate, -cadenceStep) : null;
 
     items.push({
       id: r.id,
@@ -171,7 +182,7 @@ export async function getBillsChecklist(
       amount: r.amount,
       cadence: r.cadence,
       cadenceDays: r.cadenceDays,
-      expectedOn: r.nextDate,
+      expectedOn: historicalExpectedOn ?? r.nextDate,
       paidOnDate,
       advancedNextDate,
       state,
