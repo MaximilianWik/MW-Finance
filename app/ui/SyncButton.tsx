@@ -8,52 +8,57 @@ interface SyncResult {
   newTransactions?: number;
   accountsSynced?: number;
   error?: string;
+  log?: string[];
 }
 
 /**
- * "Sync now" trigger rendered as a terminal console. Streams a stepped log
- * (connect → poll → categorize → done) while the request runs, then prints
- * the real result. Not a live server stream — the steps are client-side
- * scaffolding around a single POST — but it reads as the console the design
- * philosophy calls for. The full live AI log lands in Phase 3.
+ * Sync console. Sends a POST to /api/sync/manual and renders the server-side
+ * log lines returned by runSync — real step-by-step output including consent
+ * validity, per-account fetch status, categorization, and behavior pipeline.
  */
 export function SyncButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [log, setLog] = useState<string[]>([]);
-
-  function push(line: string) {
-    setLog((l) => [...l, line]);
-  }
+  const t0 = { current: 0 };
 
   async function run() {
     setPending(true);
-    setLog([]);
-    push("[SYNC] connecting to Enable Banking...");
-    const t0 = performance.now();
+    setLog(["[SYNC] connecting to Enable Banking..."]);
+    t0.current = performance.now();
     try {
-      push("[SYNC] polling linked accounts...");
       const res = await fetch("/api/sync/manual", { method: "POST" });
       const r = (await res.json()) as SyncResult;
-      const secs = ((performance.now() - t0) / 1000).toFixed(1);
+      const secs = ((performance.now() - t0.current) / 1000).toFixed(1);
 
-      if (!r.ok) {
-        push(`[FAIL] ${r.error ?? "sync failed"}`);
+      if (r.log && r.log.length > 0) {
+        // Server returned structured log — use it verbatim.
+        setLog(r.log);
       } else {
-        push(`[SYNC] ${r.accountsSynced ?? 0} account(s) polled            [ OK ]`);
-        if ((r.newTransactions ?? 0) > 0) {
-          push(`[AI]   categorizing ${r.newTransactions} new txn(s)...`);
-          push(`[DONE] sync complete — +${r.newTransactions} new — ${secs}s`);
-        } else {
-          push(`[DONE] up to date — no new transactions — ${secs}s`);
-        }
+        // Fallback for old API response without log.
+        setLog([
+          r.ok
+            ? `[DONE] sync complete — ${r.newTransactions ?? 0} new — ${secs}s`
+            : `[FAIL] ${r.error ?? "unknown error"}`,
+        ]);
       }
-      router.refresh();
+
+      if (r.ok) router.refresh();
     } catch {
-      push("[FAIL] network error");
+      setLog((l) => [...l, "[FAIL] network error — check your connection"]);
     } finally {
       setPending(false);
     }
+  }
+
+  function lineColor(l: string): string {
+    if (l.startsWith("[FAIL]")) return "text-danger";
+    if (l.startsWith("[WARN]")) return "text-amber";
+    if (l.startsWith("[DONE]")) return "text-accent";
+    if (l.startsWith("[OK]"))   return "text-ok";
+    if (l.startsWith("[AI]"))   return "text-accent2";
+    if (l.startsWith("[DIAG]") || l.startsWith("  (")) return "text-amber/70";
+    return "text-muted";
   }
 
   return (
@@ -66,22 +71,13 @@ export function SyncButton() {
         {pending ? "syncing…" : "$ sync now"}
       </button>
       {log.length > 0 && (
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed text-ink2">
+        <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed">
           {log.map((l, i) => (
-            <div
-              key={i}
-              className={
-                l.startsWith("[FAIL]")
-                  ? "text-danger"
-                  : l.startsWith("[DONE]")
-                  ? "text-accent"
-                  : l.includes("[ OK ]")
-                  ? "text-ok"
-                  : "text-muted"
-              }
-            >
+            <div key={i} className={lineColor(l)}>
               {l}
-              {pending && i === log.length - 1 ? <span className="caret" /> : null}
+              {pending && i === log.length - 1 && (
+                <span className="caret" />
+              )}
             </div>
           ))}
         </pre>

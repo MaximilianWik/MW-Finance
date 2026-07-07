@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import {
   accounts,
+  bankSessions,
   transactions,
   categories,
   merchantCategories,
@@ -39,6 +40,8 @@ export interface SyncResult {
   newTransactions: number;
   accountsSynced: number;
   error?: string;
+  /** Step-by-step log lines for the console UI. */
+  log: string[];
 }
 
 /**
@@ -47,25 +50,73 @@ export interface SyncResult {
  * notifications for newly-booked spending.
  */
 export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncResult> {
+  const log: string[] = [];
+  const push = (line: string) => { log.push(line); console.log("[sync]", line); };
+
   const [run] = await db.insert(syncRuns).values({}).returning({ id: syncRuns.id });
 
   try {
-    const accs = await db.select().from(accounts);
+    push("[SYNC] loading accounts from database...");
+    const accs = await db
+      .select({
+        uid: accounts.uid,
+        name: accounts.name,
+        iban: accounts.iban,
+        sessionId: accounts.sessionId,
+      })
+      .from(accounts);
+
     if (accs.length === 0) {
       await db
         .update(syncRuns)
         .set({ finishedAt: new Date(), ok: 1, newTransactions: 0 })
         .where(eq(syncRuns.id, run.id));
-      return { ok: true, newTransactions: 0, accountsSynced: 0 };
+      push("[WARN] no linked accounts found");
+      return { ok: true, newTransactions: 0, accountsSynced: 0, log };
     }
 
-    // date_to = yesterday: LF Bank and most Swedish ASPSPs only serve T-1 data.
+    // ─── Consent validity check ───────────────────────────────────────────────
+    // Check that the Enable Banking session (PSD2 bank consent) is still valid.
+    // LF Bank and other Swedish ASPSPs return ASPSP_ERROR for any API call after
+    // the 90-day consent window expires — the error looks like a generic 400 and
+    // gives no indication that it's an auth/consent issue. We check up-front so
+    // the user sees a clear "re-link your bank" message instead.
+    const sessionIds = Array.from(new Set(accs.map((a) => a.sessionId)));
+    const sessions = await db
+      .select({ sessionId: bankSessions.sessionId, validUntil: bankSessions.validUntil })
+      .from(bankSessions);
+    const sessionMap = new Map(sessions.map((s) => [s.sessionId, s.validUntil]));
+
+    for (const sid of sessionIds) {
+      const validUntil = sessionMap.get(sid);
+      push(`[SYNC] checking consent validity for session ${sid.slice(0, 8)}…`);
+      if (validUntil && validUntil < new Date()) {
+        const expired = validUntil.toLocaleDateString("sv-SE");
+        const msg =
+          `Bank consent expired on ${expired}. ` +
+          `Go to the home page and click "Link bank" to re-authorise ` +
+          `(takes ~30 seconds — you'll be redirected to Länsförsäkringar).`;
+        push(`[FAIL] ${msg}`);
+        await db
+          .update(syncRuns)
+          .set({ finishedAt: new Date(), ok: 0, error: msg })
+          .where(eq(syncRuns.id, run.id));
+        return { ok: false, newTransactions: 0, accountsSynced: 0, error: msg, log };
+      }
+      push(`[OK]   consent valid`);
+    }
+
+    // ─── Date window ─────────────────────────────────────────────────────────
+    // date_to = yesterday: LF Bank only serves booked transactions through T-1.
     // date_to = today causes ASPSP_ERROR on the transactions endpoint.
     const dateTo = isoYesterday();
+    push(`[SYNC] fetch window — up to ${dateTo}`);
     const inserted: NewTransaction[] = [];
 
     for (const acc of accs) {
-      // Determine start date: last booked tx minus overlap, else backfill.
+      const label = acc.iban ?? acc.name ?? acc.uid.slice(0, 8);
+
+      // Determine start date.
       const [{ maxDate }] = await db
         .select({ maxDate: sql<string | null>`max(${transactions.bookingDate})` })
         .from(transactions)
@@ -74,6 +125,8 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
       const from = maxDate
         ? isoDaysAgoFrom(maxDate, OVERLAP_DAYS)
         : isoDaysAgo(DEFAULT_BACKFILL_DAYS);
+
+      push(`[SYNC] account ${label} — from ${from}`);
 
       // Balances.
       try {
@@ -89,41 +142,63 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
               balanceUpdatedAt: new Date(),
             })
             .where(eq(accounts.uid, acc.uid));
+          push(`[OK]   balance ${chosen.balance_amount.amount} ${chosen.balance_amount.currency}`);
         }
       } catch (e) {
-        console.error(`balances failed for ${acc.uid}:`, e);
+        const msg = e instanceof Error ? e.message : String(e);
+        push(`[WARN] balance fetch failed — ${msg.slice(0, 120)}`);
       }
 
       // Transactions.
-      const raw = await getTransactions(acc.uid, from, dateTo);
-      for (const tx of raw) {
-        const row = mapTransaction(acc.uid, tx);
-        const res = await db
-          .insert(transactions)
-          .values(row)
-          .onConflictDoNothing({
-            target: [transactions.accountUid, transactions.dedupeKey],
-          })
-          .returning({ id: transactions.id });
-        if (res.length > 0) inserted.push({ ...row, id: res[0].id } as NewTransaction);
+      try {
+        const raw = await getTransactions(acc.uid, from, dateTo);
+        push(`[OK]   fetched ${raw.length} raw transactions`);
+
+        for (const tx of raw) {
+          const row = mapTransaction(acc.uid, tx);
+          const res = await db
+            .insert(transactions)
+            .values(row)
+            .onConflictDoNothing({
+              target: [transactions.accountUid, transactions.dedupeKey],
+            })
+            .returning({ id: transactions.id });
+          if (res.length > 0) inserted.push({ ...row, id: res[0].id } as NewTransaction);
+        }
+        push(`[OK]   ${inserted.length} new transaction(s) inserted`);
+      } catch (e) {
+        const rawMsg = e instanceof Error ? e.message : String(e);
+        // Provide a human-readable diagnosis for ASPSP_ERROR.
+        let diagnosis = rawMsg;
+        if (rawMsg.includes("ASPSP_ERROR")) {
+          diagnosis =
+            rawMsg +
+            "\n\n[DIAG] ASPSP_ERROR usually means:" +
+            "\n  (1) The bank consent has expired (most common — re-link your bank)" +
+            "\n  (2) LF Bank is temporarily unavailable (try again in a few minutes)" +
+            "\n  (3) The date range was rejected (already using T-1 and 45d windows)";
+        }
+        throw new Error(diagnosis);
       }
     }
 
-    // ─── Categorize the newly-inserted rows ──────────────────────────────────
+    // ─── Categorize ──────────────────────────────────────────────────────────
     if (inserted.length > 0) {
+      push(`[AI]   categorizing ${inserted.length} new transaction(s)…`);
       await categorizeInserted(inserted, opts.useGemini ?? false);
+      push(`[OK]   categorization complete`);
     }
 
-    // ─── Budget notifications for new outflows ───────────────────────────────
+    // ─── Budget notifications ─────────────────────────────────────────────────
     await notifyBudgets(inserted);
 
-    // ─── Behavior layer: recurring / missing / suspicious / adaptive /
-    // trajectory / monthly sweep. Runs even when inserted.length === 0 so
-    // missing-payment and trajectory checks fire on empty syncs too.
+    // ─── Behavior pipeline ────────────────────────────────────────────────────
+    push(`[SYNC] running behavior pipeline (recurring / anomalies / trajectory)…`);
     try {
       await runBehaviorPipeline(inserted);
+      push(`[OK]   behavior pipeline complete`);
     } catch (e) {
-      console.error("behavior pipeline failed:", e);
+      push(`[WARN] behavior pipeline error — ${e instanceof Error ? e.message : String(e)}`);
     }
 
     await db
@@ -131,14 +206,17 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
       .set({ finishedAt: new Date(), ok: 1, newTransactions: inserted.length })
       .where(eq(syncRuns.id, run.id));
 
-    return { ok: true, newTransactions: inserted.length, accountsSynced: accs.length };
+    push(`[DONE] sync complete — ${inserted.length} new transaction(s)`);
+    return { ok: true, newTransactions: inserted.length, accountsSynced: accs.length, log };
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await db
       .update(syncRuns)
       .set({ finishedAt: new Date(), ok: 0, error: msg.slice(0, 1000) })
       .where(eq(syncRuns.id, run.id));
-    return { ok: false, newTransactions: 0, accountsSynced: 0, error: msg };
+    push(`[FAIL] ${msg}`);
+    return { ok: false, newTransactions: 0, accountsSynced: 0, error: msg, log };
   }
 }
 

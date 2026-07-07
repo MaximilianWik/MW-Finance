@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, categories, merchantCategories } from "@/db/schema";
-import { and, desc, eq, gte, lte, ilike, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, ilike, or, sql, type SQL } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,13 +12,14 @@ function monthBounds(month: string): { from: string; to: string } | null {
   const y = Number(m[1]);
   const mo = Number(m[2]);
   const from = new Date(Date.UTC(y, mo - 1, 1));
-  const to = new Date(Date.UTC(y, mo, 0));
+  const to   = new Date(Date.UTC(y, mo,     0));
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
 export async function GET(req: NextRequest) {
-  const sp = new URL(req.url).searchParams;
-  const limit = Math.min(Number(sp.get("limit") ?? 100), 500);
+  const t0 = performance.now();
+  const sp  = new URL(req.url).searchParams;
+  const limit = Math.min(Number(sp.get("limit") ?? 200), 500);
   const conds: SQL[] = [];
 
   const month = sp.get("month");
@@ -29,43 +30,72 @@ export async function GET(req: NextRequest) {
       conds.push(lte(transactions.bookingDate, b.to));
     }
   }
+
   const categoryId = sp.get("categoryId");
   if (categoryId) conds.push(eq(transactions.categoryId, Number(categoryId)));
 
   const accountUid = sp.get("accountUid");
   if (accountUid) conds.push(eq(transactions.accountUid, accountUid));
 
-  const q = sp.get("q");
-  if (q) conds.push(ilike(transactions.counterpartyName, `%${q}%`));
+  const q = sp.get("q")?.trim();
+  if (q) {
+    const pat = `%${q}%`;
+    conds.push(
+      or(
+        ilike(transactions.counterpartyName, pat),
+        ilike(transactions.remittance, pat),
+        ilike(transactions.merchant, pat)
+      )!
+    );
+  }
 
-  const rows = await db
-    .select({
-      id: transactions.id,
-      accountUid: transactions.accountUid,
-      direction: transactions.direction,
-      amount: sql<number>`${transactions.amount}::float`,
-      signed: sql<number>`${transactions.signed}::float`,
-      currency: transactions.currency,
-      bookingDate: transactions.bookingDate,
-      counterpartyName: transactions.counterpartyName,
-      remittance: transactions.remittance,
-      merchant: transactions.merchant,
-      categoryId: transactions.categoryId,
-      categorySource: transactions.categorySource,
-      categoryName: categories.name,
-      categoryColor: categories.color,
-    })
-    .from(transactions)
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(conds.length ? and(...conds) : undefined)
-    .orderBy(desc(transactions.bookingDate), desc(transactions.id))
-    .limit(limit);
+  const minAmount = sp.get("minAmount");
+  if (minAmount) conds.push(sql`${transactions.amount}::float >= ${Number(minAmount)}`);
 
-  return NextResponse.json({ transactions: rows });
+  const maxAmount = sp.get("maxAmount");
+  if (maxAmount) conds.push(sql`${transactions.amount}::float <= ${Number(maxAmount)}`);
+
+  const where = conds.length ? and(...conds) : undefined;
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        id: transactions.id,
+        direction: transactions.direction,
+        amount: sql<number>`${transactions.amount}::float`,
+        signed: sql<number>`${transactions.signed}::float`,
+        currency: transactions.currency,
+        bookingDate: transactions.bookingDate,
+        counterpartyName: transactions.counterpartyName,
+        remittance: transactions.remittance,
+        merchant: transactions.merchant,
+        categoryId: transactions.categoryId,
+        categorySource: transactions.categorySource,
+        flaggedReason: transactions.flaggedReason,
+        categoryName: categories.name,
+        categoryColor: categories.color,
+      })
+      .from(transactions)
+      .leftJoin(categories, eq(transactions.categoryId, categories.id))
+      .where(where)
+      .orderBy(desc(transactions.bookingDate), desc(transactions.id))
+      .limit(limit),
+
+    db
+      .select({
+        totalIn:  sql<number>`coalesce(sum(case when ${transactions.direction}='CRDT' then ${transactions.amount}::float else 0 end),0)::float`,
+        totalOut: sql<number>`coalesce(sum(case when ${transactions.direction}='DBIT' then ${transactions.amount}::float else 0 end),0)::float`,
+        count:    sql<number>`count(*)::int`,
+      })
+      .from(transactions)
+      .where(where),
+  ]);
+
+  const tookMs = Math.round(performance.now() - t0);
+  return NextResponse.json({ transactions: rows, totals, tookMs });
 }
 
-// Manual category override. Also updates the merchant→category cache so future
-// transactions from the same merchant auto-apply.
+// Manual category override + merchant-cache update.
 export async function PATCH(req: NextRequest) {
   const body = (await req.json()) as { id?: number; categoryId?: number };
   if (!body.id || !body.categoryId) {
