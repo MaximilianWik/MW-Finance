@@ -97,9 +97,9 @@ export default async function Home({
       {accs.length === 0 ? (
         <Panel title="ACCOUNT SYNC">
           <p className="text-sm text-muted">No bank linked. Connect via Enable Banking.</p>
-          <Link href="/api/auth/start" className="btn btn-accent mt-3">
+          <a href="/api/auth/start" className="btn btn-accent mt-3">
             $ link bank
-          </Link>
+          </a>
         </Panel>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -117,7 +117,9 @@ export default async function Home({
                       </div>
                     </td>
                     <td className="w-20 text-center">
-                      {syncFresh(a.balanceUpdatedAt) ? (
+                      {a.balanceUpdatedAt === null ? (
+                        <StatusTag tone="muted">[ NEW ]</StatusTag>
+                      ) : syncFresh(a.balanceUpdatedAt) ? (
                         <StatusTag tone="ok">[ OK ]</StatusTag>
                       ) : (
                         <StatusTag tone="warn">[ STALE ]</StatusTag>
@@ -130,13 +132,13 @@ export default async function Home({
             </table>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <SyncButton />
-              <Link
+              <a
                 href="/api/auth/start"
                 className="btn text-[0.65rem]"
                 title="Re-authorise with Länsförsäkringar (required every 90 days)"
               >
                 $ re-link bank
-              </Link>
+              </a>
             </div>
           </Panel>
 

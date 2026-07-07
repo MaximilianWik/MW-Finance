@@ -57,6 +57,26 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
 
   try {
     push("[SYNC] loading accounts from database...");
+
+    // Only sync accounts that belong to the most-recent session per ASPSP.
+    // When a user re-links, new accounts are created alongside old ones (if the
+    // bank assigned new UIDs). This filter ensures we only touch the fresh
+    // consent — old stale accounts are silently skipped.
+    const allSessions = await db
+      .select({
+        sessionId: bankSessions.sessionId,
+        aspspName: bankSessions.aspspName,
+        aspspCountry: bankSessions.aspspCountry,
+      })
+      .from(bankSessions)
+      .orderBy(bankSessions.createdAt); // ascending — last entry per key wins
+
+    const latestByAspsp = new Map<string, string>(); // "name:country" → sessionId
+    for (const s of allSessions) {
+      latestByAspsp.set(`${s.aspspName}:${s.aspspCountry}`, s.sessionId);
+    }
+    const activeSessionIds = [...latestByAspsp.values()];
+
     const accs = await db
       .select({
         uid: accounts.uid,
@@ -64,7 +84,12 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
         iban: accounts.iban,
         sessionId: accounts.sessionId,
       })
-      .from(accounts);
+      .from(accounts)
+      .where(
+        activeSessionIds.length > 0
+          ? inArray(accounts.sessionId, activeSessionIds)
+          : undefined
+      );
 
     if (accs.length === 0) {
       await db
@@ -76,25 +101,23 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
     }
 
     // ─── Consent validity check ───────────────────────────────────────────────
-    // Check that the Enable Banking session (PSD2 bank consent) is still valid.
-    // LF Bank and other Swedish ASPSPs return ASPSP_ERROR for any API call after
-    // the 90-day consent window expires — the error looks like a generic 400 and
-    // gives no indication that it's an auth/consent issue. We check up-front so
-    // the user sees a clear "re-link your bank" message instead.
-    const sessionIds = Array.from(new Set(accs.map((a) => a.sessionId)));
-    const sessions = await db
+    // allSessions only has names/IDs — refetch validity timestamps for active ones.
+    const activeSessionDetails = await db
       .select({ sessionId: bankSessions.sessionId, validUntil: bankSessions.validUntil })
-      .from(bankSessions);
-    const sessionMap = new Map(sessions.map((s) => [s.sessionId, s.validUntil]));
+      .from(bankSessions)
+      .where(
+        activeSessionIds.length > 0
+          ? inArray(bankSessions.sessionId, activeSessionIds)
+          : undefined
+      );
 
-    for (const sid of sessionIds) {
-      const validUntil = sessionMap.get(sid);
-      push(`[SYNC] checking consent validity for session ${sid.slice(0, 8)}…`);
-      if (validUntil && validUntil < new Date()) {
-        const expired = validUntil.toLocaleDateString("sv-SE");
+    for (const s of activeSessionDetails) {
+      push(`[SYNC] checking consent validity for session ${s.sessionId.slice(0, 8)}…`);
+      if (s.validUntil && s.validUntil < new Date()) {
+        const expired = s.validUntil.toLocaleDateString("sv-SE");
         const msg =
           `Bank consent expired on ${expired}. ` +
-          `Go to the home page and click "Link bank" to re-authorise ` +
+          `Go to the home page and click "$ re-link bank" to re-authorise ` +
           `(takes ~30 seconds — you'll be redirected to Länsförsäkringar).`;
         push(`[FAIL] ${msg}`);
         await db
