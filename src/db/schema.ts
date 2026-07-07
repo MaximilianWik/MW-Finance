@@ -7,6 +7,7 @@ import {
   serial,
   jsonb,
   date,
+  boolean,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -81,6 +82,7 @@ export const transactions = pgTable(
       onDelete: "set null",
     }),
     categorySource: text("category_source"), // rule | gemini | cache | manual
+    flaggedReason: text("flagged_reason"), // suspicious-payment rule that fired
     raw: jsonb("raw"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -102,7 +104,7 @@ export const merchantCategories = pgTable("merchant_categories", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ─── Savings goals (Phase 2 foundation) ─────────────────────────────────────
+// ─── Savings goals (Phase 2) ────────────────────────────────────────────────
 export const savingsGoals = pgTable("savings_goals", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -112,21 +114,83 @@ export const savingsGoals = pgTable("savings_goals", {
     .default("0"),
   currency: text("currency").notNull().default("SEK"),
   targetDate: date("target_date"),
+  imageUrl: text("image_url"),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  paused: boolean("paused").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ─── Recurring payments (Phase 3 foundation) ────────────────────────────────
+// ─── Savings contributions (manual + monthly sweep) ─────────────────────────
+export const savingsContributions = pgTable(
+  "savings_contributions",
+  {
+    id: serial("id").primaryKey(),
+    goalId: integer("goal_id")
+      .notNull()
+      .references(() => savingsGoals.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    source: text("source").notNull().default("manual"), // manual | sweep
+    month: text("month"), // YYYY-MM when the contribution is attributed to a month
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    goalIdx: index("sc_goal_idx").on(t.goalId),
+    monthIdx: index("sc_month_idx").on(t.month),
+  })
+);
+
+// ─── Budget adjustments (adaptive redistribution per month) ─────────────────
+export const budgetAdjustments = pgTable(
+  "budget_adjustments",
+  {
+    id: serial("id").primaryKey(),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    month: text("month").notNull(), // YYYY-MM
+    delta: numeric("delta", { precision: 14, scale: 2 }).notNull(), // signed kr
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    catMonthIdx: index("ba_cat_month_idx").on(t.categoryId, t.month),
+    monthIdx: index("ba_month_idx").on(t.month),
+  })
+);
+
+// ─── App-wide settings (single row keyed by "singleton") ────────────────────
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey().default("singleton"),
+  sweepPercent: numeric("sweep_percent", { precision: 5, scale: 2 })
+    .notNull()
+    .default("80"),
+  adaptiveCapPercent: numeric("adaptive_cap_percent", { precision: 5, scale: 2 })
+    .notNull()
+    .default("20"),
+  adaptiveTriggerPercent: numeric("adaptive_trigger_percent", { precision: 5, scale: 2 })
+    .notNull()
+    .default("90"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Recurring payments (Phase 2 — detected from history) ───────────────────
 export const recurringPayments = pgTable("recurring_payments", {
   id: serial("id").primaryKey(),
-  merchant: text("merchant").notNull(),
+  merchant: text("merchant").notNull().unique(),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   currency: text("currency").notNull().default("SEK"),
   cadence: text("cadence").notNull().default("monthly"), // weekly | monthly | yearly
+  cadenceDays: integer("cadence_days"), // median gap between occurrences
+  lastDate: date("last_date"),
   nextDate: date("next_date"),
+  occurrences: integer("occurrences").notNull().default(0),
   categoryId: integer("category_id").references(() => categories.id, {
     onDelete: "set null",
   }),
+  lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ─── Sync log (audit + "what's new since last run") ─────────────────────────
@@ -143,3 +207,9 @@ export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+export type SavingsGoal = typeof savingsGoals.$inferSelect;
+export type NewSavingsGoal = typeof savingsGoals.$inferInsert;
+export type SavingsContribution = typeof savingsContributions.$inferSelect;
+export type BudgetAdjustment = typeof budgetAdjustments.$inferSelect;
+export type RecurringPayment = typeof recurringPayments.$inferSelect;
+export type Settings = typeof settings.$inferSelect;

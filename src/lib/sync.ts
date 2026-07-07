@@ -12,6 +12,7 @@ import { mapTransaction } from "@/lib/enablebanking/normalize";
 import { ruleCategory, geminiCategorize } from "@/lib/categorize";
 import { sendNtfy, budgetMessage } from "@/lib/notify";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
+import { runBehaviorPipeline } from "@/lib/behavior";
 import { env } from "@/lib/env";
 import type { NewTransaction } from "@/db/schema";
 
@@ -103,6 +104,15 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
 
     // ─── Budget notifications for new outflows ───────────────────────────────
     await notifyBudgets(inserted);
+
+    // ─── Behavior layer: recurring / missing / suspicious / adaptive /
+    // trajectory / monthly sweep. Runs even when inserted.length === 0 so
+    // missing-payment and trajectory checks fire on empty syncs too.
+    try {
+      await runBehaviorPipeline(inserted);
+    } catch (e) {
+      console.error("behavior pipeline failed:", e);
+    }
 
     await db
       .update(syncRuns)

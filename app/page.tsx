@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { getAccounts, listTransactions, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
+import { getPrimaryGoal } from "@/lib/savings";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
 import { TxRow } from "./ui/TxRow";
+import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
 
 export const dynamic = "force-dynamic";
 
@@ -32,20 +34,23 @@ export default async function Home({
   let accs: Awaited<ReturnType<typeof getAccounts>> = [];
   let budget: Awaited<ReturnType<typeof getMonthlyBudgetStatus>> = {
     label: "",
+    ym: "",
     rows: [],
     totalSpent: 0,
     totalBudget: 0,
   };
   let txs: Awaited<ReturnType<typeof listTransactions>> = [];
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
+  let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
   let dbError: string | null = null;
 
   try {
-    [accs, budget, txs, cats] = await Promise.all([
+    [accs, budget, txs, cats, primaryGoal] = await Promise.all([
       getAccounts(),
       getMonthlyBudgetStatus(),
       listTransactions({ limit: 12 }),
       getCategories(),
+      getPrimaryGoal(),
     ]);
   } catch (e) {
     dbError = e instanceof Error ? e.message : String(e);
@@ -158,11 +163,20 @@ export default async function Home({
               <BudgetBar key={r.categoryId} row={r} />
             ))}
           </div>
-          <Link href="/budgets" className="btn mt-4 w-full">
-            Edit budgets
-          </Link>
+          <div className="mt-4 flex gap-2">
+            <Link href="/budgets" className="btn flex-1">
+              Edit budgets
+            </Link>
+            <Link href="/simulate" className="btn flex-1">
+              What-if
+            </Link>
+          </div>
         </section>
       )}
+
+      {primaryGoal && <PrimaryGoalCard goal={primaryGoal} />}
+
+      <FlaggedCard />
 
       <section className="card">
         <div className="mb-2 flex items-baseline justify-between">

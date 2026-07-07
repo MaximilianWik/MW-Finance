@@ -1,0 +1,161 @@
+"use client";
+
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { kr } from "@/lib/format";
+
+/** Client-side downscale of an image to ≤ 1024 px on the long edge, JPEG. */
+async function downscaleImage(file: File, maxDim = 1024, quality = 0.85): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
+      "image/jpeg",
+      quality
+    )
+  );
+}
+
+export function GoalActions({
+  goalId,
+  isPrimary,
+  paused,
+}: {
+  goalId: number;
+  isPrimary: boolean;
+  paused: boolean;
+}) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, start] = useTransition();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onContribute(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!amount) return;
+    const res = await fetch(`/api/goals/${goalId}/contributions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: Number(amount), note: note || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "failed");
+      return;
+    }
+    setAmount("");
+    setNote("");
+    start(() => router.refresh());
+  }
+
+  async function onImage(e: React.ChangeEvent<HTMLInputElement>) {
+    setError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const scaled = await downscaleImage(file);
+      const form = new FormData();
+      form.append("file", scaled, file.name.replace(/\.[^.]+$/, "") + ".jpg");
+      const res = await fetch(`/api/goals/${goalId}/image`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "upload failed");
+        return;
+      }
+      start(() => router.refresh());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function toggle(field: "isPrimary" | "paused") {
+    const res = await fetch("/api/goals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: goalId,
+        [field]: field === "isPrimary" ? !isPrimary : !paused,
+      }),
+    });
+    if (res.ok) start(() => router.refresh());
+  }
+
+  async function onDelete() {
+    if (!confirm("Delete this goal? Contributions are removed too.")) return;
+    const res = await fetch(`/api/goals?id=${goalId}`, { method: "DELETE" });
+    if (res.ok) start(() => router.push("/goals"));
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <form onSubmit={onContribute} className="card flex flex-col gap-2">
+        <h3 className="text-sm font-medium">Add contribution</h3>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          required
+          placeholder="Amount (kr)"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="input"
+        />
+        <input
+          placeholder="Note (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="input"
+        />
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <button type="submit" disabled={busy} className="btn btn-accent">
+          {busy ? "Adding…" : `Add ${amount ? kr(Number(amount)) : ""}`}
+        </button>
+      </form>
+
+      <div className="card flex flex-col gap-2">
+        <h3 className="text-sm font-medium">Image</h3>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={onImage}
+          disabled={uploading}
+          className="text-xs text-muted file:mr-3 file:rounded file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:text-black"
+        />
+        {uploading && <p className="text-xs text-muted">Uploading…</p>}
+      </div>
+
+      <div className="card flex flex-col gap-2">
+        <button onClick={() => toggle("isPrimary")} className="btn">
+          {isPrimary ? "Remove as primary" : "Make primary (receives sweep)"}
+        </button>
+        <button onClick={() => toggle("paused")} className="btn">
+          {paused ? "Resume" : "Pause"}
+        </button>
+        <button onClick={onDelete} className="btn text-danger">
+          Delete goal
+        </button>
+      </div>
+    </div>
+  );
+}
