@@ -43,7 +43,10 @@ export function TxRow({ tx, options }: { tx: TxRowData; options: CatOption[] }) 
         {tx.recurring ? (
           <UnmarkRecurring merchant={tx.merchant} />
         ) : tx.direction === "DBIT" ? (
-          <MarkRecurring txId={tx.id} merchant={displayName} />
+          <div className="flex flex-col items-center gap-0.5">
+            <MarkRecurring txId={tx.id} merchant={displayName} />
+            <MarkRecurring txId={tx.id} merchant={displayName} variable />
+          </div>
         ) : null}
       </td>
       <td className={`w-28 text-right ${inflow ? "text-accent" : "text-ink2"}`}>

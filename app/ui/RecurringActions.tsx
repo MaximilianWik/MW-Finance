@@ -137,7 +137,17 @@ export function BillRow({ item }: { item: BillItem }) {
 }
 
 /** Mark-as-recurring button placed in the TxRow action area. */
-export function MarkRecurring({ txId, merchant, onSuccess }: { txId: number; merchant: string; onSuccess?: () => void }) {
+export function MarkRecurring({
+  txId,
+  merchant,
+  variable = false,
+  onSuccess,
+}: {
+  txId: number;
+  merchant: string;
+  variable?: boolean;
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
   const [done, setDone] = useState(false);
   const [busy, start] = useTransition();
@@ -146,7 +156,7 @@ export function MarkRecurring({ txId, merchant, onSuccess }: { txId: number; mer
     const res = await fetch("/api/recurring", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ txId }),
+      body: JSON.stringify({ txId, variable }),
     });
     if (res.ok) {
       setDone(true);
@@ -155,16 +165,26 @@ export function MarkRecurring({ txId, merchant, onSuccess }: { txId: number; mer
     }
   }
 
-  if (done) return <span className="text-[0.65rem] text-ok">[✓] recurring</span>;
+  if (done) {
+    return (
+      <span className="text-[0.65rem] text-ok">
+        [✓] {variable ? "variable" : "recurring"}
+      </span>
+    );
+  }
 
   return (
     <button
       onClick={mark}
       disabled={busy}
-      title={`Mark "${merchant}" as recurring`}
+      title={
+        variable
+          ? `Mark "${merchant}" as a variable-price recurring (e.g. electricity)`
+          : `Mark "${merchant}" as recurring`
+      }
       className="btn border-ok/40 text-ok !px-1.5 !py-0.5 text-[0.65rem] opacity-0 transition-opacity group-hover/row:opacity-100 hover:border-ok hover:bg-ok/10"
     >
-      + recurring
+      + {variable ? "variable" : "recurring"}
     </button>
   );
 }

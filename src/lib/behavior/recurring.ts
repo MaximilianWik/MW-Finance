@@ -65,6 +65,7 @@ interface DetectedRecurring {
   nextDate: string;
   occurrences: number;
   categoryId: number | null;
+  variableAmount: boolean;
 }
 
 /** Returns detected recurrings without touching the DB — pure over the input. */
@@ -77,14 +78,22 @@ export function detectRecurrings(byMerchant: Map<string, Occurrence[]>): Detecte
     // Sort ascending by date.
     const sorted = [...occs].sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
 
-    // Amount consistency: median ± tolerance.
+    // Amount consistency: median ± tolerance. A merchant with a steady cadence
+    // but varying amounts (e.g. electricity) is still recurring — flagged as
+    // variableAmount rather than rejected, unless the spread is absurd.
     const amounts = sorted.map((o) => o.amount);
     const medAmount = median(amounts);
     if (medAmount <= 0) continue;
     const spread = amounts.every(
       (a) => Math.abs(a - medAmount) / medAmount <= AMOUNT_TOLERANCE
     );
-    if (!spread) continue;
+    const variableAmount = !spread;
+    if (variableAmount) {
+      const minA = Math.min(...amounts);
+      const maxA = Math.max(...amounts);
+      // Too erratic to call a recurring commitment.
+      if (minA <= 0 || maxA / minA > 5) continue;
+    }
 
     // Gap analysis.
     const gaps: number[] = [];
@@ -128,6 +137,7 @@ export function detectRecurrings(byMerchant: Map<string, Occurrence[]>): Detecte
       nextDate,
       occurrences: sorted.length,
       categoryId,
+      variableAmount,
     });
   }
 
@@ -187,6 +197,7 @@ export async function detectAndPersistRecurrings(): Promise<DetectedRecurring[]>
         nextDate: d.nextDate,
         occurrences: d.occurrences,
         categoryId: d.categoryId,
+        variableAmount: d.variableAmount,
       })
       .onConflictDoUpdate({
         target: recurringPayments.merchant,
@@ -199,7 +210,8 @@ export async function detectAndPersistRecurrings(): Promise<DetectedRecurring[]>
           nextDate: d.nextDate,
           occurrences: d.occurrences,
           categoryId: d.categoryId,
-          // NOTE: do NOT touch `active` or `notes` — user may have customised them.
+          // NOTE: do NOT touch `active`, `notes`, or `variableAmount` — the user
+          // may have customised them.
           updatedAt: new Date(),
         },
       });

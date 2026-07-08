@@ -1,12 +1,21 @@
 import { db } from "@/db";
-import { transactions } from "@/db/schema";
+import { transactions, recurringPayments } from "@/db/schema";
 import { eq, sql, and, isNotNull, inArray, notInArray } from "drizzle-orm";
 import { sendNtfy } from "@/lib/notify";
 import { env } from "@/lib/env";
 import type { NewTransaction } from "@/db/schema";
 
 /**
- * Flags newly-inserted DBIT rows that look off. Rules (any one trips it):
+ * Flags newly-inserted DBIT rows that look off.
+ *
+ * Recurring-aware rules (checked first, using recurring_payments):
+ *   (r1) Fixed recurring merchant whose charge deviates > RECURRING_DEVIATION
+ *        from the known amount → "recurring changed".
+ *   (r2) Variable-price recurring (electricity etc.): the amount-spike check is
+ *        skipped (variability is expected), but a gross outlier beyond
+ *        VARIABLE_OUTLIER_FACTOR × the typical amount still trips.
+ *
+ * Generic rules (for non-recurring merchants):
  *   (a) Merchant never seen before AND amount > NEW_MERCHANT_FACTOR × your
  *       overall median transaction size.
  *   (b) Merchant seen before AND this amount > MERCHANT_SPIKE_FACTOR × the
@@ -18,6 +27,8 @@ import type { NewTransaction } from "@/db/schema";
 
 const NEW_MERCHANT_FACTOR = 2;
 const MERCHANT_SPIKE_FACTOR = 3;
+const RECURRING_DEVIATION = 0.35;    // ±35% off the known recurring amount
+const VARIABLE_OUTLIER_FACTOR = 3;   // gross outlier even for variable-price recurrings
 const GLOBAL_LOOKBACK_DAYS = 180;
 
 function isoDaysAgo(days: number): string {
@@ -93,16 +104,47 @@ export async function flagSuspicious(
 
   const flagged: Flagged[] = [];
 
-  for (const r of dbits) {
-    const prior = perMerchant.get(r.merchant);
-    let reason: string | null = null;
+  // Known recurring payments for these merchants — enables precise deviation
+  // checks and correct handling of variable-price recurrings.
+  const recurringMap = new Map<string, { amount: number; variable: boolean }>();
+  if (merchants.length > 0) {
+    const recRows = await db
+      .select({
+        merchant: recurringPayments.merchant,
+        amount: sql<number>`${recurringPayments.amount}::float`,
+        variable: recurringPayments.variableAmount,
+      })
+      .from(recurringPayments)
+      .where(and(eq(recurringPayments.active, true), inArray(recurringPayments.merchant, merchants)));
+    for (const r of recRows) recurringMap.set(r.merchant, { amount: r.amount, variable: r.variable });
+  }
 
-    if (!prior || prior.count === 0) {
-      if (globalMedian > 0 && r.amount > NEW_MERCHANT_FACTOR * globalMedian) {
-        reason = `New merchant · ${Math.round(r.amount)} kr (>${NEW_MERCHANT_FACTOR}× your typical spend)`;
+  for (const r of dbits) {
+    let reason: string | null = null;
+    const rec = recurringMap.get(r.merchant);
+
+    if (rec && rec.amount > 0) {
+      // Recurring-aware path.
+      if (rec.variable) {
+        if (r.amount > VARIABLE_OUTLIER_FACTOR * rec.amount) {
+          reason = `${r.merchant} variable spike · ${Math.round(r.amount)} kr (usually ~${Math.round(rec.amount)} kr, variable)`;
+        }
+      } else {
+        const dev = Math.abs(r.amount - rec.amount) / rec.amount;
+        if (dev > RECURRING_DEVIATION) {
+          reason = `${r.merchant} recurring changed · ${Math.round(r.amount)} kr (usually ${Math.round(rec.amount)} kr)`;
+        }
       }
-    } else if (prior.median > 0 && r.amount > MERCHANT_SPIKE_FACTOR * prior.median) {
-      reason = `${r.merchant} spike · ${Math.round(r.amount)} kr (>${MERCHANT_SPIKE_FACTOR}× the usual ${Math.round(prior.median)} kr)`;
+    } else {
+      // Generic path (non-recurring merchants).
+      const prior = perMerchant.get(r.merchant);
+      if (!prior || prior.count === 0) {
+        if (globalMedian > 0 && r.amount > NEW_MERCHANT_FACTOR * globalMedian) {
+          reason = `New merchant · ${Math.round(r.amount)} kr (>${NEW_MERCHANT_FACTOR}× your typical spend)`;
+        }
+      } else if (prior.median > 0 && r.amount > MERCHANT_SPIKE_FACTOR * prior.median) {
+        reason = `${r.merchant} spike · ${Math.round(r.amount)} kr (>${MERCHANT_SPIKE_FACTOR}× the usual ${Math.round(prior.median)} kr)`;
+      }
     }
 
     if (!reason) continue;

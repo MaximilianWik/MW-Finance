@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { db } from "@/db";
+import { aiInsights } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { getAccounts, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getPrimaryGoal, getSavingsTotal } from "@/lib/savings";
@@ -10,6 +13,7 @@ import { Panel } from "./ui/Panel";
 import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
 import { SavingsPanel } from "./ui/SavingsPanel";
+import { AiInsights, type AiInsightRow } from "./ui/AiInsights";
 
 export const dynamic = "force-dynamic";
 
@@ -77,9 +81,26 @@ export default async function Home({
     );
   }
 
+  let topInsights: AiInsightRow[] = [];
+  try {
+    topInsights = await db
+      .select({
+        id: aiInsights.id,
+        kind: aiInsights.kind,
+        severity: aiInsights.severity,
+        title: aiInsights.title,
+        body: aiInsights.body,
+      })
+      .from(aiInsights)
+      .where(eq(aiInsights.dismissed, false))
+      .orderBy(desc(aiInsights.createdAt), desc(aiInsights.id))
+      .limit(4);
+  } catch {
+    // AI insights are non-critical — never block the dashboard on them.
+  }
+
   const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
-  const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);
-  const budgetRows = budget.rows.filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0));
+  const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);  const budgetRows = budget.rows.filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0));
   const todayIso = new Date().toISOString().slice(0, 10);
   const cycleRange = { from: budget.from || todayIso, to: budget.to ?? todayIso };
 
@@ -158,6 +179,15 @@ export default async function Home({
       )}
 
       <FlaggedCard />
+
+      {topInsights.length > 0 && (
+        <Panel
+          title="AI INSIGHTS"
+          right={<Link href="/insights" className="text-accent2 hover:underline">» all</Link>}
+        >
+          <AiInsights initial={topInsights} />
+        </Panel>
+      )}
 
       <SavingsPanel initial={savings} />
 

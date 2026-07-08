@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { db } from "@/db";
-import { recurringPayments } from "@/db/schema";
+import { recurringPayments, aiInsights } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { getMonthComparison, getWeekComparison, type CategoryComparison } from "@/lib/comparison";
 import { getBillsChecklist } from "@/lib/behavior/checklist";
@@ -10,6 +10,8 @@ import { Panel } from "../ui/Panel";
 import { StatusTag } from "../ui/StatusTag";
 import { BillRow } from "../ui/RecurringActions";
 import { ChecklistMonthNav } from "../ui/ChecklistMonthNav";
+import { AiConsole } from "../ui/AiConsole";
+import { AiInsights } from "../ui/AiInsights";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +80,7 @@ export default async function InsightsPage({
   const { ym, label } = monthRange();
   const billsMonth = sp.billsMonth ?? ym;
 
-  const [mom, wow, bills, recurrings] = await Promise.all([
+  const [mom, wow, bills, recurrings, insights] = await Promise.all([
     getMonthComparison(ym),
     getWeekComparison(),
     getBillsChecklist(billsMonth),
@@ -94,16 +96,35 @@ export default async function InsightsPage({
         lastDate: recurringPayments.lastDate,
         occurrences: recurringPayments.occurrences,
         manual: recurringPayments.manual,
+        variableAmount: recurringPayments.variableAmount,
       })
       .from(recurringPayments)
       .where(eq(recurringPayments.active, true))
       .orderBy(desc(recurringPayments.amount)),
+    db
+      .select({
+        id: aiInsights.id,
+        kind: aiInsights.kind,
+        severity: aiInsights.severity,
+        title: aiInsights.title,
+        body: aiInsights.body,
+      })
+      .from(aiInsights)
+      .where(eq(aiInsights.dismissed, false))
+      .orderBy(desc(aiInsights.createdAt), desc(aiInsights.id)),
   ]);
 
   const billMonthLabel = monthLabel(billsMonth);
 
   return (
     <main className="flex flex-col gap-4">
+      <Panel title="AI ANALYSIS" right={insights.length > 0 ? `${insights.length} ACTIVE` : undefined}>
+        <AiInsights initial={insights} />
+        <div className="mt-3">
+          <AiConsole endpoint="/api/analysis/run" label="$ run analysis" pendingLabel="analyzing…" />
+        </div>
+      </Panel>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
           title="MONTH OVER MONTH"
@@ -214,6 +235,7 @@ export default async function InsightsPage({
                   <td className="text-right text-muted">−{kr(r.amount)}</td>
                   <td className="text-muted">
                     {r.cadence}{r.cadenceDays ? ` ~${r.cadenceDays}d` : ""}
+                    {r.variableAmount && <span className="ml-1 text-accent2">· variable</span>}
                   </td>
                   <td className="text-center">
                     <StatusTag tone={r.manual ? "accent" : "muted"}>

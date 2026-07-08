@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/lib/env";
 
 /**
@@ -13,9 +13,10 @@ export function geminiModel(
   opts: { system?: string; json?: boolean; temperature?: number } = {}
 ) {
   const genAI = new GoogleGenerativeAI(env.gemini.apiKey);
-  const generationConfig: GenerationConfig = {
-    temperature: opts.temperature ?? 0.4,
-  };
+  const generationConfig: {
+    temperature: number;
+    responseMimeType?: string;
+  } = { temperature: opts.temperature ?? 0.4 };
   if (opts.json) generationConfig.responseMimeType = "application/json";
   return genAI.getGenerativeModel({
     model: env.gemini.model,

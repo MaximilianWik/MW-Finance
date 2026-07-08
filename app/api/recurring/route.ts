@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     cadence?: string;
     notes?: string;
     nextDate?: string;
+    variable?: boolean;
   };
 
   let merchant: string;
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
       nextDate: computedNextDate ?? undefined,
       manual: true,
       active: true,
+      variableAmount: body.variable === true,
     })
     .onConflictDoUpdate({
       target: recurringPayments.merchant,
@@ -102,6 +104,7 @@ export async function POST(req: NextRequest) {
         notes: body.notes ?? null,
         manual: true,
         active: true,
+        variableAmount: body.variable === true,
         updatedAt: new Date(),
       },
     })

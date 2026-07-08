@@ -24,16 +24,16 @@ export async function PATCH(req: NextRequest) {
 
   const set: Record<string, unknown> = {};
   if (body.budgetMonthly !== undefined) {
-    set.budgetMonthly =
-      body.budgetMonthly === null || body.budgetMonthly === ""
-        ? null
-        : String(body.budgetMonthly);
+    const cleared = body.budgetMonthly === null || body.budgetMonthly === "";
+    set.budgetMonthly = cleared ? null : String(body.budgetMonthly);
+    // A manual budget edit stamps the source so AI recalibration won't overwrite
+    // it. Clearing the budget hands control back to the AI.
+    set.budgetSource = cleared ? null : "manual";
   }
   if (body.budgetWeekly !== undefined) {
-    set.budgetWeekly =
-      body.budgetWeekly === null || body.budgetWeekly === ""
-        ? null
-        : String(body.budgetWeekly);
+    const cleared = body.budgetWeekly === null || body.budgetWeekly === "";
+    set.budgetWeekly = cleared ? null : String(body.budgetWeekly);
+    if (set.budgetSource === undefined && !cleared) set.budgetSource = "manual";
   }
   if (body.name !== undefined) set.name = body.name;
   if (body.color !== undefined) set.color = body.color;

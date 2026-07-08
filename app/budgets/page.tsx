@@ -2,6 +2,7 @@ import { getMonthlyBudgetStatus, getWeeklyBudgetStatus, weekRange } from "@/lib/
 import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
 import { BudgetBar } from "../ui/BudgetBar";
 import { Panel } from "../ui/Panel";
+import { AiConsole } from "../ui/AiConsole";
 import { getCategories } from "@/lib/queries";
 import { kr } from "@/lib/format";
 
@@ -64,6 +65,26 @@ export default async function BudgetsPage() {
           </div>
         </Panel>
       )}
+
+      <Panel title="AI BUDGET">
+        <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
+          The engine reads your income, spending habits and recurring bills, then proposes
+          realistic monthly budgets. Manually-set limits are never overwritten.
+        </p>
+        <div className="flex flex-col gap-3">
+          <AiConsole
+            endpoint="/api/budget/recalibrate?preview=1"
+            label="$ ai preview"
+            pendingLabel="thinking…"
+            refreshOnDone={false}
+          />
+          <AiConsole
+            endpoint="/api/budget/recalibrate"
+            label="$ ai recalibrate"
+            pendingLabel="recalibrating…"
+          />
+        </div>
+      </Panel>
 
       <Panel title="EDIT LIMITS">
         <BudgetEditor categories={rows} />
