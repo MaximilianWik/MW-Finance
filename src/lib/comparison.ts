@@ -71,7 +71,9 @@ export async function getMonthComparison(month: string): Promise<MonthComparison
     .groupBy(categories.id)
     .orderBy(categories.sort);
 
-  const out: CategoryComparison[] = rows.map((r) => {
+  const out: CategoryComparison[] = rows
+    .filter((r) => r.name !== "Transfers")
+    .map((r) => {
     const deltaKr = r.spentThis - r.spentPrev;
     const deltaPct = r.spentPrev === 0 ? null : deltaKr / r.spentPrev;
     return {
@@ -132,7 +134,9 @@ export async function getWeekComparison(now = new Date()): Promise<WeekCompariso
     .groupBy(categories.id)
     .orderBy(categories.sort);
 
-  const out: CategoryComparison[] = rows.map((r) => {
+  const out: CategoryComparison[] = rows
+    .filter((r) => r.name !== "Transfers")
+    .map((r) => {
     const deltaKr = r.spentThis - r.spentPrev;
     const deltaPct = r.spentPrev === 0 ? null : deltaKr / r.spentPrev;
     return {

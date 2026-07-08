@@ -13,14 +13,17 @@ import { ChecklistMonthNav } from "../ui/ChecklistMonthNav";
 
 export const dynamic = "force-dynamic";
 
-function trendColor(delta: number): string {
+/** delta > 0 = spent more = bad (red) for normal categories.
+ *  reversed = true for Savings: spending more is good (green). */
+function trendColor(delta: number, reversed = false): string {
   if (Math.abs(delta) < 1) return "text-muted";
-  return delta > 0 ? "text-amber" : "text-ok";
+  const worse = reversed ? delta < 0 : delta > 0;
+  return worse ? "text-danger" : "text-ok";
 }
 
 function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
   const changed = rows
-    .filter((r) => r.spentThis > 0 || r.spentPrev > 0)
+    .filter((r) => r.name !== "Transfers" && (r.spentThis > 0 || r.spentPrev > 0))
     .sort((a, b) => Math.abs(b.deltaKr) - Math.abs(a.deltaKr));
 
   if (changed.length === 0) {
@@ -46,8 +49,8 @@ function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
             </td>
             <td className="text-right text-muted">{kr(r.spentPrev)}</td>
             <td className="text-right text-ink2">{kr(r.spentThis)}</td>
-            <td className={`text-right ${trendColor(r.deltaKr)}`}>{krSigned(r.deltaKr)}</td>
-            <td className={`text-right ${trendColor(r.deltaKr)}`}>
+            <td className={`text-right ${trendColor(r.deltaKr, r.name === "Savings")}`}>{krSigned(r.deltaKr)}</td>
+            <td className={`text-right ${trendColor(r.deltaKr, r.name === "Savings")}`}>
               {r.deltaPct != null
                 ? `${r.deltaPct >= 0 ? "+" : ""}${pct(r.deltaPct)}`
                 : "—"}
