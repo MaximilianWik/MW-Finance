@@ -42,7 +42,14 @@ export default async function BudgetsPage({
     spent: spentByCat.get(c.id) ?? 0,
   }));
 
-  const monthlyRows = status.rows.filter((r) => r.name !== "Transfers");
+  // Budgeted categories first (has a monthly budget set), then by existing sort order.
+  const monthlyRows = status.rows
+    .filter((r) => r.name !== "Transfers")
+    .sort((a, b) => {
+      const aB = a.budget != null ? 1 : 0;
+      const bB = b.budget != null ? 1 : 0;
+      return bB - aB; // stable within each group (JS sort is stable)
+    });
   const todayIso = new Date().toISOString().slice(0, 10);
   const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
   const wr = weekRange();
@@ -54,6 +61,15 @@ export default async function BudgetsPage({
 
   return (
     <main className="flex flex-col gap-4">
+      <Panel title="AI BUDGET">
+        <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
+          The engine reads your income, spending habits and recurring bills, then proposes
+          realistic monthly budgets. Manually-set limits are never overwritten. Add optional
+          guidance below to steer it.
+        </p>
+        <RecalibratePanel />
+      </Panel>
+
       <Panel
         title="MONTHLY BUDGET"
         right={`${kr(status.totalSpent)} / ${kr(status.totalBudget)}`}
@@ -101,15 +117,6 @@ export default async function BudgetsPage({
           </div>
         </Panel>
       )}
-
-      <Panel title="AI BUDGET">
-        <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
-          The engine reads your income, spending habits and recurring bills, then proposes
-          realistic monthly budgets. Manually-set limits are never overwritten. Add optional
-          guidance below to steer it.
-        </p>
-        <RecalibratePanel />
-      </Panel>
 
       <Panel title="EDIT LIMITS">
         <BudgetEditor categories={rows} />

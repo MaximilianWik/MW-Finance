@@ -100,7 +100,9 @@ export default async function Home({
   }
 
   const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
-  const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);  const budgetRows = budget.rows.filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0));
+  const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);  const budgetRows = budget.rows
+    .filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0))
+    .sort((a, b) => (b.budget != null ? 1 : 0) - (a.budget != null ? 1 : 0));
   const todayIso = new Date().toISOString().slice(0, 10);
   const cycleRange = { from: budget.from || todayIso, to: budget.to ?? todayIso };
 
