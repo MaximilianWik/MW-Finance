@@ -114,8 +114,8 @@ export async function listTransactions(f: TxFilter = {}) {
   // Compute totals over the full filtered set.
   const [totals] = await db
     .select({
-      totalIn:  sql<number>`coalesce(sum(case when ${transactions.direction}='CRDT' then ${transactions.amount}::float else 0 end),0)::float`,
-      totalOut: sql<number>`coalesce(sum(case when ${transactions.direction}='DBIT' then ${transactions.amount}::float else 0 end),0)::float`,
+      totalIn:  sql<number>`coalesce(sum(case when ${transactions.direction}='CRDT' and not exists (select 1 from categories _c where _c.id = ${transactions.categoryId} and _c.name = 'Transfers') then ${transactions.amount}::float else 0 end),0)::float`,
+      totalOut: sql<number>`coalesce(sum(case when ${transactions.direction}='DBIT' and not exists (select 1 from categories _c where _c.id = ${transactions.categoryId} and _c.name = 'Transfers') then ${transactions.amount}::float else 0 end),0)::float`,
       count:    sql<number>`count(*)::int`,
     })
     .from(transactions)

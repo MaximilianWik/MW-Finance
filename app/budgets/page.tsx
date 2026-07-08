@@ -24,7 +24,7 @@ export default async function BudgetsPage() {
     spent: spentByCat.get(c.id) ?? 0,
   }));
 
-  const monthlyRows = status.rows.filter((r) => r.budget != null || r.spent > 0);
+  const monthlyRows = status.rows.filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0));
   const todayIso = new Date().toISOString().slice(0, 10);
   const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
   const wr = weekRange();
