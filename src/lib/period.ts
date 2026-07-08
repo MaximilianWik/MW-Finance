@@ -1,28 +1,30 @@
 import { db } from "@/db";
-import { transactions } from "@/db/schema";
-import { and, asc, desc, eq, gt, isNotNull, lte } from "drizzle-orm";
+import { transactions, categories } from "@/db/schema";
+import { and, asc, desc, eq, gt, isNotNull, lte, sql } from "drizzle-orm";
 
 /**
  * Salary-cycle period.
  *
- * The budget "month" runs from one salary to the next, not the calendar month.
- * Salary is the transaction whose normalized merchant is exactly SALARY_MERCHANT
- * (only real pay counts as a boundary, not Swish/refunds/other income).
+ * A "salary" transaction is any CRDT Income entry in the amount range
+ * SALARY_MIN..SALARY_MAX. This is more robust than matching a specific
+ * merchant name because the counterparty can vary (employer name, LÖN
+ * shorthand, etc.).
  *
- *   period = [ last salary on/before ref , next salary )
+ *   period = [ most recent salary on/before ref , next salary )
  *
- * The current, ongoing period has no next salary yet -> `to` is null (open),
- * meaning "everything since the last salary up to now". When there is no salary
- * transaction at all we fall back to the calendar month so the UI still works.
+ * The current open period (no next salary yet) has to=null meaning
+ * "everything since the last salary up to now."
+ * Falls back to the calendar month when no salary transaction exists.
  */
-const SALARY_MERCHANT = "L\u00d6N";
+const SALARY_MIN = 18_000;
+const SALARY_MAX = 30_000;
 
 export interface Cycle {
-  from: string; // YYYY-MM-DD, salary date (inclusive)
-  to: string | null; // YYYY-MM-DD, day before next salary (inclusive); null = ongoing
+  from: string;       // YYYY-MM-DD, salary date (inclusive)
+  to: string | null;  // YYYY-MM-DD, day before next salary (inclusive); null = ongoing
   label: string;
-  ym: string; // from's YYYY-MM, used for adjustment keying
-  isSalaryCycle: boolean; // false when we fell back to the calendar month
+  ym: string;         // from's YYYY-MM, used for adjustment keying
+  isSalaryCycle: boolean;
 }
 
 function iso(d: Date): string {
@@ -55,6 +57,18 @@ function calendarMonth(ref: Date): Cycle {
   return { from, to, label, ym: from.slice(0, 7), isSalaryCycle: false };
 }
 
+/**
+ * Condition fragment that matches salary transactions:
+ * CRDT, Income category, amount in the salary range.
+ */
+function salaryWhere() {
+  return and(
+    eq(transactions.direction, "CRDT"),
+    eq(categories.name, "Income"),
+    sql`${transactions.amount}::float between ${SALARY_MIN} and ${SALARY_MAX}`
+  );
+}
+
 /** Resolve the salary cycle that contains `ref` (defaults to today). */
 export async function getSalaryCycle(ref = new Date()): Promise<Cycle> {
   const refIso = iso(ref);
@@ -62,12 +76,8 @@ export async function getSalaryCycle(ref = new Date()): Promise<Cycle> {
   const [start] = await db
     .select({ d: transactions.bookingDate })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.merchant, SALARY_MERCHANT),
-        lte(transactions.bookingDate, refIso)
-      )
-    )
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(and(salaryWhere(), lte(transactions.bookingDate, refIso)))
     .orderBy(desc(transactions.bookingDate))
     .limit(1);
 
@@ -77,12 +87,8 @@ export async function getSalaryCycle(ref = new Date()): Promise<Cycle> {
   const [next] = await db
     .select({ d: transactions.bookingDate })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.merchant, SALARY_MERCHANT),
-        gt(transactions.bookingDate, from)
-      )
-    )
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(and(salaryWhere(), gt(transactions.bookingDate, from)))
     .orderBy(asc(transactions.bookingDate))
     .limit(1);
 
@@ -96,12 +102,8 @@ export async function getAllSalaryCycles(): Promise<Cycle[]> {
   const rows = await db
     .select({ d: transactions.bookingDate })
     .from(transactions)
-    .where(
-      and(
-        eq(transactions.merchant, SALARY_MERCHANT),
-        isNotNull(transactions.bookingDate)
-      )
-    )
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(and(salaryWhere(), isNotNull(transactions.bookingDate)))
     .orderBy(desc(transactions.bookingDate));
 
   const uniq = [...new Set(rows.map((r) => r.d).filter((d): d is string => !!d))];
