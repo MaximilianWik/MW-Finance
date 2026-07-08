@@ -6,6 +6,27 @@
   color-scheme: dark;
 }
 
+@layer base {
+  /*
+   * Native <select> / <option> dark-mode override.
+   * color-scheme: dark is already on :root but browsers won't always
+   * apply it to the dropdown popup without an explicit per-element
+   * declaration. accent-color drives the OS highlight / checkmark color.
+   */
+  select {
+    color-scheme: dark;
+    accent-color: theme("colors.accent");
+  }
+  option {
+    background-color: theme("colors.panel");
+    color: theme("colors.ink2");
+  }
+  option:checked {
+    background-color: theme("colors.panel2");
+    color: theme("colors.accent");
+  }
+}
+
 html,
 body {
   background: #0c0c0f;
