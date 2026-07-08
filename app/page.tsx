@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getAccounts, listTransactions, getCategories } from "@/lib/queries";
+import { getAccounts, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus, monthRange } from "@/lib/budget";
 import { getPrimaryGoal, getSavingsTotal } from "@/lib/savings";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
-import { TxRow } from "./ui/TxRow";
+import { RecentLedger } from "./ui/RecentLedger";
 import { Panel } from "./ui/Panel";
 import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
@@ -43,10 +43,6 @@ export default async function Home({
   let budget: Awaited<ReturnType<typeof getMonthlyBudgetStatus>> = {
     label: "", ym: "", rows: [], totalSpent: 0, totalBudget: 0,
   };
-  let txResult: Awaited<ReturnType<typeof listTransactions>> = {
-    rows: [],
-    totals: { totalIn: 0, totalOut: 0, count: 0 },
-  };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
   let savings: Awaited<ReturnType<typeof getSavingsTotal>> = {
@@ -55,10 +51,9 @@ export default async function Home({
   let dbError: string | null = null;
 
   try {
-    [accs, budget, txResult, cats, primaryGoal, savings] = await Promise.all([
+    [accs, budget, cats, primaryGoal, savings] = await Promise.all([
       getAccounts(),
       getMonthlyBudgetStatus(),
-      listTransactions({ limit: 12 }),
       getCategories(),
       getPrimaryGoal(),
       getSavingsTotal(),
@@ -184,26 +179,7 @@ export default async function Home({
       )}
 
       <Panel title="RECENT LEDGER" right={<Link href="/transactions" className="text-accent2 hover:underline">» all</Link>}>
-        {txResult.rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted">No transactions yet.</p>
-        ) : (
-          <table className="term-table">
-            <thead>
-              <tr>
-                <th>DATE</th>
-                <th>MERCHANT</th>
-                <th>CATEGORY</th>
-                <th></th>
-                <th className="text-right">AMOUNT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {txResult.rows.map((t) => (
-                <TxRow key={t.id} tx={t} options={options} />
-              ))}
-            </tbody>
-          </table>
-        )}
+        <RecentLedger options={options} />
       </Panel>
     </main>
   );

@@ -137,7 +137,7 @@ export function BillRow({ item }: { item: BillItem }) {
 }
 
 /** Mark-as-recurring button placed in the TxRow action area. */
-export function MarkRecurring({ txId, merchant }: { txId: number; merchant: string }) {
+export function MarkRecurring({ txId, merchant, onSuccess }: { txId: number; merchant: string; onSuccess?: () => void }) {
   const router = useRouter();
   const [done, setDone] = useState(false);
   const [busy, start] = useTransition();
@@ -150,6 +150,7 @@ export function MarkRecurring({ txId, merchant }: { txId: number; merchant: stri
     });
     if (res.ok) {
       setDone(true);
+      onSuccess?.();
       start(() => router.refresh());
     }
   }
@@ -174,7 +175,7 @@ export function MarkRecurring({ txId, merchant }: { txId: number; merchant: stri
  * button; clicking soft-deletes the recurring entry for that merchant so an
  * accidental mark can be undone straight from the ledger.
  */
-export function UnmarkRecurring({ merchant }: { merchant: string | null }) {
+export function UnmarkRecurring({ merchant, onSuccess }: { merchant: string | null; onSuccess?: () => void }) {
   const router = useRouter();
   const [busy, start] = useTransition();
 
@@ -184,6 +185,7 @@ export function UnmarkRecurring({ merchant }: { merchant: string | null }) {
     await fetch(`/api/recurring?merchant=${encodeURIComponent(merchant)}`, {
       method: "DELETE",
     });
+    onSuccess?.();
     start(() => router.refresh());
   }
 
