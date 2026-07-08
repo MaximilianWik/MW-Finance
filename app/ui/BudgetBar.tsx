@@ -84,7 +84,7 @@ export function BudgetBar({
           <span className="text-ink2">{row.name}</span>
         </span>
 
-        <span className="w-32 shrink-0 text-right tabular-nums text-muted">
+        <span className="shrink-0 whitespace-nowrap text-right tabular-nums text-muted">
           {kr(row.spent)}
           {hasBudget && <span className="text-faint"> / {kr(row.budget)}</span>}
         </span>
