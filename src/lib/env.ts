@@ -43,7 +43,7 @@ export const env = {
       return req("GEMINI_API_KEY");
     },
     get model() {
-      return opt("GEMINI_MODEL", "gemini-2.0-flash");
+      return opt("GEMINI_MODEL", "gemini-2.5-flash");
     },
   },
   ntfy: {
