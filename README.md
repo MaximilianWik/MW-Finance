@@ -1,150 +1,185 @@
 # MWFinance
 
-Personal finance PWA - links your bank via **Enable Banking**, pulls transactions,
-auto-categorizes them (rules → Gemini → learned merchant cache), tracks per-category
-monthly budgets, and pushes budget alerts to your phone via **ntfy**.
+Personal finance terminal -- connects to Lansforsakringar Bank via Enable Banking Open Banking API, auto-categorizes transactions, tracks salary-cycle budgets, manages savings goals, and surfaces behavioral insights. Built with a full retro-CLI aesthetic.
 
-**Stack:** Next.js 15 (App Router) · Drizzle ORM · Neon Postgres · jose (RS256 JWT) ·
-Gemini · ntfy · Tailwind · deploy on Vercel.
-
+**Stack:** Next.js 15 (App Router) -- Drizzle ORM -- Neon Postgres -- Enable Banking (RS256 JWT) -- Gemini 2.0 Flash -- ntfy -- Tailwind -- Vercel
 
 ---
 
-## 1. Prerequisites
+## Features
 
-- Node 20+ and npm
-- A [Neon](https://neon.tech) Postgres database (free tier)
-- An [Enable Banking](https://enablebanking.com) application (sandbox is free):
-  - Create an app in the control panel, upload/generate an **RSA key pair**
-  - Note your **Application ID** (becomes the JWT `kid`)
-  - Register redirect URL `http://localhost:3000/api/callback` (and your prod URL)
-- A [Gemini API key](https://aistudio.google.com/apikey) (free tier)
-- The [ntfy](https://ntfy.sh) app on your phone, subscribed to a private topic
+- **Auto-sync** from Lansforsakringar via cron (every 6h) or manual trigger. Sync always re-links via BankID first; full log output with categorization breakdown and per-transaction detail.
+- **Categorization** pipeline: self-transfer detection -> MCC codes -> keyword rules -> merchant cache -> Gemini fallback. Manual overrides propagate to all past and future transactions from the same merchant.
+- **Salary-cycle budgeting**: budget periods run from your last salary to the next one (detected as Income 18k--30k kr), not calendar months.
+- **Category drill-down**: click any budget row to see its transactions for the current period.
+- **Recurring payments**: auto-detected from history (>=3 consistent charges) + manually markable from the ledger. Bills checklist with paid/due/overdue status on /insights.
+- **Savings goals** with Vercel Blob images, time-to-goal projections, and monthly auto-sweep of budget surplus.
+- **Insights**: month-over-month and week-over-week comparison tables. Spending increases shown in red; Savings decrease in red (reversed). Transfers excluded.
+- **Self-transfer exclusion**: transfers between own accounts (matched by counterparty name or account number) are always categorized as Transfers and excluded from spending totals and budgets.
+- **What-if simulator**: adjust category budgets and see projected month-end impact.
+- **Adaptive budgeting**: large purchases tighten other categories automatically.
+- **Anomaly detection**: suspicious payments flagged with [!] ANOMALY.
+- **Ledger LÖN period filter**: filter transactions by salary cycle.
 
 ---
 
-## 2. Setup
+## Setup
+
+### Prerequisites
+
+- Node 20+
+- [Neon](https://neon.tech) Postgres database (free tier)
+- [Enable Banking](https://enablebanking.com) application:
+  - Create an app, generate an RSA key pair
+  - Register redirect URL `http://localhost:3000/api/callback` (and your prod domain)
+  - Note your Application ID
+- [Gemini API key](https://aistudio.google.com/apikey) (free tier)
+- [ntfy](https://ntfy.sh) app on your phone
+
+### Install
 
 ```powershell
 npm install
 Copy-Item .env.example .env.local
+# fill in .env.local -- see comments there
 ```
 
-Fill in `.env.local` (see comments in `.env.example`). Key points:
-
 ### Enable Banking private key
-The key must be **PKCS#8** and stored **base64-encoded** (single line, avoids newline
-breakage in env vars). If your key is PKCS#1 (`BEGIN RSA PRIVATE KEY`), convert first:
+
+The key must be PKCS#8, base64-encoded with no line wraps:
 
 ```powershell
-openssl pkcs8 -topk8 -nocrypt -in your-app-id.pem -out pkcs8.pem
-# then base64-encode it (no line wraps):
+# Convert PKCS#1 to PKCS#8 if needed:
+openssl pkcs8 -topk8 -nocrypt -in your-key.pem -out pkcs8.pem
+# Base64-encode (no line wraps):
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("pkcs8.pem")) | Set-Content key.b64
 ```
 
-Paste the contents of `key.b64` into `ENABLE_BANKING_PRIVATE_KEY_BASE64`.
+Paste `key.b64` content into `ENABLE_BANKING_PRIVATE_KEY_BASE64`.
 
 ### Database
+
 ```powershell
-npm run db:push     # create tables from the Drizzle schema
-npm run db:seed     # insert the 11 default categories + budgets
+npm run db:push     # create tables from Drizzle schema
+npm run db:seed     # insert default categories + budgets
 ```
 
----
+For a fresh environment, also apply `drizzle/migrations/phase2.sql` in the Neon SQL editor
+(adds `savings_entries` and Phase 2 columns if `db:push` does not pick them up).
 
-## 3. Run
+### Run
 
 ```powershell
 npm run dev
+# open http://localhost:3000
+# click "$ sync now" -> BankID re-link -> auto-syncs on return
 ```
 
-Open http://localhost:3000 → **Link bank** → authenticate at your bank → you're
-redirected back → hit **Sync now**.
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | yes | Neon Postgres connection string |
+| `ENABLE_BANKING_PRIVATE_KEY_BASE64` | yes | Base64 PKCS#8 RSA private key |
+| `ENABLE_BANKING_APP_ID` | yes | Enable Banking application ID |
+| `ENABLE_BANKING_REDIRECT_URL` | yes | Must match Enable Banking panel |
+| `ENABLE_BANKING_ASPSP_NAME` | yes | e.g. `Lansforsakringar` |
+| `ENABLE_BANKING_ASPSP_COUNTRY` | yes | e.g. `SE` |
+| `GEMINI_API_KEY` | yes | Google AI Studio |
+| `GEMINI_MODEL` | no | defaults to `gemini-2.0-flash` |
+| `NTFY_SERVER` | no | defaults to `https://ntfy.sh` |
+| `NTFY_TOPIC` | yes | your private ntfy topic |
+| `BLOB_READ_WRITE_TOKEN` | yes | Vercel Blob (goal images) |
+| `CRON_SECRET` | yes | Bearer token for `/api/sync` cron |
+| `APP_URL` | yes | public base URL e.g. `https://mw-finance-six.vercel.app` |
 
 ---
 
-## 4. How it works
+## Key Source Files
 
-| Piece | File |
+| File | Role |
 |---|---|
-| JWT signer (RS256, cached) | `src/lib/enablebanking/jwt.ts` |
-| API client (`/auth`, `/sessions`, transactions w/ `continuation_key`, balances) | `src/lib/enablebanking/client.ts` |
-| Raw tx → DB row (dedupe key, merchant normalize, signed amount) | `src/lib/enablebanking/normalize.ts` |
-| Categorization (MCC + keyword rules → cache → Gemini) | `src/lib/categorize.ts` |
-| Sync orchestration (fetch → dedupe-insert → categorize → notify) | `src/lib/sync.ts` |
-| Budget math | `src/lib/budget.ts` |
-| ntfy push | `src/lib/notify.ts` |
-| Drizzle schema | `src/db/schema.ts` |
-
-**Categorization order:** deterministic MCC/keyword rules → learned merchant cache →
-Gemini fallback (only for still-unknown merchants). A manual override in the UI writes
-the merchant→category cache, so every future transaction from that merchant auto-applies.
-
-**Gemini cadence:** the 6-hourly sync does **not** call Gemini (stays in free tier).
-A separate weekly cron (`/api/sync?gemini=1`, Mondays) classifies accumulated unknowns.
-Manual **Sync now** always runs Gemini for immediate results.
-
-**Dedupe:** unique index on `(account_uid, dedupe_key)` where `dedupe_key` prefers the
-bank's `entry_reference`/`transaction_id`, else a content hash. Overlapping sync windows
-never double-insert.
-
----
-
-## 5. API routes
-
-| Route | Purpose |
-|---|---|
-| `GET /api/auth/start` | Begin bank consent; sets CSRF state cookie; redirects to bank |
-| `GET /api/callback` | Exchange `code` → session; persist session + accounts |
-| `GET\|POST /api/sync` | Cron target. Guarded by `Authorization: Bearer $CRON_SECRET`. `?gemini=1` enables Gemini |
-| `GET /api/transactions` | List (filters: `month`, `categoryId`, `accountUid`, `q`, `limit`) |
-| `PATCH /api/transactions` | Manual category override (`{id, categoryId}`) + updates merchant cache |
-| `GET/PATCH/POST /api/categories` | List / edit budget / create category |
+| `src/db/schema.ts` | Drizzle schema (all tables) |
+| `src/db/seed.ts` | Category seed data |
+| `src/lib/enablebanking/jwt.ts` | RS256 JWT signer (cached) |
+| `src/lib/enablebanking/client.ts` | Enable Banking API client |
+| `src/lib/enablebanking/normalize.ts` | Raw transaction -> DB row (dedupe key, merchant normalize) |
+| `src/lib/categorize.ts` | MCC + keyword rules, Gemini batch classifier |
+| `src/lib/transfers.ts` | Self-transfer detection by counterparty name / account number |
+| `src/lib/sync.ts` | Full sync orchestration (fetch -> categorize -> notify -> behavior) |
+| `src/lib/budget.ts` | Monthly budget status; uses salary-cycle period |
+| `src/lib/period.ts` | Salary-cycle period detection (getSalaryCycle, getAllSalaryCycles) |
+| `src/lib/comparison.ts` | Month-over-month and week-over-week spend comparison |
+| `src/lib/savings.ts` | Goals, contributions, monthly sweep, savings total |
+| `src/lib/queries.ts` | Shared query helpers (accounts, transactions, listTransactions) |
+| `src/lib/behavior/` | Recurring detection, anomaly flagging, adaptive budgets, trajectory |
+| `app/ui/SyncButton.tsx` | Sync console -- always re-links first, auto-runs on BankID return |
+| `app/ui/LedgerPanel.tsx` | Full-featured ledger with filters, query log, LÖN period select |
+| `app/ui/RecentLedger.tsx` | Overview recent transactions (client component, same API as ledger) |
+| `app/ui/BudgetBar.tsx` | Budget row with category-colored bar and click-to-drill |
+| `app/ui/SavingsPanel.tsx` | All-time savings total + manual entry form |
+| `app/ui/RecurringActions.tsx` | MarkRecurring and UnmarkRecurring buttons |
 
 ---
 
-## 6. Deploy to Vercel
+## API Routes
 
-1. Push this repo to Git and import into Vercel.
-2. Add every var from `.env.example` in **Project → Settings → Environment Variables**
-   (set `APP_URL` and `ENABLE_BANKING_REDIRECT_URL` to your prod domain, and register
-   that redirect URL in the Enable Banking panel).
-3. `vercel.json` defines the cron jobs:
+| Route | Method | Description |
+|---|---|---|
+| `/api/auth/start` | GET | Begin BankID consent (`?autoSync=1` to auto-sync on return) |
+| `/api/callback` | GET | Exchange OAuth code, persist session + accounts |
+| `/api/sync` | GET/POST | Cron target. Guarded by `Authorization: Bearer $CRON_SECRET`. `?gemini=1` enables Gemini. |
+| `/api/sync/manual` | POST | Dashboard sync trigger (no auth, personal app) |
+| `/api/transactions` | GET | List with filters: `month`, `from`, `to`, `categoryId`, `q`, `limit` |
+| `/api/transactions` | PATCH | Category override -- propagates to all same-merchant transactions |
+| `/api/categories` | GET/PATCH/POST | List / edit budgets / create |
+| `/api/recurring` | GET/POST/PATCH/DELETE | Manage recurring payments (DELETE accepts `?id=` or `?merchant=`) |
+| `/api/savings` | GET/POST/DELETE | Savings total + manual entries |
+| `/api/goals` | GET/POST | Savings goals |
+| `/api/goals/[id]/contributions` | GET/POST | Goal contributions |
+| `/api/goals/[id]/image` | POST | Upload goal image (Vercel Blob) |
+| `/api/simulate` | POST | What-if budget simulation |
+| `/api/maintenance/reclassify` | POST | One-time backfill: re-run self-transfer detection on all transactions |
+
+---
+
+## Deploy to Vercel
+
+1. Push to Git and import into Vercel.
+2. Add all env vars from `.env.example` in Project -> Settings -> Environment Variables. Set `APP_URL` and `ENABLE_BANKING_REDIRECT_URL` to your prod domain; register that URL in Enable Banking.
+3. `vercel.json` defines cron jobs:
    - `/api/sync` every 6h
-   - `/api/sync?gemini=1` weekly (Mon 06:00)
-   - Vercel sends `Authorization: Bearer $CRON_SECRET` automatically when `CRON_SECRET`
-     is set in env. **Sub-daily crons require the Vercel Pro plan** — on Hobby, change
-     the schedule to daily (`0 6 * * *`) or trigger `/api/sync` from an external cron.
-4. Run `npm run db:push` and `npm run db:seed` against the production `DATABASE_URL`
-   once (locally, pointing at prod).
-
-### Install as an app
-On iPhone: open the site in Safari → Share → **Add to Home Screen**. The PWA manifest
-and service worker (`public/`) make it launch full-screen. Budget alerts arrive via the
-ntfy app (subscribe to your `NTFY_TOPIC`).
-
----
-
-## 7. Scripts
-
-```
-npm run dev         # dev server
-npm run build       # production build
-npm run typecheck   # tsc --noEmit
-npm run db:push     # push schema to Neon
-npm run db:seed     # seed default categories
-npm run db:studio   # Drizzle Studio
-```
+   - `/api/sync?gemini=1` weekly (Monday 06:00)
+   - Vercel injects `Authorization: Bearer $CRON_SECRET` automatically.
+   - **Sub-daily crons require Vercel Pro.** On Hobby, change to daily (`0 6 * * *`).
+4. Apply DB migrations once against the prod `DATABASE_URL`:
+   ```powershell
+   # Set DATABASE_URL to prod connection string, then:
+   npm run db:push
+   npm run db:seed
+   ```
+   Also run the Phase 2 SQL from `drizzle/migrations/phase2.sql` in the Neon SQL console.
 
 ---
 
-## 8. Security notes
+## Scripts
+
+```
+npm run dev          dev server
+npm run build        production build
+npm run typecheck    tsc --noEmit
+npm run db:push      push Drizzle schema to Neon
+npm run db:seed      seed default categories
+npm run db:studio    Drizzle Studio (DB browser)
+```
+
+---
+
+## Security
 
 - `.env.local` and `*.pem` are gitignored. Never commit secrets.
-- The RSA private key lives only in env (base64). Rotate via the Enable Banking panel.
-- `/api/sync` is unauthenticated-safe only because of the `CRON_SECRET` bearer check.
-- Pick an unguessable `NTFY_TOPIC` — anyone who knows it can read your alerts.
-
-Phase 1 scope: accounts, balances, transactions, categorization, budgets, notifications.
-The schema already includes `savings_goals` and `recurring_payments` tables as
-foundations for later phases.
+- RSA private key lives only in env. Rotate via the Enable Banking panel.
+- `/api/sync` is protected by `CRON_SECRET` bearer check.
+- Use an unguessable `NTFY_TOPIC` -- anyone who knows it can read your budget alerts.
