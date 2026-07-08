@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
-import { desc, eq, isNull, or } from "drizzle-orm";
+import { desc, eq, isNull, ne, or } from "drizzle-orm";
 import { categorizeBatch, type CatRow } from "@/lib/categorize-batch";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ const BATCH_CAP = 200; // keep a single run inside the serverless time budget
  * 'default'). Streams a per-transaction [✓] log ending with a [DONE] summary.
  *
  *   POST         → categorize the uncategorized backlog
- *   POST ?all=1  → re-categorize every non-manual transaction
+ *   POST ?all=1  → re-categorize every non-manual transaction (manual overrides kept)
  */
 export async function POST(req: NextRequest) {
   const all = new URL(req.url).searchParams.get("all") === "1";
@@ -32,8 +32,10 @@ export async function POST(req: NextRequest) {
         send("[AI]   scanning ledger for transactions to categorize…");
 
         const where = all
-          ? undefined
-          : or(isNull(transactions.categorySource), eq(transactions.categorySource, "default"));
+          ? // everything except rows the user manually categorized
+            or(isNull(transactions.categorySource), ne(transactions.categorySource, "manual"))
+          : // just the backlog that was never confidently categorized
+            or(isNull(transactions.categorySource), eq(transactions.categorySource, "default"));
 
         const rows = await db
           .select({

@@ -50,7 +50,7 @@ const SYSTEM = [
   "- Total of all budgets must leave room for savings — do NOT let budgets exceed monthly income.",
   "- NEVER propose a change for a category whose source is 'manual'. Omit it from 'sets' entirely.",
   "- Only propose newCategories when the data clearly shows recurring spend that has no fitting existing category. Prefer reusing existing categories.",
-  "- Do not budget the Income, Savings, Transfers or Uncategorized categories in 'sets'.",
+  "- Do not budget the Income, Savings, Investments, Transfers, Swish or Uncategorized categories in 'sets'.",
   "- 'reasoning' = 3–6 short terminal-style lines explaining the logic. No markdown, no emoji.",
 ].join("\n");
 
@@ -112,7 +112,7 @@ export async function proposeBudget(): Promise<BudgetProposal> {
   };
 }
 
-const PROTECTED = new Set(["Income", "Savings", "Transfers", "Uncategorized"]);
+const PROTECTED = new Set(["Income", "Savings", "Investments", "Transfers", "Swish", "Uncategorized"]);
 
 /**
  * Persist a proposal. Skips categories stamped budgetSource='manual', creates

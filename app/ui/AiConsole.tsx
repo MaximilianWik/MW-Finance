@@ -1,28 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTypewriter, TerminalLog } from "./typewriter";
 
-/**
- * Shared line-colouring for every terminal console in the app (sync log, budget
- * recalibration, behavior analysis). Matches the `[TAG]` grammar used across the
- * server log streams.
- */
-export function lineColor(l: string): string {
-  const t = l.trimStart();
-  if (t.startsWith("[FAIL]")) return "text-danger";
-  if (t.startsWith("[!]")) return "text-danger";
-  if (t.startsWith("[WARN]") || t.startsWith("[~]")) return "text-amber";
-  if (t.startsWith("[DONE]")) return "text-accent";
-  if (t.startsWith("[OK]") || t.startsWith("[✓]") || t.startsWith("[SET]")) return "text-ok";
-  if (t.startsWith("[NEW]")) return "text-accent2";
-  if (t.startsWith("[SKIP]")) return "text-faint";
-  if (t.startsWith("[AI]")) return "text-accent2";
-  if (t.startsWith("[SYNC]")) return "text-muted";
-  if (t.startsWith("[DIAG]") || t.startsWith("(")) return "text-amber/60";
-  if (l.startsWith("       ")) return "text-faint";
-  return "text-muted";
-}
+// Backwards-compat re-export (older imports pulled lineColor from here).
+export { lineColor } from "./typewriter";
 
 interface AiConsoleProps {
   endpoint: string;
@@ -37,8 +19,9 @@ interface AiConsoleProps {
 
 /**
  * Generic streaming console. POSTs (or GETs) an endpoint that returns a
- * newline-delimited text stream, renders each line live with terminal colours,
- * and auto-scrolls. Reused by budget recalibration and behavior analysis.
+ * newline-delimited text stream and types the output live via the typewriter
+ * buffer. Reused by budget recalibration, behavior analysis, and ledger
+ * categorization.
  */
 export function AiConsole({
   endpoint,
@@ -50,17 +33,10 @@ export function AiConsole({
   className = "",
 }: AiConsoleProps) {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
-  const preRef = useRef<HTMLPreElement>(null);
+  const tw = useTypewriter();
 
-  useEffect(() => {
-    if (preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
-  }, [log]);
-
-  const run = useCallback(async () => {
-    setPending(true);
-    setLog([]);
+  async function run() {
+    tw.reset();
     try {
       const res = await fetch(endpoint, {
         method,
@@ -68,47 +44,32 @@ export function AiConsole({
         body: body != null ? JSON.stringify(body) : undefined,
       });
       if (!res.body) {
-        setLog(["[FAIL] no response stream"]);
+        tw.push("[FAIL] no response stream\n");
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buf = "";
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const parts = buf.split("\n");
-        buf = parts.pop() ?? "";
-        if (parts.length) setLog((l) => [...l, ...parts]);
+        tw.push(decoder.decode(value, { stream: true }));
       }
-      if (buf.trim()) setLog((l) => [...l, buf]);
       if (refreshOnDone) router.refresh();
     } catch {
-      setLog((l) => [...l, "[FAIL] network error — check your connection"]);
+      tw.push("\n[FAIL] network error — check your connection");
     } finally {
-      setPending(false);
+      tw.endStream();
     }
-  }, [endpoint, method, body, refreshOnDone, router]);
+  }
 
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
-      <button className="btn btn-accent self-start" onClick={run} disabled={pending}>
-        {pending ? pendingLabel : label}
+      <button className="btn btn-accent self-start" onClick={run} disabled={tw.busy}>
+        {tw.busy ? pendingLabel : label}
       </button>
 
-      {log.length > 0 && (
-        <pre
-          ref={preRef}
-          className="max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed"
-        >
-          {log.map((l, i) => (
-            <div key={i} className={lineColor(l)}>
-              {l}
-              {pending && i === log.length - 1 && <span className="caret" />}
-            </div>
-          ))}
-        </pre>
+      {(tw.busy || tw.shown.length > 0) && (
+        <TerminalLog shown={tw.shown} busy={tw.busy} typing={tw.typing} />
       )}
     </div>
   );

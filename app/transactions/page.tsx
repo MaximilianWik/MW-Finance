@@ -19,10 +19,18 @@ export default async function TransactionsPage({
     <main className="flex flex-col gap-4">
       <Panel title="AI CATEGORIZE">
         <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
-          Run the categorization engine over uncategorized transactions —
-          rules, learned merchants, then Gemini for the unknowns. Watch it live.
+          Run the categorization engine over your transactions — rules, learned
+          merchants, then Gemini for the unknowns. Watch it type out live.
+          <br />
+          <span className="text-faint">
+            &quot;$ categorize&quot; handles the uncategorized backlog. &quot;$ recategorize all&quot;
+            re-runs everything except your manual overrides.
+          </span>
         </p>
-        <AiConsole endpoint="/api/categorize" label="$ categorize" pendingLabel="categorizing…" />
+        <div className="flex flex-col gap-3">
+          <AiConsole endpoint="/api/categorize" label="$ categorize" pendingLabel="categorizing…" />
+          <AiConsole endpoint="/api/categorize?all=1" label="$ recategorize all" pendingLabel="categorizing…" />
+        </div>
       </Panel>
 
       <Panel title="LEDGER">

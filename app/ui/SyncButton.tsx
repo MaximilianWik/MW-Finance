@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { lineColor } from "./AiConsole";
+import { useTypewriter, TerminalLog } from "./typewriter";
 
 /**
  * Sync console.
@@ -16,52 +16,42 @@ import { lineColor } from "./AiConsole";
  *    and immediately starts the sync so the user sees the full log output
  *    without any extra clicks.
  *
- * The sync endpoint streams its log line-by-line, so the console scrolls live
- * as each transaction is categorized.
+ * The sync endpoint streams its log line-by-line; the typewriter buffer types
+ * it out live as each transaction is categorized.
  *
  * Re-linking before every sync is intentional: the ASPSP consent from
  * Lansforsakringar expires frequently and sync never succeeds without it.
  */
 export function SyncButton() {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [log, setLog]         = useState<string[]>([]);
-  const preRef = useRef<HTMLPreElement>(null);
-
-  useEffect(() => {
-    if (preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
-  }, [log]);
+  const tw = useTypewriter();
 
   async function run() {
-    setPending(true);
-    setLog(["[SYNC] connecting to Enable Banking..."]);
+    tw.reset();
+    tw.push("[SYNC] connecting to Enable Banking...\n");
+    let ok = true;
     try {
       const res = await fetch("/api/sync/manual", { method: "POST" });
       if (!res.body) {
-        setLog((l) => [...l, "[FAIL] no response stream"]);
+        tw.push("[FAIL] no response stream\n");
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
-      let ok = true;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const parts = buf.split("\n");
-        buf = parts.pop() ?? "";
-        if (parts.length) {
-          if (parts.some((p) => p.startsWith("[FAIL]"))) ok = false;
-          setLog((l) => [...l, ...parts]);
-        }
+        const text = decoder.decode(value, { stream: true });
+        buf += text;
+        if (buf.includes("[FAIL]")) ok = false;
+        tw.push(text);
       }
-      if (buf.trim()) setLog((l) => [...l, buf]);
       if (ok) router.refresh();
     } catch {
-      setLog((l) => [...l, "[FAIL] network error \u2014 check your connection"]);
+      tw.push("\n[FAIL] network error \u2014 check your connection");
     } finally {
-      setPending(false);
+      tw.endStream();
     }
   }
 
@@ -94,22 +84,13 @@ export function SyncButton() {
       <button
         className="btn btn-accent self-start"
         onClick={handleClick}
-        disabled={pending}
+        disabled={tw.busy}
       >
-        {pending ? "syncing\u2026" : "$ sync now"}
+        {tw.busy ? "syncing\u2026" : "$ sync now"}
       </button>
 
-      {log.length > 0 && (
-        <pre ref={preRef} className="max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed">
-          {log.map((l, i) => (
-            <div key={i} className={lineColor(l)}>
-              {l}
-              {pending && i === log.length - 1 && (
-                <span className="caret" />
-              )}
-            </div>
-          ))}
-        </pre>
+      {(tw.busy || tw.shown.length > 0) && (
+        <TerminalLog shown={tw.shown} busy={tw.busy} typing={tw.typing} />
       )}
     </div>
   );

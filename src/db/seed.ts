@@ -28,7 +28,9 @@ const DEFAULTS: Array<{
   { name: "Cash & ATM",      color: "#8888a0", monthly: null,   weekly: null,   sort: 80 },
   { name: "Income",          color: "#4ec96a", monthly: null,   weekly: null,   sort: 90 },
   { name: "Savings",         color: "#3ec8b0", monthly: null,   weekly: null,   sort: 95 },
+  { name: "Investments",     color: "#3ea0c8", monthly: null,   weekly: null,   sort: 96 },
   { name: "Transfers",       color: "#606070", monthly: null,   weekly: null,   sort: 100 },
+  { name: "Swish",           color: "#c8a0e0", monthly: null,   weekly: null,   sort: 101 },
   { name: "Uncategorized",   color: "#72728a", monthly: null,   weekly: null,   sort: 999 },
 ];
 

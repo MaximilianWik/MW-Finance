@@ -13,7 +13,9 @@ export const CATEGORY_NAMES = [
   "Cash & ATM",
   "Income",
   "Savings",
+  "Investments",
   "Transfers",
+  "Swish",
   "Uncategorized",
 ] as const;
 
@@ -24,6 +26,7 @@ export interface CategorizeInput {
   mcc: string | null;
   remittance: string | null;
   direction: "CRDT" | "DBIT";
+  counterpartyName?: string | null;
 }
 
 // ─── MCC → category (merchant category code, when the bank supplies it) ──────
@@ -45,17 +48,26 @@ function mccCategory(mcc: string | null): CategoryName | null {
 }
 
 // ─── Keyword rules on the normalized merchant / remittance ──────────────────
+// Order matters — first match wins. High-priority overrides (Swish, Investments,
+// insurance) sit above the generic buckets so they beat both the Income/Transfer
+// rules and Gemini.
 const RULES: Array<{ re: RegExp; cat: CategoryName }> = [
+  // Swish (any direction) — must precede Income ("SWISH INBETALNING") + Transfers.
+  { re: /\bSWISH\b/, cat: "Swish" },
+  // Fund / brokerage activity — buys AND sale deposits. NOT savings.
+  { re: /\b(LF ?FONDER|FONDER|FONDKONTO|FONDK[ÖO]P|FONDSPAR|AVANZA|NORDNET|SAVR|AKTIEINVEST)\b/, cat: "Investments" },
+  // Swedish insurers → Bills & Utilities (insurance is a bill, not savings).
+  { re: /\b(FOLKSAM|SKANDIA|TRYGG.?HANSA|MODERNA F[ÖO]RS|DINA F[ÖO]RS|HEDVIG|TRE KRONOR|GJENSIDIGE|WATERCIRCLES)\b/, cat: "Bills & Utilities" },
   { re: /\bLYSA\b/, cat: "Savings" },
   { re: /\b(ICA|COOP|HEMK[ÖO]P|WILLYS|LIDL|CITY ?GROSS|MAXI|TEMPO|MATHEM|HEMKOP)\b/, cat: "Groceries" },
-  { re: /\b(MCDONALD|BURGER KING|MAX|SUBWAY|PIZZA|SUSHI|O.?LEARYS|ESPRESSO|BARISTA|CAF[EÉ]|RESTAURANG|FOODORA|WOLT|UBER ?EATS)\b/, cat: "Restaurants" },
+  { re: /\b(MCDONALD|BURGER KING|MAX|SUBWAY|PIZZA|SUSHI|O.?LEARYS|ESPRESSO|BARISTA|CAF[EÉ]|RESTAURANG|FOODORA|WOLT|UBER ?EATS|JURESKOGS|BASTARD ?BURGER|VIGGO|TACO ?BAR|SIBYLLA)\b/, cat: "Restaurants" },
   { re: /\b(SL |SL$|V[AÄ]STTRAFIK|SK[AÅ]NETRAFIKEN|SJ |SJ$|MTR|UBER|BOLT|TAXI|CIRCLE ?K|OKQ8|PREEM|ST1|INGO|SHELL|TESLA SUPERCHARGER)\b/, cat: "Transport" },
   { re: /\b(H&M|HM |ZARA|CLAS OHLSON|ELGIGANTEN|MEDIAMARKT|IKEA|ZALANDO|AMAZON|APOTEA|XXL|STADIUM|INTERSPORT|CDON|BOOZT)\b/, cat: "Shopping" },
   { re: /\b(SPOTIFY|NETFLIX|HBO|MAX |DISNEY|VIAPLAY|YOUTUBE|C ?MORE|STEAM|PLAYSTATION|XBOX|BIO ?|SF ?BIO|FILMSTADEN)\b/, cat: "Entertainment" },
   { re: /\b(APOTEK|APOTEA|KRONANS|LLOYDS|V[AÅ]RDCENTRAL|TANDL[AÄ]KARE|FOLKTANDV[AÅ]RDEN)\b/, cat: "Health" },
   { re: /\b(VATTENFALL|ELLEVIO|E.?ON|FORTUM|TELIA|TELE2|TRE |COMHEM|BREDBAND|F[ÖO]RS[AÄ]KRING|HYRA|CSN|SKATTEVERKET|BOSTAD)\b/, cat: "Bills & Utilities" },
   { re: /\b(UTTAG|ATM|BANKOMAT|CONTANTER|CASH)\b/, cat: "Cash & ATM" },
-  { re: /\b(L[ÖO]N|LON |SALARY|LÖNEUTBETALNING|SWISH INBETALNING|INSATTNING)\b/, cat: "Income" },
+  { re: /\b(L[ÖO]N|LON |SALARY|LÖNEUTBETALNING|INSATTNING)\b/, cat: "Income" },
   { re: /\b(EGEN[ ]?[ÖO]VERF[ÖO]RING|[ÖO]VERF[ÖO]RING|SPARKONTO|TRANSFER)\b/, cat: "Transfers" },
 ];
 
@@ -64,7 +76,9 @@ export function ruleCategory(input: CategorizeInput): CategoryName | null {
   const mcc = mccCategory(input.mcc);
   if (mcc) return mcc;
 
-  const hay = `${input.merchant ?? ""} ${input.remittance ?? ""}`.toUpperCase();
+  // Include the raw counterparty name: normalizeMerchant strips words like
+  // "SWISH", so the merchant key alone can't be trusted to carry them.
+  const hay = `${input.merchant ?? ""} ${input.remittance ?? ""} ${input.counterpartyName ?? ""}`.toUpperCase();
   for (const r of RULES) {
     if (r.re.test(hay)) return r.cat;
   }
@@ -92,7 +106,17 @@ export async function geminiCategorize(
     "You classify Swedish bank-transaction merchant names into spending categories.",
     `Allowed categories (use EXACTLY these strings): ${CATEGORY_NAMES.join(", ")}.`,
     'Return a JSON object mapping each input merchant to one category, e.g. {"ICA MAXI":"Groceries"}.',
-    'If unsure, use "Uncategorized". Do not invent categories. Output JSON only.',
+    "",
+    "DOMAIN RULES (apply strictly):",
+    "- Swish payments (any direction) → Swish.",
+    "- Swedish insurers (Folksam, Skandia, Trygg-Hansa, Moderna, Dina, Hedvig, Trygg) → Bills & Utilities. Insurance is NOT Savings.",
+    "- Fund / brokerage activity (Avanza, Nordnet, LF Fonder, 'fonder', fund purchases or sales) → Investments. Money received from SELLING funds is Investments, NEVER Savings.",
+    "- Use Savings ONLY for deliberate savings deposits (e.g. Lysa, Sparkonto). Never for investment sales or insurance.",
+    "- Restaurants include Swedish food/burger chains (Jureskogs, Bastard Burgers, Max, Sibylla, O'Learys, etc.).",
+    "- Salary (Lön) → Income.",
+    "- Card-terminal noise/prefixes like 'A194 SE ARN' or trailing country codes ('STOCKHOLM SE') should be IGNORED; classify by the recognizable merchant name inside the string.",
+    "",
+    'If genuinely unsure, use "Uncategorized". Do not invent categories. Output JSON only.',
     "",
     "Merchants:",
     ...merchants.map((m) => `- ${m}`),

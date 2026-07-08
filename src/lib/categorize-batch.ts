@@ -77,6 +77,7 @@ export async function categorizeBatch(
       mcc: r.mcc,
       remittance: r.remittance,
       direction: r.direction as "CRDT" | "DBIT",
+      counterpartyName: r.counterpartyName,
     });
     if (ruleName && nameToId.has(ruleName)) {
       decided.set(r.id, { catId: nameToId.get(ruleName)!, source: "rule" });
