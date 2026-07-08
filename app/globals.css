@@ -113,7 +113,7 @@ body > * {
            outline-none placeholder:text-faint focus:border-accent;
   }
   .prompt {
-    @apply flex items-center gap-2 border border-edge bg-panel2 px-2.5 py-1.5
+    @apply flex min-h-[2rem] items-center gap-2 border border-edge bg-panel2 px-2.5 py-1
            focus-within:border-accent;
   }
   .prompt > span.sigil {

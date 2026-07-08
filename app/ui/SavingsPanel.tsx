@@ -77,10 +77,10 @@ export function SavingsPanel({ initial }: { initial: SavingsData }) {
 
       <form
         onSubmit={add}
-        className="mt-3 flex flex-wrap items-end gap-2 text-xs uppercase tracking-term text-muted"
+        className="mt-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-term text-muted"
       >
         <span className="self-center text-accent">$ add</span>
-        <label className="prompt !py-1 w-32">
+        <label className="prompt w-32">
           <span className="sigil">kr</span>
           <input
             type="number"
@@ -92,7 +92,7 @@ export function SavingsPanel({ initial }: { initial: SavingsData }) {
             className="!w-full tabular-nums text-xs"
           />
         </label>
-        <label className="prompt !py-1 flex-1 min-w-[8rem]">
+        <label className="prompt flex-1 min-w-[8rem]">
           <span className="sigil">--note</span>
           <input
             type="text"

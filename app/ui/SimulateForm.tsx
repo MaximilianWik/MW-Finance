@@ -50,8 +50,8 @@ export function SimulateForm({ categories }: { categories: CatOption[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
-        <label className="prompt !py-1 flex-1">
+      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+        <label className="prompt flex-1">
           <span className="sigil text-xs">$ spend</span>
           <input
             type="number"
@@ -64,7 +64,7 @@ export function SimulateForm({ categories }: { categories: CatOption[] }) {
             className="tabular-nums"
           />
         </label>
-        <label className="prompt !py-1">
+        <label className="prompt">
           <span className="sigil text-xs">on</span>
           <select
             required

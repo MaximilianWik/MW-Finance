@@ -105,7 +105,7 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
         </tbody>
       </table>
 
-      <div className="flex flex-wrap items-end gap-2 border-t border-edge pt-3">
+      <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
         <span className="self-center text-xs uppercase tracking-term text-accent">$ new</span>
         <input
           value={newName}

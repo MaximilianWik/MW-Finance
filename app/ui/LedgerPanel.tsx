@@ -157,11 +157,11 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
       {/* ─── Filter bar ───────────────────────────────────────────────── */}
       <form
         onSubmit={(e) => { e.preventDefault(); run(); }}
-        className="flex flex-wrap items-end gap-2 text-xs uppercase tracking-term text-muted"
+        className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-term text-muted"
       >
         <span className="self-center text-accent">$ filter</span>
 
-        <label className="prompt !py-1">
+        <label className="prompt">
           <span className="sigil">--month</span>
           <input
             type="month"
@@ -172,7 +172,7 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
         </label>
 
         {cycles.length > 0 && (
-          <label className="prompt !py-1">
+          <label className="prompt">
             <span className="sigil">{"--l\u00f6n"}</span>
             <select
               value={period}
@@ -193,7 +193,7 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
           </label>
         )}
 
-        <label className="prompt !py-1">
+        <label className="prompt">
           <span className="sigil">--cat</span>
           <select
             value={categoryId}
@@ -207,7 +207,7 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
           </select>
         </label>
 
-        <label className="prompt !py-1 flex-1 min-w-[10rem]">
+        <label className="prompt flex-1 min-w-[10rem]">
           <span className="sigil">--search</span>
           <input
             type="text"
@@ -218,7 +218,7 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
           />
         </label>
 
-        <label className="prompt !py-1 w-28">
+        <label className="prompt w-28">
           <span className="sigil">≥</span>
           <input
             type="number"
@@ -230,7 +230,7 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
           />
         </label>
 
-        <label className="prompt !py-1 w-28">
+        <label className="prompt w-28">
           <span className="sigil">≤</span>
           <input
             type="number"

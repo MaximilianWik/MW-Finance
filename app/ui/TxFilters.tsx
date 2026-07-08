@@ -24,10 +24,10 @@ export function TxFilters({ options }: { options: CatOption[] }) {
   const hasFilters = month || categoryId || q || minAmount || maxAmount;
 
   return (
-    <div className="flex flex-wrap items-end gap-2 text-xs uppercase tracking-term text-muted">
+    <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-term text-muted">
       <span className="self-center text-accent">$ filter</span>
 
-      <label className="prompt !py-1">
+      <label className="prompt">
         <span className="sigil text-xs">--month</span>
         <input
           type="month"
@@ -38,7 +38,7 @@ export function TxFilters({ options }: { options: CatOption[] }) {
         />
       </label>
 
-      <label className="prompt !py-1">
+      <label className="prompt">
         <span className="sigil text-xs">--cat</span>
         <select
           value={categoryId}
@@ -53,7 +53,7 @@ export function TxFilters({ options }: { options: CatOption[] }) {
         </select>
       </label>
 
-      <label className="prompt !py-1 flex-1 min-w-[10rem]">
+      <label className="prompt flex-1 min-w-[10rem]">
         <span className="sigil text-xs">--search</span>
         <input
           type="text"
@@ -65,7 +65,7 @@ export function TxFilters({ options }: { options: CatOption[] }) {
         />
       </label>
 
-      <label className="prompt !py-1 w-28">
+      <label className="prompt w-28">
         <span className="sigil text-xs">≥</span>
         <input
           type="number"
@@ -78,7 +78,7 @@ export function TxFilters({ options }: { options: CatOption[] }) {
         />
       </label>
 
-      <label className="prompt !py-1 w-28">
+      <label className="prompt w-28">
         <span className="sigil text-xs">≤</span>
         <input
           type="number"
