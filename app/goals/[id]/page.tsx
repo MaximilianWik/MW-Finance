@@ -78,22 +78,24 @@ export default async function GoalDetail({
         {contribs.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted">Nothing yet.</p>
         ) : (
-          <table className="term-table">
-            <tbody>
-              {contribs.map((c) => (
-                <tr key={c.id}>
-                  <td className="w-24 text-accent">+{kr(c.amount)}</td>
-                  <td className="w-20">
-                    <StatusTag tone={c.source === "sweep" ? "ok" : "muted"}>{c.source}</StatusTag>
-                  </td>
-                  <td className="text-muted">{c.note}</td>
-                  <td className="w-20 text-right text-faint">
-                    {c.createdAt ? shortDate(new Date(c.createdAt).toISOString().slice(0, 10)) : ""}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="term-table">
+              <tbody>
+                {contribs.map((c) => (
+                  <tr key={c.id}>
+                    <td className="w-24 text-accent">+{kr(c.amount)}</td>
+                    <td className="w-20">
+                      <StatusTag tone={c.source === "sweep" ? "ok" : "muted"}>{c.source}</StatusTag>
+                    </td>
+                    <td className="text-muted">{c.note}</td>
+                    <td className="w-20 text-right text-faint">
+                      {c.createdAt ? shortDate(new Date(c.createdAt).toISOString().slice(0, 10)) : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
     </main>

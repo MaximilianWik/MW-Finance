@@ -25,7 +25,7 @@ export function TopNav() {
           SEK · Länsförsäkringar
         </span>
       </div>
-      <nav className="flex flex-wrap">
+      <nav className="flex overflow-x-auto hide-scrollbar">
         {TABS.map((t) => {
           const active = t.href === "/" ? path === "/" : path.startsWith(t.href);
           return (
@@ -33,7 +33,7 @@ export function TopNav() {
               key={t.href}
               href={t.href}
               className={
-                "border-r border-edge px-3 py-1.5 text-xs uppercase tracking-term transition-colors " +
+                "shrink-0 border-r border-edge px-3 py-1.5 text-xs uppercase tracking-term transition-colors " +
                 (active
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:bg-panel2 hover:text-ink2")

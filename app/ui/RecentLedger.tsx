@@ -64,66 +64,68 @@ export function RecentLedger({ options }: { options: CatOption[] }) {
   }
 
   return (
-    <table className="term-table">
-      <thead>
-        <tr>
-          <th>DATE</th>
-          <th>MERCHANT</th>
-          <th>CATEGORY</th>
-          <th></th>
-          <th className="text-right">AMOUNT</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((t) => {
-          const inflow = t.signed >= 0;
-          const flagged = !!t.flaggedReason;
-          const displayName = t.counterpartyName ?? t.remittance ?? "\u2014";
-          return (
-            <tr key={t.id} className={`group/row ${flagged ? "bg-danger/5" : ""}`}>
-              <td className="w-16 whitespace-nowrap text-muted">
-                {shortDate(t.bookingDate)}
-              </td>
-              <td className="max-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-ink2">{displayName}</span>
-                  {flagged && (
-                    <span
-                      className="tag tag-danger shrink-0"
-                      title={t.flaggedReason ?? ""}
-                    >
-                      [!] ANOMALY
-                    </span>
-                  )}
-                </div>
-              </td>
-              <td className="w-40">
-                <CategoryCommand
-                  txId={t.id}
-                  categoryId={t.categoryId}
-                  options={options}
-                />
-              </td>
-              <td className="w-24 text-center">
-                {t.recurring ? (
-                  <UnmarkRecurring merchant={t.merchant} onSuccess={refetch} />
-                ) : t.direction === "DBIT" ? (
-                  <MarkRecurring
+    <div className="overflow-x-auto">
+      <table className="term-table">
+        <thead>
+          <tr>
+            <th>DATE</th>
+            <th>MERCHANT</th>
+            <th className="hidden sm:table-cell">CATEGORY</th>
+            <th className="hidden sm:table-cell"></th>
+            <th className="text-right">AMOUNT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t) => {
+            const inflow = t.signed >= 0;
+            const flagged = !!t.flaggedReason;
+            const displayName = t.counterpartyName ?? t.remittance ?? "\u2014";
+            return (
+              <tr key={t.id} className={`group/row ${flagged ? "bg-danger/5" : ""}`}>
+                <td className="w-16 whitespace-nowrap text-muted">
+                  {shortDate(t.bookingDate)}
+                </td>
+                <td className="max-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-ink2">{displayName}</span>
+                    {flagged && (
+                      <span
+                        className="tag tag-danger shrink-0"
+                        title={t.flaggedReason ?? ""}
+                      >
+                        [!]
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="hidden w-40 sm:table-cell">
+                  <CategoryCommand
                     txId={t.id}
-                    merchant={displayName}
-                    onSuccess={refetch}
+                    categoryId={t.categoryId}
+                    options={options}
                   />
-                ) : null}
-              </td>
-              <td
-                className={`w-28 text-right ${inflow ? "text-accent" : "text-ink2"}`}
-              >
-                {krSigned(t.signed)}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                </td>
+                <td className="hidden w-24 text-center sm:table-cell">
+                  {t.recurring ? (
+                    <UnmarkRecurring merchant={t.merchant} onSuccess={refetch} />
+                  ) : t.direction === "DBIT" ? (
+                    <MarkRecurring
+                      txId={t.id}
+                      merchant={displayName}
+                      onSuccess={refetch}
+                    />
+                  ) : null}
+                </td>
+                <td
+                  className={`w-24 text-right ${inflow ? "text-accent" : "text-ink2"}`}
+                >
+                  {krSigned(t.signed)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

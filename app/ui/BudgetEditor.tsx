@@ -81,7 +81,8 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
 
   return (
     <div className="flex flex-col gap-4">
-      <table className="term-table">
+      <div className="overflow-x-auto">
+        <table className="term-table">
         <thead>
           <tr>
             <th>CATEGORY</th>
@@ -150,7 +151,8 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
         <span className="self-center text-xs uppercase tracking-term text-accent">$ new</span>

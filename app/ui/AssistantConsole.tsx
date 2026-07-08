@@ -83,7 +83,7 @@ export function AssistantConsole() {
     <div className="flex flex-col gap-2">
       <div
         ref={scrollRef}
-        className="max-h-[28rem] min-h-[12rem] overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.75rem] leading-relaxed"
+        className="max-h-[60vh] min-h-[8rem] overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.75rem] leading-relaxed sm:max-h-[28rem]"
       >
         {!showConsole ? (
           <div className="text-faint">

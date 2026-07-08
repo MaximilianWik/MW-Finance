@@ -9,9 +9,6 @@
 @layer base {
   /*
    * Native <select> / <option> dark-mode override.
-   * color-scheme: dark is already on :root but browsers won't always
-   * apply it to the dropdown popup without an explicit per-element
-   * declaration. accent-color drives the OS highlight / checkmark color.
    */
   select {
     color-scheme: dark;
@@ -25,6 +22,19 @@
     background-color: theme("colors.panel2");
     color: theme("colors.accent");
   }
+
+  /*
+   * iOS / Android zoom-on-focus fix.
+   * Browsers auto-zoom when a focused input's font-size < 16 px.
+   * Constrain to touch-primary devices (hover: none) so desktop stays unaffected.
+   */
+  @media (hover: none) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
 }
 
 html,
@@ -35,6 +45,8 @@ body {
     Menlo, monospace;
   -webkit-font-smoothing: antialiased;
   font-variant-ligatures: none;
+  /* Prevent stray wide elements from causing page-level horizontal scroll. */
+  overflow-x: hidden;
 }
 
 /* Subtle CRT scanline overlay. Neutral, low-opacity — purely textural.
@@ -147,6 +159,15 @@ body > * {
 }
 
 @layer utilities {
+  /* Hide scrollbar while keeping scroll behaviour (used on tab strips, etc.). */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .caret::after {
     content: "▊";
     @apply ml-0.5 text-accent;

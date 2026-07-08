@@ -32,7 +32,8 @@ function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
     return <p className="py-4 text-center text-sm text-muted">No spending recorded.</p>;
   }
   return (
-    <table className="term-table">
+    <div className="overflow-x-auto">
+      <table className="term-table">
       <thead>
         <tr>
           <th>CATEGORY</th>
@@ -61,6 +62,7 @@ function ComparisonTable({ rows }: { rows: CategoryComparison[] }) {
         ))}
       </tbody>
     </table>
+  </div>
   );
 }
 
@@ -186,6 +188,7 @@ export default async function InsightsPage({
             No recurring bills detected yet. Mark transactions as recurring from the ledger.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="term-table">
             <thead>
               <tr>
@@ -203,6 +206,7 @@ export default async function InsightsPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Panel>
 
@@ -214,6 +218,7 @@ export default async function InsightsPage({
             or mark a transaction manually from the ledger.
           </p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="term-table">
             <thead>
               <tr>
@@ -247,6 +252,7 @@ export default async function InsightsPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Panel>
     </main>
