@@ -131,9 +131,9 @@ body > * {
     @apply ml-0.5 text-accent;
     animation: blink 1.1s steps(1) infinite;
   }
-  /* Amber phosphor glow — use sparingly on the title/wordmark only */
+  /* Green phosphor glow — use sparingly on the title/wordmark only */
   .glow {
-    text-shadow: 0 0 8px rgba(212, 168, 67, 0.5);
+    text-shadow: 0 0 8px rgba(78, 201, 106, 0.5);
   }
 }
 

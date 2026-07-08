@@ -7,8 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Neutral terminal palette. True dark (no green tint). Amber phosphor as
-        // the single accent — green reserved for success / ok states only.
+        // Neutral terminal palette. True dark. Green phosphor as the single accent.
         ink:    "#0c0c0f", // page background
         panel:  "#101014", // panel surface
         panel2: "#161619", // nested / input surface
@@ -19,7 +18,7 @@ export default {
         muted:  "#72728a", // secondary text (neutral grey, ≥4.5:1 on ink)
         faint:  "#454552", // tertiary / disabled
         // Accent
-        accent:  "#d4a843", // amber phosphor — primary actions, glyphs, sigils
+        accent:  "#4ec96a", // green phosphor — primary actions, glyphs, sigils
         accent2: "#5cc8e8", // cyan — links / secondary highlight
         // Status
         amber:  "#e8c545", // warnings (brighter amber than accent)
