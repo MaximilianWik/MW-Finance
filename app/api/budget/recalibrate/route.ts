@@ -16,6 +16,13 @@ export const maxDuration = 60;
  */
 export async function POST(req: NextRequest) {
   const preview = new URL(req.url).searchParams.get("preview") === "1";
+  let guidance: string | undefined;
+  try {
+    const b = (await req.json()) as { guidance?: unknown };
+    if (typeof b?.guidance === "string" && b.guidance.trim()) guidance = b.guidance.trim();
+  } catch {
+    // no body / not JSON — guidance stays undefined
+  }
   const encoder = new TextEncoder();
   const t0 = Date.now();
 
@@ -24,7 +31,8 @@ export async function POST(req: NextRequest) {
       const send = (line: string) => controller.enqueue(encoder.encode(line + "\n"));
       try {
         send("[AI]   reading income, spending habits, recurring commitments…");
-        const proposal = await proposeBudget();
+        if (guidance) send(`[AI]   guidance: ${guidance}`);
+        const proposal = await proposeBudget(guidance);
         for (const line of proposal.reasoning) send(`[AI]   ${line}`);
         send(
           `[OK]   proposal ready — ${proposal.sets.length} budget(s), ${proposal.newCategories.length} new categor${proposal.newCategories.length === 1 ? "y" : "ies"}`

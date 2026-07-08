@@ -82,3 +82,35 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ category: created }, { status: 201 });
 }
+
+// Core categories the app depends on (period detection, transfer/savings logic,
+// and the categorization fallback). These cannot be deleted.
+const UNDELETABLE = new Set(["Uncategorized", "Income", "Transfers", "Savings"]);
+
+// Delete a category. Transactions referencing it fall back to NULL (FK is
+// ON DELETE SET NULL), so history is preserved — the rows just become
+// uncategorized until re-run.
+export async function DELETE(req: NextRequest) {
+  const idParam = new URL(req.url).searchParams.get("id");
+  const id = idParam ? Number(idParam) : NaN;
+  if (!id || Number.isNaN(id)) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+
+  const [existing] = await db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, id))
+    .limit(1);
+
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (UNDELETABLE.has(existing.name)) {
+    return NextResponse.json(
+      { error: `"${existing.name}" is a core category and can't be deleted` },
+      { status: 400 }
+    );
+  }
+
+  await db.delete(categories).where(eq(categories.id, id));
+  return NextResponse.json({ ok: true });
+}

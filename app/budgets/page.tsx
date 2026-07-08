@@ -2,7 +2,7 @@ import { getMonthlyBudgetStatus, getWeeklyBudgetStatus, weekRange } from "@/lib/
 import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
 import { BudgetBar } from "../ui/BudgetBar";
 import { Panel } from "../ui/Panel";
-import { AiConsole } from "../ui/AiConsole";
+import { RecalibratePanel } from "../ui/RecalibratePanel";
 import { getCategories } from "@/lib/queries";
 import { kr } from "@/lib/format";
 
@@ -25,7 +25,7 @@ export default async function BudgetsPage() {
     spent: spentByCat.get(c.id) ?? 0,
   }));
 
-  const monthlyRows = status.rows.filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0));
+  const monthlyRows = status.rows.filter((r) => r.name !== "Transfers");
   const todayIso = new Date().toISOString().slice(0, 10);
   const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
   const wr = weekRange();
@@ -69,21 +69,10 @@ export default async function BudgetsPage() {
       <Panel title="AI BUDGET">
         <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
           The engine reads your income, spending habits and recurring bills, then proposes
-          realistic monthly budgets. Manually-set limits are never overwritten.
+          realistic monthly budgets. Manually-set limits are never overwritten. Add optional
+          guidance below to steer it.
         </p>
-        <div className="flex flex-col gap-3">
-          <AiConsole
-            endpoint="/api/budget/recalibrate?preview=1"
-            label="$ ai preview"
-            pendingLabel="thinking…"
-            refreshOnDone={false}
-          />
-          <AiConsole
-            endpoint="/api/budget/recalibrate"
-            label="$ ai recalibrate"
-            pendingLabel="recalibrating…"
-          />
-        </div>
+        <RecalibratePanel />
       </Panel>
 
       <Panel title="EDIT LIMITS">

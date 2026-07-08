@@ -54,7 +54,7 @@ const SYSTEM = [
   "- 'reasoning' = 3–6 short terminal-style lines explaining the logic. No markdown, no emoji.",
 ].join("\n");
 
-function buildPrompt(ctx: FinancialContext): string {
+function buildPrompt(ctx: FinancialContext, guidance?: string): string {
   const catLines = ctx.categories.map(
     (c) =>
       `  { id: ${c.id}, name: "${c.name}", currentBudget: ${c.budgetMonthly ?? "null"}, avgMonthlySpend: ${c.avgMonthlySpend}, source: "${c.budgetSource ?? "none"}" }`
@@ -74,16 +74,23 @@ function buildPrompt(ctx: FinancialContext): string {
     "",
     "Recurring commitments:",
     ...(recurringLines.length ? recurringLines : ["  (none)"]),
+    ...(guidance
+      ? [
+          "",
+          "USER GUIDANCE (highest priority — follow it explicitly, even if it overrides avg-spend history):",
+          guidance,
+        ]
+      : []),
     "",
     "Propose the budget now. JSON only.",
   ].join("\n");
 }
 
 /** Ask Gemini for a budget proposal. Pure — writes nothing. */
-export async function proposeBudget(): Promise<BudgetProposal> {
+export async function proposeBudget(guidance?: string): Promise<BudgetProposal> {
   const ctx = await getFinancialContext();
   const model = geminiModel({ system: SYSTEM, json: true, temperature: 0.3 });
-  const res = await model.generateContent(buildPrompt(ctx));
+  const res = await model.generateContent(buildPrompt(ctx, guidance));
   const parsed = JSON.parse(res.response.text()) as Partial<BudgetProposal>;
 
   return {

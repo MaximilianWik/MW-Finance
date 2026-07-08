@@ -10,6 +10,8 @@ interface AiConsoleProps {
   endpoint: string;
   method?: "GET" | "POST";
   body?: unknown;
+  /** Computed at click time — use for inputs whose value changes (overrides body). */
+  getBody?: () => unknown;
   label: string;         // button label, e.g. "$ ai recalibrate"
   pendingLabel?: string; // label while streaming
   /** Refresh server components once the stream ends (default true). */
@@ -27,6 +29,7 @@ export function AiConsole({
   endpoint,
   method = "POST",
   body,
+  getBody,
   label,
   pendingLabel = "working…",
   refreshOnDone = true,
@@ -37,11 +40,12 @@ export function AiConsole({
 
   async function run() {
     tw.reset();
+    const payload = getBody ? getBody() : body;
     try {
       const res = await fetch(endpoint, {
         method,
-        headers: body != null ? { "Content-Type": "application/json" } : undefined,
-        body: body != null ? JSON.stringify(body) : undefined,
+        headers: payload != null ? { "Content-Type": "application/json" } : undefined,
+        body: payload != null ? JSON.stringify(payload) : undefined,
       });
       if (!res.body) {
         tw.push("[FAIL] no response stream\n");

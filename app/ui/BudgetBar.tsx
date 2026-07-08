@@ -72,7 +72,7 @@ export function BudgetBar({
           canDrill ? "cursor-pointer hover:bg-panel2/40" : "cursor-default"
         }`}
       >
-        <span className="flex w-40 shrink-0 items-center gap-2 uppercase tracking-term">
+        <span className="flex min-w-[11rem] shrink-0 items-center gap-2 uppercase tracking-term">
           {canDrill && (
             <span
               className={`text-faint transition-transform ${open ? "rotate-90" : ""}`}
@@ -81,7 +81,7 @@ export function BudgetBar({
             </span>
           )}
           <span style={{ color: row.color }}>{"\u25a0"}</span>
-          <span className="truncate text-ink2">{row.name}</span>
+          <span className="text-ink2">{row.name}</span>
         </span>
 
         <span className="w-32 shrink-0 text-right tabular-nums text-muted">
