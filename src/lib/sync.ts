@@ -50,9 +50,11 @@ export interface SyncResult {
  * (rules → cache → optional Gemini), refresh balances, and fire budget
  * notifications for newly-booked spending.
  */
-export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncResult> {
+export async function runSync(
+  opts: { useGemini?: boolean; onLog?: (line: string) => void } = {}
+): Promise<SyncResult> {
   const log: string[] = [];
-  const push = (line: string) => { log.push(line); console.log("[sync]", line); };
+  const push = (line: string) => { log.push(line); console.log("[sync]", line); opts.onLog?.(line); };
 
   const [run] = await db.insert(syncRuns).values({}).returning({ id: syncRuns.id });
 
@@ -209,7 +211,7 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
     // ─── Categorize ──────────────────────────────────────────────────────────
     if (inserted.length > 0) {
       push(`[AI]   categorizing ${inserted.length} new transaction(s)…`);
-      const catStats = await categorizeInserted(inserted, opts.useGemini ?? false);
+      const catStats = await categorizeInserted(inserted, opts.useGemini ?? false, push);
       const catParts = [
         catStats.rule   > 0 ? `${catStats.rule} rule`    : "",
         catStats.cache  > 0 ? `${catStats.cache} cache`  : "",
@@ -217,14 +219,6 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
         catStats.def    > 0 ? `${catStats.def} default`  : "",
       ].filter(Boolean);
       push(`[OK]   categorized: ${catParts.join(", ") || "none"}`);
-      // For small batches, list each new transaction.
-      if (inserted.length <= 8) {
-        for (const tx of inserted) {
-          const dir = tx.direction === "CRDT" ? "+" : "-";
-          const name = (tx.merchant ?? tx.counterpartyName ?? "?").slice(0, 48);
-          push(`       ${dir}${tx.amount} ${tx.currency}  ${name}`);
-        }
-      }
     }
 
     // ─── Budget notifications ─────────────────────────────────────────────────
@@ -233,7 +227,7 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
     // ─── Behavior pipeline ────────────────────────────────────────────────────
     push(`[SYNC] running behavior pipeline (recurring / anomalies / trajectory)…`);
     try {
-      await runBehaviorPipeline(inserted);
+      await runBehaviorPipeline(inserted, push);
       push(`[OK]   behavior pipeline complete`);
     } catch (e) {
       push(`[WARN] behavior pipeline error — ${e instanceof Error ? e.message : String(e)}`);
@@ -266,10 +260,12 @@ function isoDaysAgoFrom(dateStr: string, days: number): string {
 /** Apply rules → merchant cache → Gemini to the given rows and persist. */
 async function categorizeInserted(
   rows: NewTransaction[],
-  useGemini: boolean
+  useGemini: boolean,
+  push: (line: string) => void
 ): Promise<{ rule: number; cache: number; gemini: number; def: number }> {
   const cats = await db.select().from(categories);
   const nameToId = new Map(cats.map((c) => [c.name, c.id]));
+  const idToName = new Map(cats.map((c) => [c.id, c.name]));
   const uncategorizedId = nameToId.get("Uncategorized") ?? null;
 
   // Existing merchant cache for the merchants in this batch.
@@ -349,8 +345,16 @@ async function categorizeInserted(
 
   // Persist decisions; everything else -> Uncategorized.
   let ruleCount = 0, cacheCount = 0, geminiCount = 0, defCount = 0;
+  const LINE_CAP = 60; // avoid flooding the console on large backfills
+  let emitted = 0;
+  const emitLine = (merchant: string, catName: string, source: string) => {
+    if (emitted < LINE_CAP) push(`       [✓] ${merchant.slice(0, 40)} → ${catName} (${source})`);
+    else if (emitted === LINE_CAP) push(`       … ${rows.length - LINE_CAP} more`);
+    emitted++;
+  };
   for (const r of rows) {
     if (!r.id) continue;
+    const merchant = (r.merchant ?? r.counterpartyName ?? "?").toString();
     const d = decided.get(r.id);
     if (d) {
       if (d.source === "rule") ruleCount++;
@@ -360,12 +364,14 @@ async function categorizeInserted(
         .update(transactions)
         .set({ categoryId: d.catId, categorySource: d.source })
         .where(eq(transactions.id, r.id));
+      emitLine(merchant, idToName.get(d.catId) ?? "?", d.source);
     } else if (uncategorizedId) {
       defCount++;
       await db
         .update(transactions)
         .set({ categoryId: uncategorizedId, categorySource: "default" })
         .where(eq(transactions.id, r.id));
+      emitLine(merchant, "Uncategorized", "default");
     }
   }
   return { rule: ruleCount, cache: cacheCount, gemini: geminiCount, def: defCount };

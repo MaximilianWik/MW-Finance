@@ -14,7 +14,10 @@ import type { NewTransaction } from "@/db/schema";
  * Every step catches its own errors so a single failure never poisons the
  * whole batch.
  */
-export async function runBehaviorPipeline(inserted: NewTransaction[]) {
+export async function runBehaviorPipeline(
+  inserted: NewTransaction[],
+  onLog?: (line: string) => void
+) {
   const results = {
     recurringsDetected: 0,
     missing: 0,
@@ -43,7 +46,7 @@ export async function runBehaviorPipeline(inserted: NewTransaction[]) {
 
   // Suspicious-payment flags for the new rows.
   try {
-    const flagged = await flagSuspicious(inserted);
+    const flagged = await flagSuspicious(inserted, onLog);
     results.flagged = flagged.length;
   } catch (e) {
     console.error("suspicious flagging failed:", e);

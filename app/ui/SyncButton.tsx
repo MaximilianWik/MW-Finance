@@ -1,15 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-
-interface SyncResult {
-  ok: boolean;
-  newTransactions?: number;
-  accountsSynced?: number;
-  error?: string;
-  log?: string[];
-}
+import { lineColor } from "./AiConsole";
 
 /**
  * Sync console.
@@ -23,6 +16,9 @@ interface SyncResult {
  *    and immediately starts the sync so the user sees the full log output
  *    without any extra clicks.
  *
+ * The sync endpoint streams its log line-by-line, so the console scrolls live
+ * as each transaction is categorized.
+ *
  * Re-linking before every sync is intentional: the ASPSP consent from
  * Lansforsakringar expires frequently and sync never succeeds without it.
  */
@@ -30,28 +26,38 @@ export function SyncButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [log, setLog]         = useState<string[]>([]);
+  const preRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
+  }, [log]);
 
   async function run() {
     setPending(true);
     setLog(["[SYNC] connecting to Enable Banking..."]);
-    const t0 = performance.now();
     try {
       const res = await fetch("/api/sync/manual", { method: "POST" });
-      const r = (await res.json()) as SyncResult;
-      const secs = ((performance.now() - t0) / 1000).toFixed(1);
-
-      if (r.log && r.log.length > 0) {
-        // Append a wall-clock summary that isn't part of the server log.
-        setLog([...r.log, `[DONE] wall time ${secs}s`]);
-      } else {
-        setLog([
-          r.ok
-            ? `[DONE] sync complete \u2014 ${r.newTransactions ?? 0} new \u2014 ${secs}s`
-            : `[FAIL] ${r.error ?? "unknown error"}`,
-        ]);
+      if (!res.body) {
+        setLog((l) => [...l, "[FAIL] no response stream"]);
+        return;
       }
-
-      if (r.ok) router.refresh();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let ok = true;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n");
+        buf = parts.pop() ?? "";
+        if (parts.length) {
+          if (parts.some((p) => p.startsWith("[FAIL]"))) ok = false;
+          setLog((l) => [...l, ...parts]);
+        }
+      }
+      if (buf.trim()) setLog((l) => [...l, buf]);
+      if (ok) router.refresh();
     } catch {
       setLog((l) => [...l, "[FAIL] network error \u2014 check your connection"]);
     } finally {
@@ -83,18 +89,6 @@ export function SyncButton() {
     window.location.href = "/api/auth/start?autoSync=1";
   }
 
-  function lineColor(l: string): string {
-    if (l.startsWith("[FAIL]"))                   return "text-danger";
-    if (l.startsWith("[WARN]"))                   return "text-amber";
-    if (l.startsWith("[DONE]"))                   return "text-accent";
-    if (l.startsWith("[OK]"))                     return "text-ok";
-    if (l.startsWith("[AI]"))                     return "text-accent2";
-    if (l.startsWith("[SYNC]"))                   return "text-muted";
-    if (l.startsWith("[DIAG]") || l.startsWith("  (")) return "text-amber/60";
-    if (l.startsWith("       "))                  return "text-faint";
-    return "text-muted";
-  }
-
   return (
     <div className="flex flex-col gap-2">
       <button
@@ -106,7 +100,7 @@ export function SyncButton() {
       </button>
 
       {log.length > 0 && (
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed">
+        <pre ref={preRef} className="max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed">
           {log.map((l, i) => (
             <div key={i} className={lineColor(l)}>
               {l}

@@ -31,7 +31,10 @@ export interface Flagged {
   reason: string;
 }
 
-export async function flagSuspicious(rows: NewTransaction[]): Promise<Flagged[]> {
+export async function flagSuspicious(
+  rows: NewTransaction[],
+  onLog?: (line: string) => void
+): Promise<Flagged[]> {
   const dbits = rows
     .filter((r) => r.direction === "DBIT" && r.id != null && r.merchant)
     .map((r) => ({
@@ -115,6 +118,8 @@ export async function flagSuspicious(rows: NewTransaction[]): Promise<Flagged[]>
       priority: 5,
       click: env.appUrl + "/transactions",
     });
+
+    onLog?.(`       [!] ANOMALY · ${reason}`);
 
     flagged.push({ id: r.id, merchant: r.merchant, amount: r.amount, reason });
   }

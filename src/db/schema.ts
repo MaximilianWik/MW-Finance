@@ -50,6 +50,7 @@ export const categories = pgTable("categories", {
   color: text("color").notNull().default("#72728a"),
   budgetMonthly: numeric("budget_monthly", { precision: 14, scale: 2 }),
   budgetWeekly: numeric("budget_weekly", { precision: 14, scale: 2 }),
+  budgetSource: text("budget_source"), // ai | manual | null — lets AI recalibration skip manually-set budgets
   sort: integer("sort").notNull().default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -190,6 +191,7 @@ export const recurringPayments = pgTable("recurring_payments", {
     onDelete: "set null",
   }),
   manual: boolean("manual").notNull().default(false), // true = user-created, not auto-detected
+  variableAmount: boolean("variable_amount").notNull().default(false), // true = variable-price recurring (e.g. electricity)
   active: boolean("active").notNull().default(true),  // false = soft-deleted by user
   lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -221,6 +223,28 @@ export const savingsEntries = pgTable(
   })
 );
 
+// ─── AI insights (Phase 3 — behavioral patterns, savings suggestions, trends) ─
+export const aiInsights = pgTable(
+  "ai_insights",
+  {
+    id: serial("id").primaryKey(),
+    kind: text("kind").notNull(),                       // pattern | suggestion | anomaly | trend
+    severity: text("severity").notNull().default("info"), // info | warn | danger
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    data: jsonb("data"),                                // arbitrary supporting numbers/refs
+    categoryId: integer("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
+    dismissed: boolean("dismissed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    kindIdx: index("ai_insights_kind_idx").on(t.kind),
+    dismissedIdx: index("ai_insights_dismissed_idx").on(t.dismissed),
+  })
+);
+
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Category = typeof categories.$inferSelect;
@@ -233,3 +257,5 @@ export type RecurringPayment = typeof recurringPayments.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type SavingsEntry = typeof savingsEntries.$inferSelect;
 export type NewSavingsEntry = typeof savingsEntries.$inferInsert;
+export type AiInsight = typeof aiInsights.$inferSelect;
+export type NewAiInsight = typeof aiInsights.$inferInsert;
