@@ -1,4 +1,4 @@
-import { getMonthlyBudgetStatus, getWeeklyBudgetStatus, weekRange } from "@/lib/budget";
+import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getAllSalaryCycles } from "@/lib/period";
 import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
 import { BudgetBar } from "../ui/BudgetBar";
@@ -23,11 +23,9 @@ export default async function BudgetsPage({
   const ref = cycleFrom ? new Date(cycleFrom + "T12:00:00Z") : new Date();
   const isCurrentCycle = !cycleFrom;
 
-  const [cats, status, weekly, cycles] = await Promise.all([
+  const [cats, status, cycles] = await Promise.all([
     getCategories(),
     getMonthlyBudgetStatus(ref),
-    // Weekly status only makes sense for the current cycle.
-    isCurrentCycle ? getWeeklyBudgetStatus() : Promise.resolve(null),
     getAllSalaryCycles(),
   ]);
 
@@ -38,7 +36,6 @@ export default async function BudgetsPage({
     name: c.name,
     color: c.color,
     budgetMonthly: c.budgetMonthly,
-    budgetWeekly: c.budgetWeekly,
     spent: spentByCat.get(c.id) ?? 0,
   }));
 
@@ -52,7 +49,6 @@ export default async function BudgetsPage({
     });
   const todayIso = new Date().toISOString().slice(0, 10);
   const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
-  const wr = weekRange();
 
   // The "current" from for the nav: if a past cycle is selected use its from;
   // otherwise use the first (latest) detected cycle's from so the selector
@@ -83,40 +79,16 @@ export default async function BudgetsPage({
             [ HISTORICAL ] budgets shown are your current limits applied to that period&apos;s spending.
           </p>
         )}
-        <div className="divide-y divide-grid">
-          {monthlyRows.map((r) => (
-            <BudgetBar key={r.categoryId} row={r} range={{ from: mr.from, to: mr.to }} />
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <tbody>
+              {monthlyRows.map((r) => (
+                <BudgetBar key={r.categoryId} row={r} range={{ from: mr.from, to: mr.to }} />
+              ))}
+            </tbody>
+          </table>
         </div>
       </Panel>
-
-      {weekly && weekly.rows.length > 0 && (
-        <Panel
-          title="WEEKLY BUDGET"
-          right={`${kr(weekly.totalSpent)} / ${kr(weekly.totalBudget)}`}
-        >
-          <p className="mb-2 text-[0.7rem] uppercase tracking-term text-faint">{weekly.label}</p>
-          <div className="divide-y divide-grid">
-            {weekly.rows.map((r) => (
-              <BudgetBar
-                key={r.categoryId}
-                range={{ from: wr.from, to: wr.to }}
-                row={{
-                  categoryId: r.categoryId,
-                  name: r.name,
-                  color: r.color,
-                  budget: r.budget,
-                  baseBudget: r.budget,
-                  adjustment: 0,
-                  spent: r.spent,
-                  remaining: r.remaining,
-                  pct: r.pct,
-                }}
-              />
-            ))}
-          </div>
-        </Panel>
-      )}
 
       <Panel title="EDIT LIMITS">
         <BudgetEditor categories={rows} />

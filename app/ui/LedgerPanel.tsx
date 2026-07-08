@@ -333,6 +333,14 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
                               </span>
                             )}
                           </div>
+                          {t.categoryName && (
+                            <span
+                              className="mt-0.5 block text-[0.62rem] uppercase tracking-term sm:hidden"
+                              style={{ color: t.categoryColor ?? "#72728a" }}
+                            >
+                              {t.categoryName}
+                            </span>
+                          )}
                         </td>
                         <td className="hidden w-40 sm:table-cell">
                           <CategoryCommand

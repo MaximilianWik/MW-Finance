@@ -195,10 +195,14 @@ export default async function Home({
 
       {budgetRows.length > 0 && (
         <Panel title="MONTHLY BUDGET" right={`${kr(budget.totalSpent)} / ${kr(budget.totalBudget)}`}>
-          <div className="divide-y divide-grid">
-            {budgetRows.map((r) => (
-              <BudgetBar key={r.categoryId} row={r} range={cycleRange} />
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <tbody>
+                {budgetRows.map((r) => (
+                  <BudgetBar key={r.categoryId} row={r} range={cycleRange} />
+                ))}
+              </tbody>
+            </table>
           </div>
           <div className="mt-3 flex gap-2">
             <Link href="/budgets" className="btn">

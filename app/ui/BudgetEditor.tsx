@@ -9,7 +9,6 @@ export interface EditableCategory {
   name: string;
   color: string;
   budgetMonthly: string | null;
-  budgetWeekly: string | null;
   spent: number;
 }
 
@@ -23,13 +22,12 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState("#6f926f");
   const [newMonthly, setNewMonthly] = useState("");
-  const [newWeekly, setNewWeekly] = useState("");
 
-  async function save(id: number, field: "budgetMonthly" | "budgetWeekly", value: string) {
+  async function save(id: number, value: string) {
     await fetch("/api/categories", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, [field]: value === "" ? null : value }),
+      body: JSON.stringify({ id, budgetMonthly: value === "" ? null : value }),
     });
     start(() => router.refresh());
   }
@@ -65,7 +63,6 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
         name: newName.trim(),
         color: newColor,
         budgetMonthly: newMonthly || null,
-        budgetWeekly: newWeekly || null,
       }),
     });
     if (res.ok) {
@@ -74,7 +71,6 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
       setNewName("");
       setNewColor("#6f926f");
       setNewMonthly("");
-      setNewWeekly("");
       start(() => router.refresh());
     }
   }
@@ -83,74 +79,59 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
     <div className="flex flex-col gap-4">
       <div className="overflow-x-auto">
         <table className="term-table">
-        <thead>
-          <tr>
-            <th>CATEGORY</th>
-            <th className="text-right">SPENT (MO)</th>
-            <th className="text-right">MONTHLY</th>
-            <th className="text-right">WEEKLY</th>
-            <th className="w-10"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.id}>
-              <td className="uppercase tracking-term">
-                <span className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={c.color}
-                    onChange={(e) => saveColor(c.id, e.target.value)}
-                    title="Category colour"
-                    className="h-4 w-6 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-                  />
-                  {c.name}
-                </span>
-              </td>
-              <td className="text-right text-muted">{kr(c.spent)}</td>
-              <td className="text-right">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  defaultValue={c.budgetMonthly ?? ""}
-                  placeholder="—"
-                  onBlur={(e) => {
-                    if (e.target.value !== (c.budgetMonthly ?? "")) {
-                      save(c.id, "budgetMonthly", e.target.value);
-                    }
-                  }}
-                  className="input w-24 text-right tabular-nums"
-                />
-              </td>
-              <td className="text-right">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  defaultValue={c.budgetWeekly ?? ""}
-                  placeholder="—"
-                  onBlur={(e) => {
-                    if (e.target.value !== (c.budgetWeekly ?? "")) {
-                      save(c.id, "budgetWeekly", e.target.value);
-                    }
-                  }}
-                  className="input w-24 text-right tabular-nums"
-                />
-              </td>
-              <td className="text-right">
-                {!UNDELETABLE.has(c.name) && (
-                  <button
-                    onClick={() => del(c.id, c.name)}
-                    disabled={pending}
-                    title={`Delete ${c.name}`}
-                    className="btn btn-danger !px-1.5 !py-0.5 text-[0.65rem]"
-                  >
-                    del
-                  </button>
-                )}
-              </td>
+          <thead>
+            <tr>
+              <th>CATEGORY</th>
+              <th className="text-right">SPENT (MO)</th>
+              <th className="text-right">MONTHLY</th>
+              <th className="w-10"></th>
             </tr>
-          ))}
-        </tbody>
+          </thead>
+          <tbody>
+            {rows.map((c) => (
+              <tr key={c.id}>
+                <td className="uppercase tracking-term">
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={c.color}
+                      onChange={(e) => saveColor(c.id, e.target.value)}
+                      title="Category colour"
+                      className="h-4 w-6 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+                    />
+                    {c.name}
+                  </span>
+                </td>
+                <td className="text-right text-muted">{kr(c.spent)}</td>
+                <td className="text-right">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    defaultValue={c.budgetMonthly ?? ""}
+                    placeholder="—"
+                    onBlur={(e) => {
+                      if (e.target.value !== (c.budgetMonthly ?? "")) {
+                        save(c.id, e.target.value);
+                      }
+                    }}
+                    className="input w-24 text-right tabular-nums"
+                  />
+                </td>
+                <td className="text-right">
+                  {!UNDELETABLE.has(c.name) && (
+                    <button
+                      onClick={() => del(c.id, c.name)}
+                      disabled={pending}
+                      title={`Delete ${c.name}`}
+                      className="btn btn-danger !px-1.5 !py-0.5 text-[0.65rem]"
+                    >
+                      del
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
 
@@ -174,13 +155,6 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
           value={newMonthly}
           onChange={(e) => setNewMonthly(e.target.value)}
           placeholder="monthly"
-          className="input w-24 text-right tabular-nums"
-        />
-        <input
-          type="number"
-          value={newWeekly}
-          onChange={(e) => setNewWeekly(e.target.value)}
-          placeholder="weekly"
           className="input w-24 text-right tabular-nums"
         />
         <button className="btn btn-accent" onClick={addCategory} disabled={pending}>
