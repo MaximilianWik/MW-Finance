@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
-import { and, asc, desc, eq, gt, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, lte } from "drizzle-orm";
 
 /**
  * Salary-cycle period.
@@ -89,4 +89,27 @@ export async function getSalaryCycle(ref = new Date()): Promise<Cycle> {
   const to = next?.d ? addDays(next.d, -1) : null;
   const label = `${fmt(from)} \u2013 ${to ? fmt(to) : "now"}`;
   return { from, to, label, ym: from.slice(0, 7), isSalaryCycle: true };
+}
+
+/** Every salary cycle (latest first) for the ledger period filter. */
+export async function getAllSalaryCycles(): Promise<Cycle[]> {
+  const rows = await db
+    .select({ d: transactions.bookingDate })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.merchant, SALARY_MERCHANT),
+        isNotNull(transactions.bookingDate)
+      )
+    )
+    .orderBy(desc(transactions.bookingDate));
+
+  const uniq = [...new Set(rows.map((r) => r.d).filter((d): d is string => !!d))];
+
+  return uniq.map((from, i) => {
+    const nextSalary = i > 0 ? uniq[i - 1] : null; // later date, since desc order
+    const to = nextSalary ? addDays(nextSalary, -1) : null;
+    const label = `${fmt(from)} \u2013 ${to ? fmt(to) : "now"}`;
+    return { from, to, label, ym: from.slice(0, 7), isSalaryCycle: true };
+  });
 }

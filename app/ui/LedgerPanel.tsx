@@ -28,9 +28,16 @@ interface Totals {
   count: number;
 }
 
+interface LedgerCycle {
+  from: string;
+  to: string | null;
+  label: string;
+}
+
 interface Props {
   options: CatOption[];
   initialMonth?: string;
+  cycles?: LedgerCycle[];
 }
 
 /**
@@ -40,13 +47,14 @@ interface Props {
  * Shows a query log (SQL-like preview → timing → row count) exactly like the
  * sync console.
  */
-export function LedgerPanel({ options, initialMonth = "" }: Props) {
+export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) {
   // Filter state
   const [month,      setMonth]      = useState(initialMonth);
   const [categoryId, setCategoryId] = useState("");
   const [q,          setQ]          = useState("");
   const [minAmount,  setMinAmount]  = useState("");
   const [maxAmount,  setMaxAmount]  = useState("");
+  const [period,     setPeriod]     = useState("");
 
   // Result state
   const [log,     setLog]     = useState<string[]>([]);
@@ -62,7 +70,12 @@ export function LedgerPanel({ options, initialMonth = "" }: Props) {
     const lines: string[] = [];
     const conditions: string[] = ["direction IN ('CRDT', 'DBIT')"];
 
-    if (month) {
+    if (period && cycles[Number(period)]) {
+      const c = cycles[Number(period)];
+      conditions.push(
+        `booking_date >= '${c.from}'${c.to ? ` AND booking_date <= '${c.to}'` : ""} -- L\u00d6N ${c.label}`
+      );
+    } else if (month) {
       const [y, m] = month.split("-");
       const lastDay = new Date(Number(y), Number(m), 0).getDate();
       conditions.push(`booking_date BETWEEN '${month}-01' AND '${month}-${lastDay}'`);
@@ -101,7 +114,13 @@ export function LedgerPanel({ options, initialMonth = "" }: Props) {
     setTotals(null);
 
     const params = new URLSearchParams({ limit: "500" });
-    if (month)      params.set("month",      month);
+    if (period && cycles[Number(period)]) {
+      const c = cycles[Number(period)];
+      params.set("from", c.from);
+      if (c.to) params.set("to", c.to);
+    } else if (month) {
+      params.set("month", month);
+    }
     if (categoryId) params.set("categoryId", categoryId);
     if (q)          params.set("q",          q);
     if (minAmount)  params.set("minAmount",  minAmount);
@@ -151,6 +170,28 @@ export function LedgerPanel({ options, initialMonth = "" }: Props) {
             className="!w-36 text-xs uppercase tracking-term"
           />
         </label>
+
+        {cycles.length > 0 && (
+          <label className="prompt !py-1">
+            <span className="sigil">{"--l\u00f6n"}</span>
+            <select
+              value={period}
+              onChange={(e) => {
+                setPeriod(e.target.value);
+                if (e.target.value) setMonth("");
+              }}
+              className="text-xs uppercase tracking-term"
+              title="Filter by salary period (LÖN to next LÖN)"
+            >
+              <option value="">any</option>
+              {cycles.map((c, i) => (
+                <option key={i} value={String(i)}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="prompt !py-1">
           <span className="sigil">--cat</span>
@@ -205,11 +246,11 @@ export function LedgerPanel({ options, initialMonth = "" }: Props) {
           {loading ? "running…" : "$ run"}
         </button>
 
-        {(month || categoryId || q || minAmount || maxAmount) && (
+        {(period || month || categoryId || q || minAmount || maxAmount) && (
           <button
             type="button"
             onClick={() => {
-              setMonth(""); setCategoryId(""); setQ(""); setMinAmount(""); setMaxAmount("");
+              setMonth(""); setPeriod(""); setCategoryId(""); setQ(""); setMinAmount(""); setMaxAmount("");
               setLog([]); setRows(null); setTotals(null);
             }}
             className="btn btn-danger text-[0.65rem]"
