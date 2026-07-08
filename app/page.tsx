@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getAccounts, getCategories } from "@/lib/queries";
-import { getMonthlyBudgetStatus, monthRange } from "@/lib/budget";
+import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getPrimaryGoal, getSavingsTotal } from "@/lib/savings";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
@@ -41,7 +41,7 @@ export default async function Home({
 
   let accs: Awaited<ReturnType<typeof getAccounts>> = [];
   let budget: Awaited<ReturnType<typeof getMonthlyBudgetStatus>> = {
-    label: "", ym: "", rows: [], totalSpent: 0, totalBudget: 0,
+    label: "", ym: "", from: "", to: null, rows: [], totalSpent: 0, totalBudget: 0,
   };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
@@ -80,7 +80,8 @@ export default async function Home({
   const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
   const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);
   const budgetRows = budget.rows.filter((r) => r.budget != null || r.spent > 0);
-  const mr = monthRange();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const cycleRange = { from: budget.from || todayIso, to: budget.to ?? todayIso };
 
   return (
     <main className="flex flex-col gap-4">
@@ -164,7 +165,7 @@ export default async function Home({
         <Panel title="MONTHLY BUDGET" right={`${kr(budget.totalSpent)} / ${kr(budget.totalBudget)}`}>
           <div className="divide-y divide-grid">
             {budgetRows.map((r) => (
-              <BudgetBar key={r.categoryId} row={r} range={{ from: mr.from, to: mr.to }} />
+              <BudgetBar key={r.categoryId} row={r} range={cycleRange} />
             ))}
           </div>
           <div className="mt-3 flex gap-2">

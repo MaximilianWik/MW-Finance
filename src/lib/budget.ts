@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { transactions, categories, budgetAdjustments } from "@/db/schema";
 import { and, gte, lte, eq, sql } from "drizzle-orm";
+import { getSalaryCycle } from "@/lib/period";
 
 export interface CategoryBudget {
   categoryId: number;
@@ -34,14 +35,19 @@ export function monthRange(d = new Date()): { from: string; to: string; label: s
  * The `budget` field is the EFFECTIVE budget (base + adaptive adjustments),
  * so all downstream UI shows live-adjusted numbers.
  */
-export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
+export async function getMonthlyBudgetStatus(ref = new Date()): Promise<{
   label: string;
   ym: string;
+  from: string;
+  to: string | null;
   rows: CategoryBudget[];
   totalSpent: number;
   totalBudget: number;
 }> {
-  const { from, to, label, ym } = monthRange(month);
+  const { from, to, label, ym } = await getSalaryCycle(ref);
+  const inCycle = to
+    ? and(gte(transactions.bookingDate, from), lte(transactions.bookingDate, to))
+    : gte(transactions.bookingDate, from);
 
   const spentExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
 
@@ -56,11 +62,7 @@ export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
     .from(categories)
     .leftJoin(
       transactions,
-      and(
-        eq(transactions.categoryId, categories.id),
-        gte(transactions.bookingDate, from),
-        lte(transactions.bookingDate, to)
-      )
+      and(eq(transactions.categoryId, categories.id), inCycle)
     )
     .groupBy(categories.id)
     .orderBy(categories.sort);
@@ -100,7 +102,7 @@ export async function getMonthlyBudgetStatus(month = new Date()): Promise<{
   // Transfers between own accounts are not spending -> excluded from the total.
   const totalSpent = out.reduce((s, r) => s + (r.name === "Transfers" ? 0 : r.spent), 0);
   const totalBudget = out.reduce((s, r) => s + (r.budget ?? 0), 0);
-  return { label, ym, rows: out, totalSpent, totalBudget };
+  return { label, ym, from, to, rows: out, totalSpent, totalBudget };
 }
 
 /** Current ISO week (Mon–Sun) as YYYY-MM-DD bounds + a compact label. */

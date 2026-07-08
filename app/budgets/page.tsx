@@ -1,4 +1,4 @@
-import { getMonthlyBudgetStatus, getWeeklyBudgetStatus, monthRange, weekRange } from "@/lib/budget";
+import { getMonthlyBudgetStatus, getWeeklyBudgetStatus, weekRange } from "@/lib/budget";
 import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
 import { BudgetBar } from "../ui/BudgetBar";
 import { Panel } from "../ui/Panel";
@@ -25,7 +25,8 @@ export default async function BudgetsPage() {
   }));
 
   const monthlyRows = status.rows.filter((r) => r.budget != null || r.spent > 0);
-  const mr = monthRange();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
   const wr = weekRange();
 
   return (

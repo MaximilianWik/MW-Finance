@@ -90,7 +90,7 @@ export function BudgetBar({
         </span>
 
         {hasBudget ? (
-          <AsciiBar ratio={ratio} width={16} />
+          <AsciiBar ratio={ratio} width={16} barColor={row.color} />
         ) : (
           <span className="text-faint">[ no budget ]</span>
         )}

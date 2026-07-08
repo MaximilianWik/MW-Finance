@@ -126,6 +126,12 @@ export async function PATCH(req: NextRequest) {
         target: merchantCategories.merchant,
         set: { categoryId: body.categoryId, source: "manual", updatedAt: new Date() },
       });
+
+    // Propagate to every transaction sharing this merchant (past + future).
+    await db
+      .update(transactions)
+      .set({ categoryId: body.categoryId, categorySource: "manual" })
+      .where(eq(transactions.merchant, updated.merchant));
   }
 
   return NextResponse.json({ ok: true });
