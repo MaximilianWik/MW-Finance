@@ -209,8 +209,22 @@ export async function runSync(opts: { useGemini?: boolean } = {}): Promise<SyncR
     // ─── Categorize ──────────────────────────────────────────────────────────
     if (inserted.length > 0) {
       push(`[AI]   categorizing ${inserted.length} new transaction(s)…`);
-      await categorizeInserted(inserted, opts.useGemini ?? false);
-      push(`[OK]   categorization complete`);
+      const catStats = await categorizeInserted(inserted, opts.useGemini ?? false);
+      const catParts = [
+        catStats.rule   > 0 ? `${catStats.rule} rule`    : "",
+        catStats.cache  > 0 ? `${catStats.cache} cache`  : "",
+        catStats.gemini > 0 ? `${catStats.gemini} ai`    : "",
+        catStats.def    > 0 ? `${catStats.def} default`  : "",
+      ].filter(Boolean);
+      push(`[OK]   categorized: ${catParts.join(", ") || "none"}`);
+      // For small batches, list each new transaction.
+      if (inserted.length <= 8) {
+        for (const tx of inserted) {
+          const dir = tx.direction === "CRDT" ? "+" : "-";
+          const name = (tx.merchant ?? tx.counterpartyName ?? "?").slice(0, 48);
+          push(`       ${dir}${tx.amount} ${tx.currency}  ${name}`);
+        }
+      }
     }
 
     // ─── Budget notifications ─────────────────────────────────────────────────
@@ -250,7 +264,10 @@ function isoDaysAgoFrom(dateStr: string, days: number): string {
 }
 
 /** Apply rules → merchant cache → Gemini to the given rows and persist. */
-async function categorizeInserted(rows: NewTransaction[], useGemini: boolean) {
+async function categorizeInserted(
+  rows: NewTransaction[],
+  useGemini: boolean
+): Promise<{ rule: number; cache: number; gemini: number; def: number }> {
   const cats = await db.select().from(categories);
   const nameToId = new Map(cats.map((c) => [c.name, c.id]));
   const uncategorizedId = nameToId.get("Uncategorized") ?? null;
@@ -330,22 +347,28 @@ async function categorizeInserted(rows: NewTransaction[], useGemini: boolean) {
     }
   }
 
-  // Persist decisions; everything else → Uncategorized.
+  // Persist decisions; everything else -> Uncategorized.
+  let ruleCount = 0, cacheCount = 0, geminiCount = 0, defCount = 0;
   for (const r of rows) {
     if (!r.id) continue;
     const d = decided.get(r.id);
     if (d) {
+      if (d.source === "rule") ruleCount++;
+      else if (d.source === "cache") cacheCount++;
+      else geminiCount++;
       await db
         .update(transactions)
         .set({ categoryId: d.catId, categorySource: d.source })
         .where(eq(transactions.id, r.id));
     } else if (uncategorizedId) {
+      defCount++;
       await db
         .update(transactions)
         .set({ categoryId: uncategorizedId, categorySource: "default" })
         .where(eq(transactions.id, r.id));
     }
   }
+  return { rule: ruleCount, cache: cacheCount, gemini: geminiCount, def: defCount };
 }
 
 /** Fire ntfy budget messages for newly-booked outflows in budgeted categories. */

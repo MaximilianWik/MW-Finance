@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
   const c = await cookies();
   const saved = c.get("eb_state")?.value;
   c.delete("eb_state");
+  const autoSync = c.get("eb_auto_sync")?.value === "1";
+  c.delete("eb_auto_sync");
 
   if (searchParams.get("error")) return fail(searchParams.get("error")!);
   if (!code)  return fail("missing_code");
@@ -124,7 +126,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.redirect(`${env.appUrl}/?linked=${session.accounts?.length ?? 0}`);
+    const linked = session.accounts?.length ?? 0;
+    const returnUrl = `${env.appUrl}/?linked=${linked}${autoSync ? "&autoSync=1" : ""}`;
+    return NextResponse.redirect(returnUrl);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return fail(msg.slice(0, 120));
