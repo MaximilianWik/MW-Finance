@@ -15,6 +15,7 @@ import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
 import { SavingsPanel } from "./ui/SavingsPanel";
 import { AiInsights, type AiInsightRow } from "./ui/AiInsights";
 import { QueryLog } from "./ui/QueryLog";
+import { AsciiSigil } from "./ui/AsciiSigil";
 import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,9 @@ export default async function Home({
   if (!process.env.DATABASE_URL) {
     return (
       <Panel title="SETUP REQUIRED" className="mt-2">
+        <div className="mb-3 flex justify-center overflow-hidden">
+          <AsciiSigil name="thornCross" tone="edge" opacity={0.5} className="text-[0.5rem]" />
+        </div>
         <p className="text-sm text-muted">
           Copy <code className="text-accent">.env.example</code> → {" "}
           <code className="text-accent">.env.local</code>, then run{" "}
@@ -94,6 +98,9 @@ export default async function Home({
   if (dbError) {
     return (
       <Panel title="DATABASE ERROR" className="mt-2">
+        <div className="mb-3 flex justify-center overflow-hidden">
+          <AsciiSigil name="runeEye" tone="edge" opacity={0.5} className="text-[0.5rem]" />
+        </div>
         <p className="text-sm text-muted">
           Tables likely don&apos;t exist. Run{" "}
           <code className="text-accent">npm run db:push</code> then{" "}
@@ -129,6 +136,9 @@ export default async function Home({
 
       {accs.length === 0 ? (
         <Panel title="ACCOUNT SYNC">
+          <div className="mb-2 flex justify-center overflow-hidden">
+            <AsciiSigil name="figure04" tone="accent" opacity={0.28} className="text-[0.5rem]" />
+          </div>
           <p className="text-sm text-muted">No bank linked. Connect via Enable Banking.</p>
           <a href="/api/auth/start" className="btn btn-accent mt-3">
             $ link bank
@@ -179,6 +189,9 @@ export default async function Home({
             <PrimaryGoalCard goal={primaryGoal} />
           ) : (
             <Panel title="GOALS">
+              <div className="mb-2 flex justify-center overflow-hidden">
+                <AsciiSigil name="figure00" tone="accent" opacity={0.28} className="text-[0.5rem]" />
+              </div>
               <p className="text-sm text-muted">No primary goal set.</p>
               <Link href="/goals" className="btn mt-3">
                 » goals
