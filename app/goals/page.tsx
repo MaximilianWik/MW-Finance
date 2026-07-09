@@ -1,14 +1,19 @@
 import { getGoals } from "@/lib/savings";
 import { GoalRow, NewGoalForm } from "../ui/Goals";
 import { Panel } from "../ui/Panel";
+import { QueryLog } from "../ui/QueryLog";
+import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
 
 export default async function GoalsPage() {
-  const goals = await getGoals();
+  const t0 = Date.now();
+  const [[goals], queryLog] = await withQueryLog(() => Promise.all([getGoals()]));
+  const tookMs = Date.now() - t0;
 
   return (
     <main className="flex flex-col gap-4">
+      <QueryLog queries={queryLog.map((q) => q.sql)} tookMs={tookMs} page="GOALS" />
       {goals.length === 0 ? (
         <Panel title="SAVINGS GOALS">
           <p className="text-sm text-muted">

@@ -16,7 +16,10 @@ export function lineColor(l: string): string {
   if (t.startsWith("[NEW]")) return "text-accent2";
   if (t.startsWith("[SKIP]")) return "text-faint";
   if (t.startsWith("[AI]")) return "text-accent2";
+  if (t.startsWith("[BOOT]")) return "text-muted";
   if (t.startsWith("[SYNC]")) return "text-muted";
+  if (l.startsWith(">   ")) return "text-faint";   // SQL clause continuation
+  if (l.startsWith("> "))  return "text-ink2";     // SQL first line
   if (t.startsWith("[DIAG]") || t.startsWith("(")) return "text-amber/60";
   if (l.startsWith("       ")) return "text-faint";
   return "text-muted";

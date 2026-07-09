@@ -14,6 +14,8 @@ import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
 import { SavingsPanel } from "./ui/SavingsPanel";
 import { AiInsights, type AiInsightRow } from "./ui/AiInsights";
+import { QueryLog } from "./ui/QueryLog";
+import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
 
@@ -53,18 +55,41 @@ export default async function Home({
     fromTransactions: 0, fromManual: 0, total: 0, recentEntries: [],
   };
   let dbError: string | null = null;
+  let topInsights: AiInsightRow[] = [];
+  const t0 = Date.now();
 
-  try {
-    [accs, budget, cats, primaryGoal, savings] = await Promise.all([
-      getAccounts(),
-      getMonthlyBudgetStatus(),
-      getCategories(),
-      getPrimaryGoal(),
-      getSavingsTotal(),
-    ]);
-  } catch (e) {
-    dbError = e instanceof Error ? e.message : String(e);
-  }
+  const [, _ql] = await withQueryLog(async () => {
+    try {
+      [accs, budget, cats, primaryGoal, savings] = await Promise.all([
+        getAccounts(),
+        getMonthlyBudgetStatus(),
+        getCategories(),
+        getPrimaryGoal(),
+        getSavingsTotal(),
+      ]);
+    } catch (e) {
+      dbError = e instanceof Error ? e.message : String(e);
+      return;
+    }
+    try {
+      topInsights = await db
+        .select({
+          id: aiInsights.id,
+          kind: aiInsights.kind,
+          severity: aiInsights.severity,
+          title: aiInsights.title,
+          body: aiInsights.body,
+        })
+        .from(aiInsights)
+        .where(eq(aiInsights.dismissed, false))
+        .orderBy(desc(aiInsights.createdAt), desc(aiInsights.id))
+        .limit(4);
+    } catch {
+      // AI insights are non-critical — never block the dashboard on them.
+    }
+  });
+  const queryLog = _ql;
+  const tookMs = Date.now() - t0;
 
   if (dbError) {
     return (
@@ -81,24 +106,6 @@ export default async function Home({
     );
   }
 
-  let topInsights: AiInsightRow[] = [];
-  try {
-    topInsights = await db
-      .select({
-        id: aiInsights.id,
-        kind: aiInsights.kind,
-        severity: aiInsights.severity,
-        title: aiInsights.title,
-        body: aiInsights.body,
-      })
-      .from(aiInsights)
-      .where(eq(aiInsights.dismissed, false))
-      .orderBy(desc(aiInsights.createdAt), desc(aiInsights.id))
-      .limit(4);
-  } catch {
-    // AI insights are non-critical — never block the dashboard on them.
-  }
-
   const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
   const totalBalance = accs.reduce((s, a) => s + (a.balance ?? 0), 0);  const budgetRows = budget.rows
     .filter((r) => r.name !== "Transfers" && (r.budget != null || r.spent > 0))
@@ -108,6 +115,7 @@ export default async function Home({
 
   return (
     <main className="flex flex-col gap-4">
+      <QueryLog queries={queryLog.map((q) => q.sql)} tookMs={tookMs} page="OVERVIEW" />
       {sp.linked && (
         <div className="border border-accent/50 bg-accent/10 px-3 py-1.5 text-xs uppercase tracking-term text-accent">
           [ OK ] linked {sp.linked} account(s) — run $ sync now

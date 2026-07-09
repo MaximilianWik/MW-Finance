@@ -16,6 +16,8 @@ import { RecurringNote } from "../ui/RecurringNote";
 import { RecurringCategory } from "../ui/RecurringCategory";
 import { RecurringTypeToggle } from "../ui/RecurringTypeToggle";
 import { getCategories } from "@/lib/queries";
+import { QueryLog } from "../ui/QueryLog";
+import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
 
@@ -86,8 +88,10 @@ export default async function InsightsPage({
   const { ym } = monthRange();
   const billsMonth = sp.billsMonth ?? ym;
 
-  const [mom, wow, bills, recurrings, insights, cats] = await Promise.all([
-    getSalaryComparison(),
+  const t0 = Date.now();
+  const [[mom, wow, bills, recurrings, insights, cats], queryLog] = await withQueryLog(() =>
+    Promise.all([
+      getSalaryComparison(),
     getWeekComparison(),
     getBillsChecklist(billsMonth),
     db
@@ -120,7 +124,9 @@ export default async function InsightsPage({
       .where(eq(aiInsights.dismissed, false))
       .orderBy(desc(aiInsights.createdAt), desc(aiInsights.id)),
     getCategories(),
-  ]);
+  ])
+  );
+  const tookMs = Date.now() - t0;
 
   const billMonthLabel = monthLabel(billsMonth);
   const catOptions = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
@@ -138,6 +144,8 @@ export default async function InsightsPage({
 
   return (
     <main className="flex flex-col gap-4">
+      <QueryLog queries={queryLog.map((q) => q.sql)} tookMs={tookMs} page="INSIGHTS" />
+
       <Panel title="AI ANALYSIS" right={insights.length > 0 ? `${insights.length} ACTIVE` : undefined}>
         <AiInsights initial={insights} />
         <div className="mt-3">

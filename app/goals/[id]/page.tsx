@@ -5,6 +5,8 @@ import { GoalActions } from "../../ui/GoalActions";
 import { Panel } from "../../ui/Panel";
 import { AsciiBar } from "../../ui/AsciiBar";
 import { StatusTag } from "../../ui/StatusTag";
+import { QueryLog } from "../../ui/QueryLog";
+import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +19,16 @@ export default async function GoalDetail({
   const goalId = Number(id);
   if (!Number.isFinite(goalId)) notFound();
 
-  const [row, allGoals, contribs] = await Promise.all([
-    getGoal(goalId),
-    getGoals(),
-    getGoalContributions(goalId),
-  ]);
+  const t0 = Date.now();
+  const [[row, allGoals, contribs], queryLog] = await withQueryLog(() =>
+    Promise.all([
+      getGoal(goalId),
+      getGoals(),
+      getGoalContributions(goalId),
+    ])
+  );
+  const tookMs = Date.now() - t0;
+
   if (!row) notFound();
   const summary = allGoals.find((g) => g.id === goalId);
 
@@ -31,6 +38,7 @@ export default async function GoalDetail({
 
   return (
     <main className="flex flex-col gap-4">
+      <QueryLog queries={queryLog.map((q) => q.sql)} tookMs={tookMs} page="GOAL" />
       <a href="/goals" className="text-xs uppercase tracking-term text-muted hover:text-accent">
         « goals
       </a>

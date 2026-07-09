@@ -5,8 +5,10 @@ import { BudgetBar } from "../ui/BudgetBar";
 import { BudgetCycleNav } from "../ui/BudgetCycleNav";
 import { Panel } from "../ui/Panel";
 import { RecalibratePanel } from "../ui/RecalibratePanel";
+import { QueryLog } from "../ui/QueryLog";
 import { getCategories } from "@/lib/queries";
 import { kr } from "@/lib/format";
+import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +25,15 @@ export default async function BudgetsPage({
   const ref = cycleFrom ? new Date(cycleFrom + "T12:00:00Z") : new Date();
   const isCurrentCycle = !cycleFrom;
 
-  const [cats, status, cycles] = await Promise.all([
-    getCategories(),
-    getMonthlyBudgetStatus(ref),
-    getAllSalaryCycles(),
-  ]);
+  const t0 = Date.now();
+  const [[cats, status, cycles], queryLog] = await withQueryLog(() =>
+    Promise.all([
+      getCategories(),
+      getMonthlyBudgetStatus(ref),
+      getAllSalaryCycles(),
+    ])
+  );
+  const tookMs = Date.now() - t0;
 
   const spentByCat = new Map(status.rows.map((r) => [r.categoryId, r.spent]));
 
@@ -57,6 +63,8 @@ export default async function BudgetsPage({
 
   return (
     <main className="flex flex-col gap-4">
+      <QueryLog queries={queryLog.map((q) => q.sql)} tookMs={tookMs} page="BUDGETS" />
+
       <Panel title="AI BUDGET">
         <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
           The engine reads your income, spending habits and recurring bills, then proposes
