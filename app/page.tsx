@@ -4,7 +4,7 @@ import { aiInsights } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { getAccounts, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
-import { getPrimaryGoal, getSavingsTotal } from "@/lib/savings";
+import { getPrimaryGoal } from "@/lib/savings";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
@@ -12,7 +12,6 @@ import { RecentLedger } from "./ui/RecentLedger";
 import { Panel } from "./ui/Panel";
 import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
-import { SavingsPanel } from "./ui/SavingsPanel";
 import { AiInsights, type AiInsightRow } from "./ui/AiInsights";
 import { InvestmentsPanel } from "./ui/InvestmentsPanel";
 import { QueryLog } from "./ui/QueryLog";
@@ -56,21 +55,17 @@ export default async function Home({
   };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
-  let savings: Awaited<ReturnType<typeof getSavingsTotal>> = {
-    fromTransactions: 0, fromManual: 0, total: 0, recentEntries: [],
-  };
   let dbError: string | null = null;
   let topInsights: AiInsightRow[] = [];
   const t0 = Date.now();
 
   const [, _ql] = await withQueryLog(async () => {
     try {
-      [accs, budget, cats, primaryGoal, savings] = await Promise.all([
+      [accs, budget, cats, primaryGoal] = await Promise.all([
         getAccounts(),
         getMonthlyBudgetStatus(),
         getCategories(),
         getPrimaryGoal(),
-        getSavingsTotal(),
       ]);
     } catch (e) {
       dbError = e instanceof Error ? e.message : String(e);
@@ -213,7 +208,6 @@ export default async function Home({
         </Panel>
       )}
 
-      <SavingsPanel initial={savings} />
       <InvestmentsPanel />
 
       {budgetRows.length > 0 && (
