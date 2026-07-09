@@ -16,23 +16,31 @@
     </filter>
   </defs>
 
+  <!-- Background -->
   <rect width="512" height="512" rx="108" fill="#0c0c0f"/>
+
+  <!-- Subtle outer border -->
   <rect x="1.5" y="1.5" width="509" height="509" rx="107" fill="none"
         stroke="#4ec96a" stroke-width="2" opacity="0.35"/>
 
+  <!-- Corner bracket marks — top-left -->
   <path d="M 44 44 L 44 88 M 44 44 L 88 44"
         stroke="#4ec96a" stroke-width="5" stroke-linecap="square"
         fill="none" opacity="0.55" filter="url(#glowsm)"/>
+  <!-- top-right -->
   <path d="M 468 44 L 468 88 M 468 44 L 424 44"
         stroke="#4ec96a" stroke-width="5" stroke-linecap="square"
         fill="none" opacity="0.55" filter="url(#glowsm)"/>
+  <!-- bottom-left -->
   <path d="M 44 468 L 44 424 M 44 468 L 88 468"
         stroke="#4ec96a" stroke-width="5" stroke-linecap="square"
         fill="none" opacity="0.55" filter="url(#glowsm)"/>
+  <!-- bottom-right -->
   <path d="M 468 468 L 468 424 M 468 468 L 424 468"
         stroke="#4ec96a" stroke-width="5" stroke-linecap="square"
         fill="none" opacity="0.55" filter="url(#glowsm)"/>
 
+  <!-- Dollar sign — phosphor green, centered, glowing -->
   <text x="256" y="362"
     font-family="'JetBrains Mono', 'Courier New', Courier, ui-monospace, monospace"
     font-size="340"
