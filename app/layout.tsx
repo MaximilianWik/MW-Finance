@@ -41,9 +41,9 @@ export default function RootLayout({
           <footer className="mt-6 border-t border-edge pt-2 text-[0.65rem] uppercase tracking-term text-faint">
             <div className="flex justify-center overflow-hidden">
               <AsciiSigil
-                name="barbDivider"
+                name="figure02"
                 tone="edge"
-                opacity={0.65}
+                opacity={0.8}
                 className="mb-2 text-[0.5rem]"
               />
             </div>

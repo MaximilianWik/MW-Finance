@@ -37,7 +37,7 @@ export default async function Home({
     return (
       <Panel title="SETUP REQUIRED" className="mt-2">
         <div className="mb-3 flex justify-center overflow-hidden">
-          <AsciiSigil name="thornCross" tone="accent" opacity={0.55} className="text-[0.65rem]" />
+          <AsciiSigil name="figure01" tone="accent" opacity={0.8} className="text-[0.65rem]" />
         </div>
         <p className="text-sm text-muted">
           Copy <code className="text-accent">.env.example</code> → {" "}
@@ -99,7 +99,7 @@ export default async function Home({
     return (
       <Panel title="DATABASE ERROR" className="mt-2">
         <div className="mb-3 flex justify-center overflow-hidden">
-          <AsciiSigil name="runeEye" tone="accent" opacity={0.55} className="text-[0.65rem]" />
+          <AsciiSigil name="figure04" tone="accent" opacity={0.8} className="text-[0.65rem]" />
         </div>
         <p className="text-sm text-muted">
           Tables likely don&apos;t exist. Run{" "}
@@ -137,7 +137,7 @@ export default async function Home({
       {accs.length === 0 ? (
         <Panel title="ACCOUNT SYNC">
           <div className="mb-2 flex justify-center overflow-hidden">
-            <AsciiSigil name="figure04" tone="accent" opacity={0.5} className="text-[0.65rem]" />
+            <AsciiSigil name="figure04" tone="accent" opacity={0.8} className="text-[0.65rem]" />
           </div>
           <p className="text-sm text-muted">No bank linked. Connect via Enable Banking.</p>
           <a href="/api/auth/start" className="btn btn-accent mt-3">
@@ -190,7 +190,7 @@ export default async function Home({
           ) : (
             <Panel title="GOALS">
               <div className="mb-2 flex justify-center overflow-hidden">
-                <AsciiSigil name="figure00" tone="accent" opacity={0.5} className="text-[0.65rem]" />
+                <AsciiSigil name="figure00" tone="accent" opacity={0.8} className="text-[0.65rem]" />
               </div>
               <p className="text-sm text-muted">No primary goal set.</p>
               <Link href="/goals" className="btn mt-3">

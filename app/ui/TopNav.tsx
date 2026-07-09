@@ -22,7 +22,7 @@ export function TopNav() {
       <AsciiSigil
         name="figure01"
         tone="accent"
-        opacity={0.25}
+        opacity={0.8}
         className="pointer-events-none absolute -right-1 top-0 select-none text-[0.44rem]"
       />
 

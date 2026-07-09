@@ -146,9 +146,9 @@ export function TerminalLog({
       </pre>
       {/* Right-side sigil accent — rendered over the log surface */}
       <AsciiSigil
-        name="runeEye"
+        name="figure03"
         tone="accent"
-        opacity={0.14}
+        opacity={0.8}
         className="pointer-events-none absolute right-2 top-2 select-none text-[0.42rem]"
       />
     </div>
