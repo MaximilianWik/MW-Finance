@@ -183,7 +183,7 @@ export function InvestmentsPanel() {
                       <button
                         onClick={() => deleteAccount(acc.id, acc.name)}
                         disabled={busy}
-                        className="btn btn-danger !py-0 !px-1.5 text-[0.65rem] opacity-30 hover:opacity-100"
+                        className="btn btn-danger !py-0 !px-1.5 text-[0.65rem]"
                         title="Delete account"
                       >
                         del
