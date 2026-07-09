@@ -12,6 +12,7 @@ import { BillRow } from "../ui/RecurringActions";
 import { ChecklistMonthNav } from "../ui/ChecklistMonthNav";
 import { AiConsole } from "../ui/AiConsole";
 import { AiInsights } from "../ui/AiInsights";
+import { RecurringNote } from "../ui/RecurringNote";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +119,17 @@ export default async function InsightsPage({
 
   const billMonthLabel = monthLabel(billsMonth);
 
+  // Monthly commitment = sum of all active recurring amounts normalised to /mo.
+  const monthlyTotal = Math.round(
+    recurrings.reduce((s, r) => {
+      const m =
+        r.cadence === "weekly" ? r.amount * (52 / 12)
+        : r.cadence === "yearly" ? r.amount / 12
+        : r.amount; // monthly (default)
+      return s + m;
+    }, 0)
+  );
+
   return (
     <main className="flex flex-col gap-4">
       <Panel title="AI ANALYSIS" right={insights.length > 0 ? `${insights.length} ACTIVE` : undefined}>
@@ -211,7 +223,7 @@ export default async function InsightsPage({
       </Panel>
 
       {/* Detected recurring payments */}
-      <Panel title="RECURRING PAYMENTS" right={`${recurrings.length} DETECTED`}>
+      <Panel title="RECURRING PAYMENTS" right={`${recurrings.length} DETECTED · ${kr(monthlyTotal)}/MO`}>
         {recurrings.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted">
             Nothing detected — need ≥3 charges from one merchant,
@@ -235,7 +247,7 @@ export default async function InsightsPage({
                 <tr key={r.id}>
                   <td className="uppercase tracking-term text-ink2">{r.merchant}</td>
                   <td className="text-muted italic">
-                    {r.notes ?? <span className="text-faint">—</span>}
+                    <RecurringNote id={r.id} initial={r.notes ?? null} />
                   </td>
                   <td className="text-right text-muted">−{kr(r.amount)}</td>
                   <td className="text-muted">
