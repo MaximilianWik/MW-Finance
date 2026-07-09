@@ -34,11 +34,10 @@ export function BudgetBar({
   const [loading, setLoading] = useState(false);
 
   const hasBudget = row.budget != null && row.budget > 0;
-  const ratio = hasBudget ? row.pct ?? 0 : 0;
-  const over = (row.pct ?? 0) > 1;
+  const ratio    = hasBudget ? row.pct ?? 0 : 0;
+  const over     = (row.pct ?? 0) > 1;
   const adjusted = row.adjustment !== 0;
   const canDrill = !!range;
-  const pctNum = hasBudget && row.pct != null ? Math.round(row.pct * 100) : null;
 
   async function toggle() {
     if (!canDrill) return;
@@ -91,34 +90,30 @@ export function BudgetBar({
           {hasBudget && <span className="text-faint"> / {kr(row.budget)}</span>}
         </td>
 
-        {/* BAR — desktop only */}
         <td className="hidden py-1.5 pr-3 align-middle sm:table-cell">
           {hasBudget ? (
-            <AsciiBar ratio={ratio} width={16} barColor={row.color} showPct={false} />
+            <AsciiBar ratio={ratio} width={16} barColor={row.color} />
           ) : (
             <span className="text-faint">[ no budget ]</span>
           )}
         </td>
 
-        {/* PERCENT + tags */}
-        <td className="whitespace-nowrap py-1.5 text-right align-middle tabular-nums">
-          {pctNum != null &&
-            (over ? (
-              <span className="text-danger">{pctNum}%</span>
-            ) : (
-              <span style={{ color: row.color }}>{pctNum}%</span>
-            ))}
-          {adjusted && (
-            <span
-              className={`tag ml-2 ${row.adjustment > 0 ? "tag-ok" : "tag-warn"}`}
-              title={`Adaptive adjustment ${row.adjustment > 0 ? "+" : ""}${kr(row.adjustment)}`}
-            >
-              {row.adjustment > 0 ? "+" : ""}
-              {Math.round(row.adjustment)}
-            </span>
-          )}
-          {over && <span className="tag tag-danger ml-2">[ OVER ]</span>}
-        </td>
+        {/* Tags — only shown when there's something to display */}
+        {(adjusted || over) && (
+          <td className="whitespace-nowrap py-1.5 text-right align-middle">
+            {adjusted && (
+              <span
+                className={`tag ${row.adjustment > 0 ? "tag-ok" : "tag-warn"}`}
+                title={`Adaptive adjustment ${row.adjustment > 0 ? "+" : ""}${kr(row.adjustment)}`}
+              >
+                {row.adjustment > 0 ? "+" : ""}
+                {Math.round(row.adjustment)}
+              </span>
+            )}
+            {over && <span className="tag tag-danger ml-1">[ OVER ]</span>}
+          </td>
+        )}
+        {!adjusted && !over && <td />}
       </tr>
 
       {open && (
