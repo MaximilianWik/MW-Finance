@@ -148,7 +148,7 @@ export default function RootLayout({
               <div className="flex justify-center overflow-hidden">
                 <AsciiSigil
                   name="figure02"
-                  tone="edge"
+                  tone="accent"
                   opacity={0.8}
                   className="mb-2 text-[0.5rem]"
                 />

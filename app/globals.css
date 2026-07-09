@@ -78,7 +78,7 @@ body > * {
      │  content                                                             │
      └──────────────────────────────────────────────────────────────────────┘  */
   .panel {
-    @apply relative border border-edge bg-panel px-4 pb-4 pt-5;
+    @apply relative border border-edge bg-panel/80 px-4 pb-4 pt-5;
   }
   .panel > .panel-title {
     @apply absolute -top-[0.62rem] left-3 bg-ink px-2 text-[0.7rem] font-medium
