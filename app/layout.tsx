@@ -43,7 +43,7 @@ export default function RootLayout({
               <AsciiSigil
                 name="barbDivider"
                 tone="edge"
-                opacity={0.4}
+                opacity={0.65}
                 className="mb-2 text-[0.5rem]"
               />
             </div>

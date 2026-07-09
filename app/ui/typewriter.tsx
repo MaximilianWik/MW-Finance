@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AsciiSigil } from "./AsciiSigil";
 
 /**
  * Shared line-colouring for every terminal console. Matches the `[TAG]` grammar
@@ -126,21 +127,30 @@ export function TerminalLog({
   const lines = shown.length ? shown.split("\n") : [];
 
   return (
-    <pre
-      ref={ref}
-      className={`max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed ${className}`}
-    >
-      {lines.map((l, i) => (
-        <div key={i} className={lineColor(l)}>
-          {l}
-          {typing && i === lines.length - 1 && <span className="caret" />}
-        </div>
-      ))}
-      {busy && !typing && (
-        <div className="text-muted">
-          <Spinner /> <span className="text-faint">working…</span>
-        </div>
-      )}
-    </pre>
+    <div className="relative">
+      <pre
+        ref={ref}
+        className={`max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed ${className}`}
+      >
+        {lines.map((l, i) => (
+          <div key={i} className={lineColor(l)}>
+            {l}
+            {typing && i === lines.length - 1 && <span className="caret" />}
+          </div>
+        ))}
+        {busy && !typing && (
+          <div className="text-muted">
+            <Spinner /> <span className="text-faint">working…</span>
+          </div>
+        )}
+      </pre>
+      {/* Right-side sigil accent — rendered over the log surface */}
+      <AsciiSigil
+        name="runeEye"
+        tone="accent"
+        opacity={0.14}
+        className="pointer-events-none absolute right-2 top-2 select-none text-[0.42rem]"
+      />
+    </div>
   );
 }

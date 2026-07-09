@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AsciiSigil } from "./AsciiSigil";
 
 const TABS = [
   { href: "/", label: "OVERVIEW" },
@@ -16,16 +17,24 @@ const TABS = [
 export function TopNav() {
   const path = usePathname();
   return (
-    <header className="border border-edge bg-panel">
-      <div className="flex items-center justify-between border-b border-edge px-3 py-1.5">
-        <Link href="/" className="text-sm font-bold uppercase tracking-term text-accent glow">
+    <header className="relative overflow-hidden border border-edge bg-panel">
+      {/* Sigil backdrop — figure01 peeking from the right, clipped by overflow-hidden */}
+      <AsciiSigil
+        name="figure01"
+        tone="accent"
+        opacity={0.25}
+        className="pointer-events-none absolute -right-1 top-0 select-none text-[0.44rem]"
+      />
+
+      <div className="relative flex items-center justify-between border-b border-edge px-3 py-1.5">
+        <Link href="/" className="glow text-sm font-bold uppercase tracking-term text-accent">
           MWFINANCE
         </Link>
         <span className="text-[0.65rem] uppercase tracking-term text-faint">
           SEK · Länsförsäkringar
         </span>
       </div>
-      <nav className="flex overflow-x-auto hide-scrollbar">
+      <nav className="relative flex overflow-x-auto hide-scrollbar">
         {TABS.map((t) => {
           const active = t.href === "/" ? path === "/" : path.startsWith(t.href);
           return (
