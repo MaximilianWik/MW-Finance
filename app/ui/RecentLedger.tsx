@@ -19,6 +19,7 @@ interface TxRow {
   categoryId: number | null;
   flaggedReason: string | null;
   recurring: boolean;
+  recurringVariable: boolean;
   categoryName: string | null;
   categoryColor: string | null;
 }
@@ -115,13 +116,19 @@ export function RecentLedger({ options }: { options: CatOption[] }) {
                 </td>
                 <td className="hidden w-24 text-center sm:table-cell">
                   {t.recurring ? (
-                    <UnmarkRecurring merchant={t.merchant} onSuccess={refetch} />
+                    <div className="flex flex-col items-center gap-0.5">
+                      <UnmarkRecurring merchant={t.merchant} onSuccess={refetch} />
+                      {t.recurringVariable ? (
+                        <span className="text-[0.62rem] uppercase tracking-term text-accent2">· variable</span>
+                      ) : (
+                        <MarkRecurring txId={t.id} merchant={displayName} variable onSuccess={refetch} />
+                      )}
+                    </div>
                   ) : t.direction === "DBIT" ? (
-                    <MarkRecurring
-                      txId={t.id}
-                      merchant={displayName}
-                      onSuccess={refetch}
-                    />
+                    <div className="flex flex-col items-center gap-0.5">
+                      <MarkRecurring txId={t.id} merchant={displayName} onSuccess={refetch} />
+                      <MarkRecurring txId={t.id} merchant={displayName} variable onSuccess={refetch} />
+                    </div>
                   ) : null}
                 </td>
                 <td

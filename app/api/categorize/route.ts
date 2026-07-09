@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { transactions } from "@/db/schema";
 import { desc, eq, isNull, ne, or } from "drizzle-orm";
 import { categorizeBatch, type CatRow } from "@/lib/categorize-batch";
+import { detectAndPersistRecurrings } from "@/lib/behavior/recurring";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +53,9 @@ export async function POST(req: NextRequest) {
           .limit(BATCH_CAP);
 
         if (rows.length === 0) {
-          send("[DONE] nothing to categorize — ledger is clean");
+          send("[OK]   ledger is clean — scanning for recurring patterns anyway…");
+          const detected = await detectAndPersistRecurrings();
+          send(`[DONE] ${detected.length} recurring pattern(s) detected`);
           return;
         }
 
@@ -66,6 +69,16 @@ export async function POST(req: NextRequest) {
           stats.def > 0 ? `${stats.def} default` : "",
         ].filter(Boolean);
         send(`[OK]   categorized: ${parts.join(", ") || "none"}`);
+
+        // After categorizing, scan full history for recurring patterns so newly
+        // categorized merchants get picked up as recurring (including variable-price ones).
+        send("[AI]   scanning for recurring patterns…");
+        const detected = await detectAndPersistRecurrings();
+        const varCount = detected.filter((d) => d.variableAmount).length;
+        send(
+          `[OK]   ${detected.length} recurring pattern(s) detected` +
+          (varCount > 0 ? ` (${varCount} variable-price)` : "")
+        );
 
         const secs = ((Date.now() - t0) / 1000).toFixed(1);
         send(`[DONE] categorization complete — ${secs}s`);

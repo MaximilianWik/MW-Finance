@@ -13,6 +13,8 @@ import { ChecklistMonthNav } from "../ui/ChecklistMonthNav";
 import { AiConsole } from "../ui/AiConsole";
 import { AiInsights } from "../ui/AiInsights";
 import { RecurringNote } from "../ui/RecurringNote";
+import { RecurringCategory } from "../ui/RecurringCategory";
+import { getCategories } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +85,7 @@ export default async function InsightsPage({
   const { ym, label } = monthRange();
   const billsMonth = sp.billsMonth ?? ym;
 
-  const [mom, wow, bills, recurrings, insights] = await Promise.all([
+  const [mom, wow, bills, recurrings, insights, cats] = await Promise.all([
     getMonthComparison(ym),
     getWeekComparison(),
     getBillsChecklist(billsMonth),
@@ -100,6 +102,7 @@ export default async function InsightsPage({
         occurrences: recurringPayments.occurrences,
         manual: recurringPayments.manual,
         variableAmount: recurringPayments.variableAmount,
+        categoryId: recurringPayments.categoryId,
       })
       .from(recurringPayments)
       .where(eq(recurringPayments.active, true))
@@ -115,9 +118,11 @@ export default async function InsightsPage({
       .from(aiInsights)
       .where(eq(aiInsights.dismissed, false))
       .orderBy(desc(aiInsights.createdAt), desc(aiInsights.id)),
+    getCategories(),
   ]);
 
   const billMonthLabel = monthLabel(billsMonth);
+  const catOptions = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
 
   // Monthly commitment = sum of all active recurring amounts normalised to /mo.
   const monthlyTotal = Math.round(
@@ -236,6 +241,7 @@ export default async function InsightsPage({
               <tr>
                 <th>MERCHANT</th>
                 <th>NOTES / ALIAS</th>
+                <th>CATEGORY</th>
                 <th className="text-right">AMOUNT</th>
                 <th>CADENCE</th>
                 <th className="text-center">TYPE</th>
@@ -248,6 +254,13 @@ export default async function InsightsPage({
                   <td className="uppercase tracking-term text-ink2">{r.merchant}</td>
                   <td className="text-muted italic">
                     <RecurringNote id={r.id} initial={r.notes ?? null} />
+                  </td>
+                  <td>
+                    <RecurringCategory
+                      recurringId={r.id}
+                      categoryId={r.categoryId ?? null}
+                      options={catOptions}
+                    />
                   </td>
                   <td className="text-right text-muted">−{kr(r.amount)}</td>
                   <td className="text-muted">

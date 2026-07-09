@@ -18,6 +18,7 @@ interface TxRow {
   categoryId: number | null;
   flaggedReason: string | null;
   recurring: boolean;
+  recurringVariable: boolean;
   categoryName: string | null;
   categoryColor: string | null;
 }
@@ -351,9 +352,19 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
                         </td>
                         <td className="hidden w-24 text-center sm:table-cell">
                           {t.recurring ? (
-                            <UnmarkRecurring merchant={t.merchant} />
+                            <div className="flex flex-col items-center gap-0.5">
+                              <UnmarkRecurring merchant={t.merchant} />
+                              {t.recurringVariable ? (
+                                <span className="text-[0.62rem] uppercase tracking-term text-accent2">· variable</span>
+                              ) : (
+                                <MarkRecurring txId={t.id} merchant={displayName} variable />
+                              )}
+                            </div>
                           ) : t.direction === "DBIT" ? (
-                            <MarkRecurring txId={t.id} merchant={displayName} />
+                            <div className="flex flex-col items-center gap-0.5">
+                              <MarkRecurring txId={t.id} merchant={displayName} />
+                              <MarkRecurring txId={t.id} merchant={displayName} variable />
+                            </div>
                           ) : null}
                         </td>
                         <td className={`w-24 text-right ${inflow ? "text-accent" : "text-ink2"}`}>
