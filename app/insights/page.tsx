@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { db } from "@/db";
 import { recurringPayments, aiInsights } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import { getMonthComparison, getWeekComparison, type CategoryComparison } from "@/lib/comparison";
+import { getSalaryComparison, getWeekComparison, type CategoryComparison } from "@/lib/comparison";
 import { getBillsChecklist } from "@/lib/behavior/checklist";
 import { monthRange } from "@/lib/budget";
 import { kr, krSigned, pct, shortDate } from "@/lib/format";
@@ -14,6 +14,7 @@ import { AiConsole } from "../ui/AiConsole";
 import { AiInsights } from "../ui/AiInsights";
 import { RecurringNote } from "../ui/RecurringNote";
 import { RecurringCategory } from "../ui/RecurringCategory";
+import { RecurringTypeToggle } from "../ui/RecurringTypeToggle";
 import { getCategories } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -82,11 +83,11 @@ export default async function InsightsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const { ym, label } = monthRange();
+  const { ym } = monthRange();
   const billsMonth = sp.billsMonth ?? ym;
 
   const [mom, wow, bills, recurrings, insights, cats] = await Promise.all([
-    getMonthComparison(ym),
+    getSalaryComparison(),
     getWeekComparison(),
     getBillsChecklist(billsMonth),
     db
@@ -146,7 +147,7 @@ export default async function InsightsPage({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
-          title="MONTH OVER MONTH"
+          title="SALARY PERIOD"
           right={
             <span className={trendColor(mom.totalDelta)}>
               {krSigned(mom.totalDelta)}
@@ -156,7 +157,7 @@ export default async function InsightsPage({
           }
         >
           <p className="mb-2 text-[0.7rem] uppercase tracking-term text-faint">
-            {label} vs {mom.previousMonth}
+            {mom.month} vs {mom.previousMonth}
           </p>
           <ComparisonTable rows={mom.rows} />
         </Panel>
@@ -268,9 +269,7 @@ export default async function InsightsPage({
                     {r.variableAmount && <span className="ml-1 text-accent2">· variable</span>}
                   </td>
                   <td className="text-center">
-                    <StatusTag tone={r.manual ? "accent" : "muted"}>
-                      {r.manual ? "manual" : "auto"}
-                    </StatusTag>
+                    <RecurringTypeToggle id={r.id} manual={r.manual} />
                   </td>
                   <td className="text-right text-faint">{shortDate(r.nextDate)}</td>
                 </tr>

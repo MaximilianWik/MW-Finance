@@ -122,6 +122,7 @@ export async function PATCH(req: NextRequest) {
     nextDate?: string | null;
     active?: boolean;
     categoryId?: number | null;
+    manual?: boolean;
   };
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -131,6 +132,7 @@ export async function PATCH(req: NextRequest) {
   if (body.nextDate !== undefined) set.nextDate = body.nextDate;
   if (body.active !== undefined) set.active = body.active;
   if (body.categoryId !== undefined) set.categoryId = body.categoryId;
+  if ("manual" in body) set.manual = body.manual;
 
   const [updated] = await db
     .update(recurringPayments)
