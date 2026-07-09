@@ -1,0 +1,120 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { investmentAccounts, transactions } from "@/db/schema";
+import { and, asc, eq, sql } from "drizzle-orm";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/** Compute balance delta for one account from its linked transactions. */
+async function computeDelta(merchant: string, seedDate: string | null) {
+  const where = seedDate
+    ? and(eq(transactions.merchant, merchant), sql`${transactions.bookingDate} > ${seedDate}`)
+    : eq(transactions.merchant, merchant);
+
+  const [row] = await db
+    .select({
+      deposits:    sql<number>`coalesce(sum(case when ${transactions.direction}='DBIT' then ${transactions.amount}::float else 0 end),0)::float`,
+      withdrawals: sql<number>`coalesce(sum(case when ${transactions.direction}='CRDT' then ${transactions.amount}::float else 0 end),0)::float`,
+      txCount:     sql<number>`count(*)::int`,
+    })
+    .from(transactions)
+    .where(where);
+
+  const deposits    = row?.deposits    ?? 0;
+  const withdrawals = row?.withdrawals ?? 0;
+  return { delta: deposits - withdrawals, deposits, withdrawals, txCount: row?.txCount ?? 0 };
+}
+
+/** List all accounts with their computed current balances. */
+export async function GET() {
+  const accs = await db
+    .select()
+    .from(investmentAccounts)
+    .orderBy(asc(investmentAccounts.sort), asc(investmentAccounts.id));
+
+  const enriched = await Promise.all(
+    accs.map(async (acc) => {
+      const seed = Number(acc.seedBalance);
+      if (!acc.merchant) {
+        return { ...acc, seedBalance: seed, currentBalance: seed, delta: 0, deposits: 0, withdrawals: 0, txCount: 0 };
+      }
+      const { delta, deposits, withdrawals, txCount } = await computeDelta(acc.merchant, acc.seedDate);
+      return { ...acc, seedBalance: seed, currentBalance: Math.round((seed + delta) * 100) / 100, delta: Math.round(delta * 100) / 100, deposits: Math.round(deposits * 100) / 100, withdrawals: Math.round(withdrawals * 100) / 100, txCount };
+    })
+  );
+
+  const total = enriched.reduce((s, a) => s + a.currentBalance, 0);
+  return NextResponse.json({ accounts: enriched, total: Math.round(total * 100) / 100 });
+}
+
+/** Create a new investment account. */
+export async function POST(req: NextRequest) {
+  const body = (await req.json()) as {
+    name?: string;
+    color?: string;
+    merchant?: string;
+    balance?: number;
+    sort?: number;
+  };
+  if (!body.name?.trim()) return NextResponse.json({ error: "name required" }, { status: 400 });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [created] = await db
+    .insert(investmentAccounts)
+    .values({
+      name:        body.name.trim().toUpperCase(),
+      color:       body.color ?? "#3ea0c8",
+      merchant:    body.merchant?.trim().toUpperCase() || null,
+      seedBalance: String(body.balance ?? 0),
+      seedDate:    body.balance != null ? today : null,
+      sort:        body.sort ?? 100,
+    })
+    .returning();
+
+  return NextResponse.json({ account: created }, { status: 201 });
+}
+
+/**
+ * Update an account.
+ * - Pass `balance` to reset the seed to that absolute value (seed_date = today).
+ * - Pass `name`, `color`, `merchant`, `sort` to update metadata.
+ */
+export async function PATCH(req: NextRequest) {
+  const body = (await req.json()) as {
+    id?: number;
+    name?: string;
+    color?: string;
+    merchant?: string | null;
+    balance?: number | null;
+    sort?: number;
+  };
+  if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.name     !== undefined) set.name     = body.name.trim().toUpperCase();
+  if (body.color    !== undefined) set.color    = body.color;
+  if ("merchant" in body)          set.merchant = body.merchant?.trim().toUpperCase() || null;
+  if (body.sort     !== undefined) set.sort     = body.sort;
+  if (body.balance  !== undefined) {
+    set.seedBalance = String(body.balance ?? 0);
+    set.seedDate    = today;
+  }
+
+  const [updated] = await db
+    .update(investmentAccounts)
+    .set(set)
+    .where(eq(investmentAccounts.id, body.id))
+    .returning();
+
+  if (!updated) return NextResponse.json({ error: "not found" }, { status: 404 });
+  return NextResponse.json({ account: updated });
+}
+
+export async function DELETE(req: NextRequest) {
+  const id = Number(new URL(req.url).searchParams.get("id"));
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  await db.delete(investmentAccounts).where(eq(investmentAccounts.id, id));
+  return NextResponse.json({ ok: true });
+}

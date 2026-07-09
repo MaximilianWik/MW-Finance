@@ -14,6 +14,7 @@ import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
 import { SavingsPanel } from "./ui/SavingsPanel";
 import { AiInsights, type AiInsightRow } from "./ui/AiInsights";
+import { InvestmentsPanel } from "./ui/InvestmentsPanel";
 import { QueryLog } from "./ui/QueryLog";
 import { AsciiSigil } from "./ui/AsciiSigil";
 import { withQueryLog } from "@/db/query-log";
@@ -213,6 +214,7 @@ export default async function Home({
       )}
 
       <SavingsPanel initial={savings} />
+      <InvestmentsPanel />
 
       {budgetRows.length > 0 && (
         <Panel title="MONTHLY BUDGET" right={`${kr(budget.totalSpent)} / ${kr(budget.totalBudget)}`}>

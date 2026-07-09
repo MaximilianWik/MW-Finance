@@ -245,6 +245,25 @@ export const aiInsights = pgTable(
   })
 );
 
+// ─── Investment accounts (Phase 4 — per-account balance tracking) ───────────
+// Balance = seed_balance + Σ DBIT txns to merchant since seed_date
+//                        − Σ CRDT txns from merchant since seed_date
+// Setting a new balance resets seed_balance and stamps seed_date = today.
+export const investmentAccounts = pgTable("investment_accounts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#3ea0c8"),
+  merchant: text("merchant"),          // normalized merchant key; null = manual-only
+  seedBalance: numeric("seed_balance", { precision: 14, scale: 2 }).notNull().default("0"),
+  seedDate: date("seed_date"),         // only count txns AFTER this date; null = all history
+  currency: text("currency").notNull().default("SEK"),
+  sort: integer("sort").notNull().default(100),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type InvestmentAccount = typeof investmentAccounts.$inferSelect;
+
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Category = typeof categories.$inferSelect;
