@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { investmentAccounts, transactions } from "@/db/schema";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Compute balance delta for one account from its linked transactions. */
 async function computeDelta(merchant: string, seedDate: string | null) {
+  // ILIKE so "LYSA" matches "LYSA AB", "LYSA FONDER", etc.
+  const merchantMatch = ilike(transactions.merchant, `%${merchant}%`);
   const where = seedDate
-    ? and(eq(transactions.merchant, merchant), sql`${transactions.bookingDate} > ${seedDate}`)
-    : eq(transactions.merchant, merchant);
+    ? and(merchantMatch, sql`${transactions.bookingDate} > ${seedDate}`)
+    : merchantMatch;
 
   const [row] = await db
     .select({
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
     .values({
       name:        body.name.trim().toUpperCase(),
       color:       body.color ?? "#3ea0c8",
-      merchant:    body.merchant?.trim().toUpperCase() || null,
+      merchant:    body.merchant?.trim().toUpperCase() || body.name.trim().toUpperCase(),
       seedBalance: String(body.balance ?? 0),
       seedDate:    body.balance != null ? today : null,
       sort:        body.sort ?? 100,

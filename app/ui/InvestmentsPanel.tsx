@@ -44,7 +44,6 @@ export function InvestmentsPanel() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newMerchant, setNewMerchant] = useState("");
   const [newBalance, setNewBalance] = useState("");
   const [newColor, setNewColor] = useState("#3ea0c8");
 
@@ -87,13 +86,12 @@ export function InvestmentsPanel() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name:     newName.trim(),
-        color:    newColor,
-        merchant: newMerchant.trim().toUpperCase() || undefined,
-        balance:  newBalance ? Number(newBalance) : 0,
+        name:    newName.trim(),
+        color:   newColor,
+        balance: newBalance ? Number(newBalance) : 0,
       }),
     });
-    setNewName(""); setNewMerchant(""); setNewBalance(""); setNewColor("#3ea0c8");
+    setNewName(""); setNewBalance(""); setNewColor("#3ea0c8");
     setAddOpen(false);
     await fetchAll();
     setBusy(false);
@@ -204,7 +202,7 @@ export function InvestmentsPanel() {
                   )}
                   {acc.txCount === 0 && acc.merchant && (
                     <p className="mt-0.5 text-[0.65rem] text-faint">
-                      no new transactions since base · tracking <span className="text-accent2">{acc.merchant}</span>
+                      no new transactions since base
                     </p>
                   )}
                 </>
@@ -236,13 +234,6 @@ export function InvestmentsPanel() {
               onChange={(e) => setNewName(e.target.value)}
               placeholder="NAME"
               className="input w-28 uppercase tracking-term"
-            />
-            <input
-              value={newMerchant}
-              onChange={(e) => setNewMerchant(e.target.value)}
-              placeholder="merchant key"
-              className="input w-32 uppercase tracking-term text-xs"
-              title="Normalized merchant key — must match what appears in the ledger"
             />
             <label className="prompt w-28">
               <span className="sigil text-faint">kr</span>
