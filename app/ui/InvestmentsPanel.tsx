@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { kr, krSigned } from "@/lib/format";
+import { kr } from "@/lib/format";
 
 interface AccountRow {
   id: number;
@@ -17,6 +17,10 @@ interface AccountRow {
   deposits: number;
   withdrawals: number;
   txCount: number;
+  // Live-price peg (Phase 4b)
+  ticker: string | null;
+  basePrice: number | null;
+  shares: number | null;
 }
 
 interface ApiResponse {
@@ -24,16 +28,22 @@ interface ApiResponse {
   total: number;
 }
 
+interface Quote {
+  symbol: string;
+  current: number;
+  prevClose: number;
+  changePct: number;
+  ts: number;
+}
+
 /**
  * Per-account investment balance tracker.
  *
- * Each account has a seed balance (set manually) and a delta computed from
- * transactions matching the account's merchant key:
- *   DBIT to merchant → deposit  (balance goes up)
- *   CRDT from merchant → withdrawal (balance goes down)
- *
- * "Set balance" resets the seed to the entered value and stamps today as the
- * new baseline, so only future transactions are applied on top.
+ * Two flavours of account:
+ *  • Transaction-tracked — a seed balance plus a delta from matching txns.
+ *  • Price-pegged — linked to a stock ticker; value scales with the live quote:
+ *      live_value = base_balance × (live_price / base_price)
+ *    base_price is captured at the peg moment ("set balance" re-pegs it).
  */
 export function InvestmentsPanel() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -41,13 +51,21 @@ export function InvestmentsPanel() {
 
   const [editId, setEditId] = useState<number | null>(null);
   const [editVal, setEditVal] = useState("");
+  const [editTicker, setEditTicker] = useState("");
+  const [editShares, setEditShares] = useState("");
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
   const [newColor, setNewColor] = useState("#3ea0c8");
+  const [newTicker, setNewTicker] = useState("");
+  const [newShares, setNewShares] = useState("");
 
   const [busy, setBusy] = useState(false);
+
+  // Live market data, keyed by ticker symbol (shared across accounts).
+  const [quotes, setQuotes] = useState<Record<string, Quote>>({});
+  const [series, setSeries] = useState<Record<string, number[]>>({});
 
   const fetchAll = useCallback(async () => {
     const res = await fetch("/api/investments");
@@ -57,15 +75,90 @@ export function InvestmentsPanel() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  async function setBalance(id: number) {
+  // ─── Poll live quotes + intraday candles for every linked ticker ──────────
+  const tickers = Array.from(
+    new Set((data?.accounts ?? []).map((a) => a.ticker).filter((t): t is string => !!t))
+  );
+  const tickerKey = tickers.join(",");
+
+  useEffect(() => {
+    if (!tickerKey) return;
+    const syms = tickerKey.split(",");
+    let alive = true;
+
+    async function pullQuotes() {
+      const results = await Promise.all(
+        syms.map(async (s) => {
+          try {
+            const r = await fetch(`/api/quote?symbol=${encodeURIComponent(s)}`);
+            if (!r.ok) return null;
+            const { quote } = (await r.json()) as { quote: Quote };
+            return quote;
+          } catch { return null; }
+        })
+      );
+      if (!alive) return;
+      setQuotes((prev) => {
+        const next = { ...prev };
+        for (const q of results) if (q) next[q.symbol] = q;
+        return next;
+      });
+      // Append the live price as a tail point on each series (self-extending line).
+      setSeries((prev) => {
+        const next = { ...prev };
+        for (const q of results) {
+          if (!q) continue;
+          const cur = next[q.symbol] ?? [];
+          next[q.symbol] = [...cur, q.current].slice(-240);
+        }
+        return next;
+      });
+    }
+
+    async function pullCandles() {
+      await Promise.all(
+        syms.map(async (s) => {
+          try {
+            const r = await fetch(`/api/candles?symbol=${encodeURIComponent(s)}&range=1d`);
+            if (!r.ok) return;
+            const { candles } = (await r.json()) as { candles: { points: { price: number }[] } };
+            const base = candles.points.map((p) => p.price);
+            if (!alive || base.length === 0) return;
+            // Seed the series from Yahoo history only if we don't already have a
+            // richer live tail; otherwise keep the accumulating live line.
+            setSeries((prev) => {
+              const existing = prev[s] ?? [];
+              return existing.length > base.length ? prev : { ...prev, [s]: base };
+            });
+          } catch { /* ignore */ }
+        })
+      );
+    }
+
+    pullCandles();
+    pullQuotes();
+    const qi = setInterval(pullQuotes, 15_000);
+    const ci = setInterval(pullCandles, 60_000);
+    return () => { alive = false; clearInterval(qi); clearInterval(ci); };
+  }, [tickerKey]);
+
+  async function setBalance(id: number, ticker: string | null) {
     const val = Number(editVal);
     if (isNaN(val)) return;
     setBusy(true);
-    await fetch("/api/investments", {
+    const t = editTicker.trim().toUpperCase();
+    const body: Record<string, unknown> = { id, balance: val };
+    // Only send ticker/shares when the field is meaningful, so unrelated edits
+    // don't accidentally clear the peg.
+    if (t !== (ticker ?? "")) body.ticker = t || null;
+    else if (t) body.ticker = t; // re-send to force a re-peg alongside the balance
+    if (editShares.trim() !== "") body.shares = Number(editShares);
+    const res = await fetch("/api/investments", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, balance: val }),
+      body: JSON.stringify(body),
     });
+    if (!res.ok) { alert(`Update failed: ${(await res.json()).error ?? res.status}`); setBusy(false); return; }
     setEditId(null);
     await fetchAll();
     setBusy(false);
@@ -82,16 +175,19 @@ export function InvestmentsPanel() {
   async function addAccount() {
     if (!newName.trim()) return;
     setBusy(true);
-    await fetch("/api/investments", {
+    const res = await fetch("/api/investments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name:    newName.trim(),
         color:   newColor,
         balance: newBalance ? Number(newBalance) : 0,
+        ticker:  newTicker.trim().toUpperCase() || null,
+        shares:  newShares.trim() !== "" ? Number(newShares) : null,
       }),
     });
-    setNewName(""); setNewBalance(""); setNewColor("#3ea0c8");
+    if (!res.ok) { alert(`Add failed: ${(await res.json()).error ?? res.status}`); setBusy(false); return; }
+    setNewName(""); setNewBalance(""); setNewColor("#3ea0c8"); setNewTicker(""); setNewShares("");
     setAddOpen(false);
     await fetchAll();
     setBusy(false);
@@ -107,7 +203,9 @@ export function InvestmentsPanel() {
   }
 
   const accounts = data?.accounts ?? [];
-  const total    = data?.total ?? 0;
+
+  // Live total uses scaled values for pegged accounts.
+  const total = accounts.reduce((s, a) => s + liveValue(a, quotes[a.ticker ?? ""]), 0);
 
   return (
     <div className="panel">
@@ -122,7 +220,14 @@ export function InvestmentsPanel() {
             No accounts yet. Add one below.
           </p>
         ) : (
-          accounts.map((acc) => (
+          accounts.map((acc) => {
+            const quote = acc.ticker ? quotes[acc.ticker] : undefined;
+            const value = liveValue(acc, quote);
+            const pegged = !!(acc.ticker && acc.basePrice && quote);
+            const pegPct = pegged ? (quote!.current / acc.basePrice! - 1) * 100 : 0;
+            const pegDelta = value - acc.currentBalance;
+            const up = pegPct >= 0;
+            return (
             <div key={acc.id} className="border-b border-grid py-2 last:border-0">
               {editId === acc.id ? (
                 /* ─── Edit row ─────────────────────── */
@@ -132,7 +237,7 @@ export function InvestmentsPanel() {
                   <span className="text-[0.75rem] uppercase tracking-term text-ink2 mr-1">
                     {acc.name}
                   </span>
-                  <label className="prompt flex-1 min-w-[8rem]">
+                  <label className="prompt min-w-[7rem] flex-1">
                     <span className="sigil text-faint">kr</span>
                     <input
                       autoFocus
@@ -140,15 +245,28 @@ export function InvestmentsPanel() {
                       value={editVal}
                       onChange={(e) => setEditVal(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") setBalance(acc.id);
+                        if (e.key === "Enter") setBalance(acc.id, acc.ticker);
                         if (e.key === "Escape") setEditId(null);
                       }}
                       className="!w-full tabular-nums text-xs"
                       placeholder="amount"
                     />
                   </label>
+                  <input
+                    value={editTicker}
+                    onChange={(e) => setEditTicker(e.target.value)}
+                    placeholder="TICKER"
+                    className="input w-20 uppercase tracking-term text-xs"
+                  />
+                  <input
+                    type="number"
+                    value={editShares}
+                    onChange={(e) => setEditShares(e.target.value)}
+                    placeholder="shares"
+                    className="input w-20 tabular-nums text-xs"
+                  />
                   <button
-                    onClick={() => setBalance(acc.id)}
+                    onClick={() => setBalance(acc.id, acc.ticker)}
                     disabled={busy}
                     className="btn btn-accent !py-0.5 !px-2 text-xs"
                   >
@@ -171,12 +289,25 @@ export function InvestmentsPanel() {
                     </span>
                     <div className="flex items-baseline gap-3">
                       <span className="tabular-nums text-sm font-medium text-ink2">
-                        {kr(acc.currentBalance)}
+                        {kr(value)}
                       </span>
+                      {pegged && (
+                        <span
+                          className="tabular-nums text-[0.7rem] font-medium"
+                          style={{ color: up ? "#4ec96a" : "#e85252" }}
+                        >
+                          {up ? "▲" : "▼"} {up ? "+" : ""}{pegPct.toFixed(2)}%
+                        </span>
+                      )}
                       <button
-                        onClick={() => { setEditId(acc.id); setEditVal(String(acc.currentBalance)); }}
+                        onClick={() => {
+                          setEditId(acc.id);
+                          setEditVal(String(acc.currentBalance));
+                          setEditTicker(acc.ticker ?? "");
+                          setEditShares(acc.shares != null ? String(acc.shares) : "");
+                        }}
                         className="btn !py-0 !px-1.5 text-[0.65rem] opacity-50 hover:opacity-100"
-                        title="Set balance"
+                        title="Set balance / peg"
                       >
                         edit
                       </button>
@@ -191,8 +322,33 @@ export function InvestmentsPanel() {
                     </div>
                   </div>
 
-                  {/* Delta breakdown */}
-                  {acc.txCount > 0 && (
+                  {/* Price-peg detail: sparkline + ticker/shares + kr delta */}
+                  {pegged && (
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <Sparkline points={series[acc.ticker!] ?? []} up={up} />
+                      <div className="text-right text-[0.65rem] tabular-nums text-faint">
+                        <span style={{ color: up ? "#4ec96a" : "#e85252" }}>
+                          {pegDelta >= 0 ? "+" : ""}{kr(pegDelta)}
+                        </span>
+                        <span className="ml-1 text-faint">
+                          {acc.ticker}
+                          {acc.shares != null ? ` · ${acc.shares} sh` : ""}
+                        </span>
+                        <span className="ml-1 text-faint/70">
+                          @ ${quote!.current.toFixed(2)}
+                          {quote!.changePct != null && ` (${quote!.changePct >= 0 ? "+" : ""}${quote!.changePct.toFixed(2)}% today)`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {acc.ticker && !pegged && (
+                    <p className="mt-0.5 text-[0.65rem] text-faint">
+                      {acc.basePrice ? "fetching live price…" : "no base price — re-peg via edit"}
+                    </p>
+                  )}
+
+                  {/* Transaction-delta breakdown (non-pegged accounts) */}
+                  {!acc.ticker && acc.txCount > 0 && (
                     <p className="mt-0.5 text-[0.65rem] tabular-nums text-faint">
                       {acc.delta >= 0 ? "+" : ""}{kr(acc.delta)} · {acc.txCount} transaction{acc.txCount !== 1 ? "s" : ""} since base
                       {acc.seedDate && (
@@ -200,7 +356,7 @@ export function InvestmentsPanel() {
                       )}
                     </p>
                   )}
-                  {acc.txCount === 0 && acc.merchant && (
+                  {!acc.ticker && acc.txCount === 0 && acc.merchant && (
                     <p className="mt-0.5 text-[0.65rem] text-faint">
                       no new transactions since base
                     </p>
@@ -208,7 +364,8 @@ export function InvestmentsPanel() {
                 </>
               )}
             </div>
-          ))
+            );
+          })
         )}
 
         {/* ─── Total row ───────────────────────────── */}
@@ -235,7 +392,7 @@ export function InvestmentsPanel() {
               placeholder="NAME"
               className="input w-28 uppercase tracking-term"
             />
-            <label className="prompt w-28">
+            <label className="prompt w-24">
               <span className="sigil text-faint">kr</span>
               <input
                 type="number"
@@ -245,6 +402,19 @@ export function InvestmentsPanel() {
                 className="!w-full tabular-nums text-xs"
               />
             </label>
+            <input
+              value={newTicker}
+              onChange={(e) => setNewTicker(e.target.value)}
+              placeholder="TICKER"
+              className="input w-20 uppercase tracking-term text-xs"
+            />
+            <input
+              type="number"
+              value={newShares}
+              onChange={(e) => setNewShares(e.target.value)}
+              placeholder="shares"
+              className="input w-20 tabular-nums text-xs"
+            />
             <button onClick={addAccount} disabled={busy || !newName.trim()} className="btn btn-accent">
               add
             </button>
@@ -260,5 +430,35 @@ export function InvestmentsPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Scaled live value for a pegged account; plain balance otherwise. */
+function liveValue(acc: AccountRow, quote: Quote | undefined): number {
+  if (acc.ticker && acc.basePrice && quote && quote.current > 0) {
+    return Math.round(acc.currentBalance * (quote.current / acc.basePrice) * 100) / 100;
+  }
+  return acc.currentBalance;
+}
+
+/** Minimal terminal-styled intraday sparkline. */
+function Sparkline({ points, up }: { points: number[]; up: boolean }) {
+  const W = 120, H = 26, P = 1;
+  if (points.length < 2) {
+    return <svg width={W} height={H} className="opacity-40" />;
+  }
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const stepX = (W - P * 2) / (points.length - 1);
+  const y = (v: number) => H - P - ((v - min) / span) * (H - P * 2);
+  const d = points
+    .map((v, i) => `${i === 0 ? "M" : "L"}${(P + i * stepX).toFixed(1)},${y(v).toFixed(1)}`)
+    .join(" ");
+  const stroke = up ? "#4ec96a" : "#e85252";
+  return (
+    <svg width={W} height={H} className="shrink-0" aria-hidden>
+      <path d={d} fill="none" stroke={stroke} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }

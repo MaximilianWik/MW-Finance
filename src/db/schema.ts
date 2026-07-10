@@ -256,6 +256,12 @@ export const investmentAccounts = pgTable("investment_accounts", {
   merchant: text("merchant"),          // normalized merchant key; null = manual-only
   seedBalance: numeric("seed_balance", { precision: 14, scale: 2 }).notNull().default("0"),
   seedDate: date("seed_date"),         // only count txns AFTER this date; null = all history
+  // Live-price peg (Phase 4b): link the account to a stock ticker so its value
+  // scales with the live quote. base_price is captured at the peg moment; the
+  // displayed value = seed_balance × (live_price / base_price). shares is display-only.
+  ticker: text("ticker"),              // e.g. "GME"; null = not price-linked
+  basePrice: numeric("base_price", { precision: 14, scale: 4 }),  // quote at peg moment
+  shares: numeric("shares", { precision: 14, scale: 4 }),         // display-only holding size
   currency: text("currency").notNull().default("SEK"),
   sort: integer("sort").notNull().default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

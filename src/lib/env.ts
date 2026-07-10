@@ -46,6 +46,9 @@ export const env = {
       return opt("GEMINI_MODEL", "gemini-2.5-flash");
     },
   },
+  get finnhubApiKey() {
+    return req("FINNHUB_API_KEY");
+  },
   ntfy: {
     get server() {
       return opt("NTFY_SERVER", "https://ntfy.sh");
