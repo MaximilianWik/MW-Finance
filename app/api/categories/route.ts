@@ -19,7 +19,6 @@ export async function PATCH(req: NextRequest) {
     budgetWeekly?: string | number | null;
     name?: string;
     color?: string;
-    discretionary?: boolean;
   };
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -38,7 +37,6 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.name !== undefined) set.name = body.name;
   if (body.color !== undefined) set.color = body.color;
-  if (body.discretionary !== undefined) set.discretionary = body.discretionary;
 
   if (Object.keys(set).length === 0) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });

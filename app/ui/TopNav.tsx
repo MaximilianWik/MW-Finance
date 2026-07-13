@@ -6,6 +6,7 @@ import { AsciiSigil } from "./AsciiSigil";
 
 const TABS = [
   { href: "/", label: "OVERVIEW" },
+  { href: "/rank", label: "CORE" },
   { href: "/transactions", label: "LEDGER" },
   { href: "/budgets", label: "BUDGETS" },
   { href: "/insights", label: "INSIGHTS" },

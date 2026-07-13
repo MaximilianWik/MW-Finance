@@ -51,9 +51,6 @@ export const categories = pgTable("categories", {
   budgetMonthly: numeric("budget_monthly", { precision: 14, scale: 2 }),
   budgetWeekly: numeric("budget_weekly", { precision: 14, scale: 2 }),
   budgetSource: text("budget_source"), // ai | manual | null — lets AI recalibration skip manually-set budgets
-  // Phase 5 — "Wants" flag. Micro-reflection prompts + goal trade-off chips
-  // only fire on discretionary categories (Restaurants, Shopping, Entertainment).
-  discretionary: boolean("discretionary").notNull().default(false),
   sort: integer("sort").notNull().default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -175,9 +172,6 @@ export const settings = pgTable("settings", {
   adaptiveTriggerPercent: numeric("adaptive_trigger_percent", { precision: 5, scale: 2 })
     .notNull()
     .default("90"),
-  // Phase 5 — used to translate spend into hours-of-work. NULL = derive from
-  // detected salary (median salary ÷ 160h).
-  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -276,16 +270,46 @@ export const investmentAccounts = pgTable("investment_accounts", {
 
 export type InvestmentAccount = typeof investmentAccounts.$inferSelect;
 
-// ─── Micro-reflections (Phase 5 — "still glad you got this?") ───────────────
-// One verdict per discretionary purchase. transaction_id is the PK so a
-// reflection is naturally unique per transaction (re-answering overwrites).
-export const reflections = pgTable("reflections", {
-  transactionId: integer("transaction_id")
-    .primaryKey()
-    .references(() => transactions.id, { onDelete: "cascade" }),
-  verdict: text("verdict").notNull(), // glad | regret | meh
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+// ─── Reactor Core game state (Phase 5, singleton) ──────────────────────────
+// Tracks the streak high-water mark and last evaluation so the nightly eval is
+// idempotent. XP/level are DERIVED (not stored) to avoid drift.
+export const gameState = pgTable("game_state", {
+  key: text("key").primaryKey().default("singleton"),
+  bestStreak: integer("best_streak").notNull().default(0),
+  lastEvalDate: date("last_eval_date"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─── Achievements (Phase 5, logged reactor events) ─────────────────────────
+// Definitions + predicates live in code (src/lib/game/achievements.ts). Only
+// the unlock timestamp is persisted, keyed by the definition id.
+export const achievements = pgTable("achievements", {
+  id: text("id").primaryKey(), // matches a definition id in code
+  unlockedAt: timestamp("unlocked_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Weekly challenges (Phase 5, feed the reactor) ─────────────────────────
+export const challenges = pgTable(
+  "challenges",
+  {
+    id: serial("id").primaryKey(),
+    week: text("week").notNull(),          // ISO week key, e.g. 2026-W28
+    templateKey: text("template_key").notNull(), // which generator produced it
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    target: numeric("target", { precision: 14, scale: 2 }).notNull(),
+    progress: numeric("progress", { precision: 14, scale: 2 }).notNull().default("0"),
+    rewardXp: integer("reward_xp").notNull().default(0),
+    lowerIsBetter: boolean("lower_is_better").notNull().default(false), // spend-cap style
+    status: text("status").notNull().default("active"), // active | complete | failed
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    weekIdx: index("challenges_week_idx").on(t.week),
+    weekTemplateIdx: uniqueIndex("challenges_week_template_idx").on(t.week, t.templateKey),
+  })
+);
 
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
@@ -301,5 +325,7 @@ export type SavingsEntry = typeof savingsEntries.$inferSelect;
 export type NewSavingsEntry = typeof savingsEntries.$inferInsert;
 export type AiInsight = typeof aiInsights.$inferSelect;
 export type NewAiInsight = typeof aiInsights.$inferInsert;
-export type Reflection = typeof reflections.$inferSelect;
-export type NewReflection = typeof reflections.$inferInsert;
+export type GameState = typeof gameState.$inferSelect;
+export type Achievement = typeof achievements.$inferSelect;
+export type Challenge = typeof challenges.$inferSelect;
+export type NewChallenge = typeof challenges.$inferInsert;

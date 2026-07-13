@@ -1,6 +1,5 @@
 import { getCategories } from "@/lib/queries";
 import { getAllSalaryCycles } from "@/lib/period";
-import { getChipContext } from "@/lib/game/rate";
 import { Panel } from "../ui/Panel";
 import { LedgerPanel } from "../ui/LedgerPanel";
 import { AiConsole } from "../ui/AiConsole";
@@ -16,8 +15,8 @@ export default async function TransactionsPage({
 }) {
   const sp = await searchParams;
   const t0 = Date.now();
-  const [[cats, cycles, ctx], queryLog] = await withQueryLog(() =>
-    Promise.all([getCategories(), getAllSalaryCycles(), getChipContext()])
+  const [[cats, cycles], queryLog] = await withQueryLog(() =>
+    Promise.all([getCategories(), getAllSalaryCycles()])
   );
   const tookMs = Date.now() - t0;
   const options = cats.map((c) => ({ id: c.id, name: c.name, color: c.color }));
@@ -43,7 +42,7 @@ export default async function TransactionsPage({
       </Panel>
 
       <Panel title="LEDGER">
-        <LedgerPanel options={options} initialMonth={sp.month ?? ""} cycles={cycles} ctx={ctx} />
+        <LedgerPanel options={options} initialMonth={sp.month ?? ""} cycles={cycles} />
       </Panel>
     </main>
   );

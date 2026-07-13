@@ -179,6 +179,30 @@ body > * {
   }
 }
 
+/* ─── Reactor Core animations (Phase 5) ───────────────────────────────────
+   Applied to SVG groups in <ReactorCore>. transform-box: view-box makes
+   transform-origin resolve against the SVG viewport (center = 100 100). */
+@keyframes reactor-spin      { to { transform: rotate(360deg); } }
+@keyframes reactor-spin-rev  { to { transform: rotate(-360deg); } }
+@keyframes reactor-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.82; }
+  50%      { transform: scale(1.09); opacity: 1; }
+}
+@keyframes reactor-bloom {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.9; }
+}
+@keyframes reactor-flicker {
+  0%, 100% { opacity: 1; }
+  18% { opacity: 0.55; } 20% { opacity: 0.9; }
+  52% { opacity: 0.4; }  54% { opacity: 0.85; }
+  78% { opacity: 0.6; }
+}
+.reactor-anim {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body::before {
     background: radial-gradient(120% 120% at 50% 0%, transparent 62%, rgba(0,0,0,0.5) 100%);
@@ -186,4 +210,6 @@ body > * {
   .caret::after,
   .animate-blink,
   .animate-flicker { animation: none !important; }
+  /* Freeze the reactor: no spin, pulse, bloom or flicker. */
+  [class*="reactor-"] { animation: none !important; }
 }

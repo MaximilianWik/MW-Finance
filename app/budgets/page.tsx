@@ -4,7 +4,6 @@ import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
 import { BudgetBar } from "../ui/BudgetBar";
 import { BudgetCycleNav } from "../ui/BudgetCycleNav";
 import { Panel } from "../ui/Panel";
-import { ProfilePanel } from "../ui/ProfilePanel";
 import { RecalibratePanel } from "../ui/RecalibratePanel";
 import { QueryLog } from "../ui/QueryLog";
 import { getCategories } from "@/lib/queries";
@@ -43,7 +42,6 @@ export default async function BudgetsPage({
     name: c.name,
     color: c.color,
     budgetMonthly: c.budgetMonthly,
-    discretionary: c.discretionary,
     spent: spentByCat.get(c.id) ?? 0,
   }));
 
@@ -102,10 +100,6 @@ export default async function BudgetsPage({
 
       <Panel title="EDIT LIMITS">
         <BudgetEditor categories={rows} />
-      </Panel>
-
-      <Panel title="PROFILE">
-        <ProfilePanel />
       </Panel>
     </main>
   );

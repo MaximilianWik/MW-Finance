@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { krSigned, shortDate } from "@/lib/format";
 import { CategoryCommand } from "./CategoryCommand";
 import { MarkRecurring, UnmarkRecurring } from "./RecurringActions";
-import { TxChips, type GameChipContext } from "./TxChips";
 import type { CatOption } from "./CategoryCommand";
 
 interface TxRow {
@@ -21,7 +20,6 @@ interface TxRow {
   flaggedReason: string | null;
   recurring: boolean;
   recurringVariable: boolean;
-  discretionary: boolean;
   categoryName: string | null;
   categoryColor: string | null;
 }
@@ -31,7 +29,7 @@ interface TxRow {
  * full ledger so the recurring flag, category editing, and mark/unmark all
  * go through the exact same code path.
  */
-export function RecentLedger({ options, ctx }: { options: CatOption[]; ctx: GameChipContext }) {
+export function RecentLedger({ options }: { options: CatOption[] }) {
   const [rows, setRows] = useState<TxRow[] | null>(null);
   const [version, setVersion] = useState(0);
 
@@ -108,7 +106,6 @@ export function RecentLedger({ options, ctx }: { options: CatOption[]; ctx: Game
                       {t.categoryName}
                     </span>
                   )}
-                  <TxChips signed={t.signed} discretionary={t.discretionary} ctx={ctx} />
                 </td>
                 <td className="hidden w-40 sm:table-cell">
                   <CategoryCommand

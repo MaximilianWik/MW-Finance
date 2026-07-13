@@ -9,7 +9,6 @@ export interface EditableCategory {
   name: string;
   color: string;
   budgetMonthly: string | null;
-  discretionary: boolean;
   spent: number;
 }
 
@@ -39,16 +38,6 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, color }),
-    });
-    start(() => router.refresh());
-  }
-
-  async function toggleDiscretionary(id: number, discretionary: boolean) {
-    setRows((r) => r.map((c) => (c.id === id ? { ...c, discretionary } : c)));
-    await fetch("/api/categories", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, discretionary }),
     });
     start(() => router.refresh());
   }
@@ -95,7 +84,6 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
               <th>CATEGORY</th>
               <th className="text-right">SPENT (MO)</th>
               <th className="text-right">MONTHLY</th>
-              <th className="w-16 text-center" title="Discretionary 'Want' — enables reflection prompts + goal trade-off chips">WANT?</th>
               <th className="w-10"></th>
             </tr>
           </thead>
@@ -127,15 +115,6 @@ export function BudgetEditor({ categories }: { categories: EditableCategory[] })
                       }
                     }}
                     className="input w-24 text-right tabular-nums"
-                  />
-                </td>
-                <td className="text-center">
-                  <input
-                    type="checkbox"
-                    checked={c.discretionary}
-                    onChange={(e) => toggleDiscretionary(c.id, e.target.checked)}
-                    title="Discretionary 'Want' — enables reflection prompts + goal trade-off chips"
-                    className="h-3.5 w-3.5 cursor-pointer accent-amber"
                   />
                 </td>
                 <td className="text-right">

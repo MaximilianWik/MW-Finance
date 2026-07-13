@@ -7,6 +7,7 @@ import { flagSuspicious } from "./suspicious";
 import { evaluateAdaptiveForCategories } from "./adaptive";
 import { checkTrajectory } from "./trajectory";
 import { runMonthlySweep } from "@/lib/savings";
+import { runGameEval } from "@/lib/game/eval";
 import type { NewTransaction } from "@/db/schema";
 
 /**
@@ -25,6 +26,7 @@ export async function runBehaviorPipeline(
     adaptive: 0,
     trajectory: 0,
     sweepMonth: null as string | null,
+    gameBreach: false,
   };
 
   // Detect recurrings from ALL history (not just this batch). Cheap and lets
@@ -87,6 +89,14 @@ export async function runBehaviorPipeline(
     if (sweep.executed) results.sweepMonth = sweep.month;
   } catch (e) {
     console.error("monthly sweep failed:", e);
+  }
+
+  // Reactor Core eval: streak, weekly challenges, achievements, breach alerts.
+  try {
+    const game = await runGameEval(onLog);
+    results.gameBreach = game.breach;
+  } catch (e) {
+    console.error("game eval failed:", e);
   }
 
   return results;
