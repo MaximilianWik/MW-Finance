@@ -1,6 +1,6 @@
 # MWFinance
 
-Personal finance terminal — connects to Lansforsakringar Bank via Enable Banking Open Banking API, auto-categorizes transactions with Gemini AI, tracks salary-cycle budgets, manages savings goals, and surfaces behavioral insights. Built with a full retro-CLI aesthetic.
+Personal finance terminal - connects to Länsforsakringar Bank via Enable Banking Open Banking API, auto-categorizes transactions with Gemini AI, tracks salary-cycle budgets, manages savings goals, and surfaces behavioral insights. Built with a full retro-CLI aesthetic.
 
 **Stack:** Next.js 15 (App Router) · Drizzle ORM · Neon Postgres · Enable Banking (RS256 JWT) · Gemini 2.5 Flash · ntfy · Tailwind · Vercel
 
