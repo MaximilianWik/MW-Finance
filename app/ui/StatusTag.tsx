@@ -35,5 +35,5 @@ export function Glyph({
     warn: { ch: "[!]", c: "text-amber" },
   } as const;
   const g = map[state];
-  return <span className={`${g.c} ${className}`}>{g.ch}</span>;
+  return <span className={`whitespace-nowrap ${g.c} ${className}`}>{g.ch}</span>;
 }
