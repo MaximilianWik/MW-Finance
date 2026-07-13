@@ -1,6 +1,6 @@
 # MWFinance
 
-Personal finance terminal — connects to Lansforsakringar Bank via Enable Banking Open Banking API, auto-categorizes transactions with Gemini AI, tracks salary-cycle budgets, manages savings goals, and surfaces behavioral insights. Built with a full retro-CLI aesthetic.
+Personal finance terminal - connects to Länsforsakringar Bank via Enable Banking Open Banking API, auto-categorizes transactions with Gemini AI, tracks salary-cycle budgets, manages savings goals, and surfaces behavioral insights. Built with a full retro-CLI aesthetic.
 
 **Stack:** Next.js 15 (App Router) · Drizzle ORM · Neon Postgres · Enable Banking (RS256 JWT) · Gemini 2.5 Flash · ntfy · Tailwind · Vercel
 
@@ -8,7 +8,7 @@ Personal finance terminal — connects to Lansforsakringar Bank via Enable Banki
 
 ## Features
 
-- **Auto-sync** from Lansforsakringar via cron (daily + weekly) or manual trigger. Sync always re-links via BankID first; full streaming log with per-transaction categorization detail and a `[DONE]` summary.
+- **Auto-sync** from Länsforsakringar via cron (daily + weekly) or manual trigger. Sync always re-links via BankID first; full streaming log with per-transaction categorization detail and a `[DONE]` summary.
 - **Categorization pipeline**: self-transfer detection → MCC codes → keyword rules → merchant cache → Gemini fallback. Manual overrides propagate to all past and future transactions from the same merchant. On-demand backlog recategorization from the ledger.
 - **Salary-cycle budgeting**: budget periods run from your last salary to the next one (detected as Income 18k–30k kr), not calendar months.
 - **AI budget recalibration**: Gemini analyzes your spending, recurring bills, and habits, then proposes and applies a full budget. Manual edits are respected and never overwritten.
