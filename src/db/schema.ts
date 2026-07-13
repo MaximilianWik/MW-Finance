@@ -51,6 +51,9 @@ export const categories = pgTable("categories", {
   budgetMonthly: numeric("budget_monthly", { precision: 14, scale: 2 }),
   budgetWeekly: numeric("budget_weekly", { precision: 14, scale: 2 }),
   budgetSource: text("budget_source"), // ai | manual | null — lets AI recalibration skip manually-set budgets
+  // Phase 5 — "Wants" flag. Micro-reflection prompts + goal trade-off chips
+  // only fire on discretionary categories (Restaurants, Shopping, Entertainment).
+  discretionary: boolean("discretionary").notNull().default(false),
   sort: integer("sort").notNull().default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -172,6 +175,9 @@ export const settings = pgTable("settings", {
   adaptiveTriggerPercent: numeric("adaptive_trigger_percent", { precision: 5, scale: 2 })
     .notNull()
     .default("90"),
+  // Phase 5 — used to translate spend into hours-of-work. NULL = derive from
+  // detected salary (median salary ÷ 160h).
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -270,6 +276,17 @@ export const investmentAccounts = pgTable("investment_accounts", {
 
 export type InvestmentAccount = typeof investmentAccounts.$inferSelect;
 
+// ─── Micro-reflections (Phase 5 — "still glad you got this?") ───────────────
+// One verdict per discretionary purchase. transaction_id is the PK so a
+// reflection is naturally unique per transaction (re-answering overwrites).
+export const reflections = pgTable("reflections", {
+  transactionId: integer("transaction_id")
+    .primaryKey()
+    .references(() => transactions.id, { onDelete: "cascade" }),
+  verdict: text("verdict").notNull(), // glad | regret | meh
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Category = typeof categories.$inferSelect;
@@ -284,3 +301,5 @@ export type SavingsEntry = typeof savingsEntries.$inferSelect;
 export type NewSavingsEntry = typeof savingsEntries.$inferInsert;
 export type AiInsight = typeof aiInsights.$inferSelect;
 export type NewAiInsight = typeof aiInsights.$inferInsert;
+export type Reflection = typeof reflections.$inferSelect;
+export type NewReflection = typeof reflections.$inferInsert;

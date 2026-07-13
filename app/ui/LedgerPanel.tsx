@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { kr, krSigned, shortDate } from "@/lib/format";
 import { CategoryCommand, type CatOption } from "./CategoryCommand";
 import { MarkRecurring, UnmarkRecurring } from "./RecurringActions";
+import { TxChips, type GameChipContext } from "./TxChips";
 
 interface TxRow {
   id: number;
@@ -19,6 +20,7 @@ interface TxRow {
   flaggedReason: string | null;
   recurring: boolean;
   recurringVariable: boolean;
+  discretionary: boolean;
   categoryName: string | null;
   categoryColor: string | null;
 }
@@ -39,6 +41,7 @@ interface Props {
   options: CatOption[];
   initialMonth?: string;
   cycles?: LedgerCycle[];
+  ctx: GameChipContext;
 }
 
 /**
@@ -48,7 +51,7 @@ interface Props {
  * Shows a query log (SQL-like preview → timing → row count) exactly like the
  * sync console.
  */
-export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) {
+export function LedgerPanel({ options, initialMonth = "", cycles = [], ctx }: Props) {
   // Filter state
   const [month,      setMonth]      = useState(initialMonth);
   const [categoryId, setCategoryId] = useState("");
@@ -342,6 +345,7 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
                               {t.categoryName}
                             </span>
                           )}
+                          <TxChips signed={t.signed} discretionary={t.discretionary} ctx={ctx} />
                         </td>
                         <td className="hidden w-40 sm:table-cell">
                           <CategoryCommand

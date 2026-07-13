@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
         flaggedReason: transactions.flaggedReason,
         categoryName: categories.name,
         categoryColor: categories.color,
+        discretionary: sql<number>`coalesce(${categories.discretionary}::int, 0)`,
         recurring: sql<number>`(exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant}))::int`,
         recurringVariable: sql<number>`coalesce((select variable_amount::int from recurring_payments where active = true and merchant = ${transactions.merchant} limit 1), 0)`,
       })
@@ -103,6 +104,7 @@ export async function GET(req: NextRequest) {
     ...r,
     recurring: Number(r.recurring) === 1,
     recurringVariable: Number(r.recurringVariable) === 1,
+    discretionary: Number(r.discretionary) === 1,
   }));
   const tookMs = Math.round(performance.now() - t0);
   return NextResponse.json({ transactions: transactionsOut, totals, tookMs });

@@ -5,10 +5,13 @@ import { desc, eq } from "drizzle-orm";
 import { getAccounts, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getPrimaryGoal } from "@/lib/savings";
+import { getChipContext } from "@/lib/game/rate";
+import { getPendingReflections, type PendingReflection } from "@/lib/game/reflections";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
 import { RecentLedger } from "./ui/RecentLedger";
+import { PendingReflections } from "./ui/PendingReflections";
 import { Panel } from "./ui/Panel";
 import { StatusTag } from "./ui/StatusTag";
 import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
@@ -55,17 +58,21 @@ export default async function Home({
   };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
+  let ctx: Awaited<ReturnType<typeof getChipContext>> = { hourlyRate: null, goal: null };
+  let pending: PendingReflection[] = [];
   let dbError: string | null = null;
   let topInsights: AiInsightRow[] = [];
   const t0 = Date.now();
 
   const [, _ql] = await withQueryLog(async () => {
     try {
-      [accs, budget, cats, primaryGoal] = await Promise.all([
+      [accs, budget, cats, primaryGoal, ctx, pending] = await Promise.all([
         getAccounts(),
         getMonthlyBudgetStatus(),
         getCategories(),
         getPrimaryGoal(),
+        getChipContext(),
+        getPendingReflections(),
       ]);
     } catch (e) {
       dbError = e instanceof Error ? e.message : String(e);
@@ -199,6 +206,12 @@ export default async function Home({
 
       <FlaggedCard />
 
+      {pending.length > 0 && (
+        <Panel title="PENDING REFLECTIONS">
+          <PendingReflections initial={pending} />
+        </Panel>
+      )}
+
       {topInsights.length > 0 && (
         <Panel
           title="AI INSIGHTS"
@@ -233,7 +246,7 @@ export default async function Home({
       )}
 
       <Panel title="RECENT LEDGER" right={<Link href="/transactions" className="text-accent2 hover:underline">» all</Link>}>
-        <RecentLedger options={options} />
+        <RecentLedger options={options} ctx={ctx} />
       </Panel>
     </main>
   );
