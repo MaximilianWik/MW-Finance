@@ -23,7 +23,7 @@ export default async function RankPage({
 }: {
   searchParams?: Promise<Record<string, string | undefined>>;
 }) {
-  const sp = await (searchParams ?? Promise.resolve({}));
+  const sp = await (searchParams ?? Promise.resolve({} as Record<string, string | undefined>));
   const devMode = sp.dev === "1";
   const t0 = Date.now();
 
