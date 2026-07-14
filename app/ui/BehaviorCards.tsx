@@ -6,7 +6,7 @@ import { kr, shortDate } from "@/lib/format";
 import { AsciiBar } from "./AsciiBar";
 import { Panel } from "./Panel";
 import type { GoalSummary } from "@/lib/savings";
-import { dismissAnomaly } from "@/app/actions";
+import { dismissAnomaly } from "../actions";
 
 export function PrimaryGoalCard({ goal }: { goal: GoalSummary }) {
   return (
