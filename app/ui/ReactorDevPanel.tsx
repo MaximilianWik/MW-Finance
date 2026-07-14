@@ -82,6 +82,7 @@ export function ReactorDevPanel() {
                 progress={progress}
                 danger={danger}
                 size={size}
+                uid={`dev${i}`}
               />
 
               {/* Label */}
