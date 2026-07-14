@@ -4,6 +4,7 @@ import { getReactorSnapshot } from "@/lib/game/snapshot";
 import { getUnlocked, ACHIEVEMENTS } from "@/lib/game/achievements";
 import { getActiveChallenges } from "@/lib/game/challenges";
 import { getDayHistory } from "@/lib/game/history";
+import { getWealthVelocity, getFuelEfficiency } from "@/lib/game/velocity";
 import { TIERS } from "@/lib/game/level";
 import { Panel } from "../ui/Panel";
 import { ReactorCore } from "../ui/ReactorCore";
@@ -22,6 +23,8 @@ export default async function RankPage() {
   let unlocked:   Awaited<ReturnType<typeof getUnlocked>>        = [];
   let challenges: Awaited<ReturnType<typeof getActiveChallenges>> = [];
   let history:    Awaited<ReturnType<typeof getDayHistory>>       = [];
+  let velocity:   Awaited<ReturnType<typeof getWealthVelocity>> | null = null;
+  let efficiency: Awaited<ReturnType<typeof getFuelEfficiency>>  | null = null;
   let queryLog:   { sql: string }[]                              = [];
   let dbError:    string | null                                  = null;
 
@@ -30,6 +33,13 @@ export default async function RankPage() {
       Promise.all([getReactorSnapshot(), getUnlocked(), getActiveChallenges(), getDayHistory()])
     );
     snap = s; unlocked = u; challenges = c; history = h; queryLog = ql;
+    // Velocity + efficiency are non-critical; fetch after core data.
+    if (snap) {
+      [velocity, efficiency] = await Promise.all([
+        getWealthVelocity(snap.level.xp, snap.level.index),
+        getFuelEfficiency(),
+      ]).catch(() => [null, null]);
+    }
   } catch (e) {
     dbError = e instanceof Error ? e.message : String(e);
   }
@@ -53,7 +63,7 @@ export default async function RankPage() {
 
   if (!snap) return null;
 
-  const { level, streak, pot, savingsTotal, investmentsTotal, xpInputs } = snap;
+  const { level, streak, pot, savingsTotal, investmentsTotal, xpInputs, shields, directiveStreak, nextMilestone } = snap;
   const hue = level.danger ? "#e85252" : level.tier.color;
   const unlockedIds   = new Set(unlocked.map((a) => a.id));
   const recentUnlocks = unlocked.slice(0, 3);
@@ -65,7 +75,8 @@ export default async function RankPage() {
       {/* ── Reactor core + tier ladder ─────────────────────────────────── */}
       <Panel title="REACTOR CORE" right={<span style={{ color: hue }}>{level.tier.name}</span>}>
         <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start">
-          <div className="flex shrink-0 flex-col items-center gap-2">
+          <div className="flex shrink-0 flex-col items-center gap-2"
+            style={{ animation: "reactor-enter 0.8s ease-out" }}>
             <ReactorCore
               tierIndex={level.index}
               color={level.tier.color}
@@ -102,8 +113,8 @@ export default async function RankPage() {
               </span>
             </div>
 
-            {/* Stats: 4-wide */}
-            <div className="grid grid-cols-2 gap-3 border-t border-edge pt-3 text-center sm:grid-cols-4">
+            {/* Stats: 6-wide on large, 3+3 on mobile */}
+            <div className="grid grid-cols-3 gap-3 border-t border-edge pt-3 text-center sm:grid-cols-6">
               <div>
                 <div className="text-[0.6rem] uppercase tracking-term text-muted">uptime</div>
                 <div className={`text-lg tabular-nums ${level.danger ? "text-danger" : "text-accent"}`}>
@@ -112,7 +123,18 @@ export default async function RankPage() {
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">best {streak.best}d</div>
               </div>
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">stored charge</div>
+                <div className="text-[0.6rem] uppercase tracking-term text-muted">shields</div>
+                <div className="flex items-center justify-center gap-0.5 py-0.5">
+                  {[0,1,2].map((i) => (
+                    <span key={i} style={{ color: i < shields ? "#5cc8e8" : "#252530", fontSize:"1.1rem", lineHeight:1 }}>
+                      {i < shields ? "◆" : "◇"}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[0.58rem] uppercase tracking-term text-faint">{shields}/3 banked</div>
+              </div>
+              <div>
+                <div className="text-[0.6rem] uppercase tracking-term text-muted">charge</div>
                 <div className={`text-lg tabular-nums ${pot.discharging ? "text-danger" : "text-accent2"}`}>
                   {kr(pot.charge)}
                 </div>
@@ -128,7 +150,26 @@ export default async function RankPage() {
                 <div className="text-lg tabular-nums text-accent2">{kr(investmentsTotal)}</div>
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">all-time</div>
               </div>
+              <div>
+                <div className="text-[0.6rem] uppercase tracking-term text-muted">directives</div>
+                <div className="text-lg tabular-nums text-ink2">{directiveStreak}w</div>
+                <div className="text-[0.58rem] uppercase tracking-term text-faint">run streak</div>
+              </div>
             </div>
+
+            {/* Next milestone */}
+            {nextMilestone && (
+              <div className="flex items-center justify-between rounded border border-edge bg-panel2 px-3 py-2 text-[0.68rem] uppercase tracking-term">
+                <span className="text-faint">next unlock</span>
+                <span style={{ color: nextMilestone.color }}>
+                  {nextMilestone.name}
+                </span>
+                <span className="text-faint">
+                  {nextMilestone.needed.toLocaleString("sv-SE")} {nextMilestone.unit} away
+                  <span className="ml-1 text-[0.58rem]">· +{nextMilestone.xp} XP</span>
+                </span>
+              </div>
+            )}
 
             {/* Tier ladder */}
             <div className="flex flex-col gap-0.5 border-t border-edge pt-3">
@@ -154,6 +195,58 @@ export default async function RankPage() {
           </div>
         </div>
       </Panel>
+
+      {/* ── Reactor metrics (velocity + efficiency) ───────────────────── */}
+      {(velocity || efficiency) && (
+        <Panel title="REACTOR METRICS">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Wealth velocity */}
+            {velocity && (
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[0.65rem] uppercase tracking-term text-muted">wealth velocity</div>
+                <div className="text-xl tabular-nums text-accent">
+                  {velocity.krPerMonth > 0 ? kr(velocity.krPerMonth) }
+                  <span className="ml-1 text-sm font-normal text-faint">/month</span>
+                </div>
+                <div className="text-[0.65rem] text-faint">
+                  rolling 3-month average (savings + investments)
+                </div>
+                {velocity.projectedMonths != null && velocity.projectedTierName && (
+                  <div className="mt-1 text-[0.68rem] uppercase tracking-term text-accent2">
+                    at this rate: {velocity.projectedTierName} in ~{velocity.projectedMonths}mo
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Fuel efficiency */}
+            {efficiency && (
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[0.65rem] uppercase tracking-term text-muted">fuel efficiency</div>
+                <div className="text-xl tabular-nums text-accent">
+                  {efficiency.pct != null
+                    ? `${Math.round(efficiency.pct * 100)}%`
+                    }
+                  <span className="ml-1 text-sm font-normal text-faint">of salary</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden bg-edge">
+                  <div
+                    className="h-full"
+                    style={{
+                      width: efficiency.pct != null ? `${Math.min(100, Math.round(efficiency.pct * 100))}%` : "0%",
+                      background: (efficiency.pct ?? 0) >= 0.2 ? "#4ec96a" : (efficiency.pct ?? 0) >= 0.1 ? "#e8c545" : "#e85252",
+                    }}
+                  />
+                </div>
+                <div className="text-[0.65rem] text-faint">
+                  {kr(efficiency.monthlySavingsInvest)} saved+invested this month
+                  {efficiency.salary && ` of ${kr(efficiency.salary)} salary`}
+                </div>
+              </div>
+            )}
+          </div>
+        </Panel>
+      )}
 
       {/* ── Containment log ────────────────────────────────────────────── */}
       <Panel title="CONTAINMENT LOG">

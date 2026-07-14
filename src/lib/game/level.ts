@@ -28,10 +28,10 @@ export interface XpInputs {
   challengeXp: number;
 }
 
-// XP weighting: savings + investments share the same rate; streak multiplies over time.
-export const XP_PER_100_KR = 1;
-export const XP_PER_100_KR_INVEST = 1; // same rate — investing IS saving
-export const XP_PER_STREAK_DAY = 50;
+// XP weighting: savings + investments are the backbone; streak multiplies over time.
+export const XP_PER_100_KR        = 5;  // 5 XP per 100 kr saved
+export const XP_PER_100_KR_INVEST = 8;  // 8 XP per 100 kr invested (deployed capital earns more)
+export const XP_PER_STREAK_DAY    = 50;
 
 export function computeXp(i: XpInputs): number {
   return (

@@ -54,6 +54,25 @@ export async function getStreak(): Promise<StreakInfo> {
 }
 
 /**
+ * Streak length as-of a specific date (non-today reference). Used by shield
+ * absorption so eval can compute "yesterday's streak + 1 (shielded today)".
+ */
+export async function getStreakAsOf(refDate: string): Promise<number> {
+  const { pace } = await getDailyPace();
+  const from = shiftIso(refDate, -LOOKBACK_DAYS);
+  const spend = await getDailySpendMap(from, refDate);
+  const eps = 0.5;
+  let count = 0;
+  for (let i = 0; i < LOOKBACK_DAYS; i++) {
+    const day = shiftIso(refDate, -i);
+    const s = spend.get(day) ?? 0;
+    if (s <= pace + eps) count++;
+    else break;
+  }
+  return count;
+}
+
+/**
  * Persist the streak high-water mark + eval date. Called by the nightly eval.
  * Returns whether a new best was set (for milestone notifications).
  */

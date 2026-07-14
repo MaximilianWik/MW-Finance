@@ -198,6 +198,11 @@ body > * {
   52% { opacity: 0.4; }  54% { opacity: 0.85; }
   78% { opacity: 0.6; }
 }
+@keyframes reactor-enter {
+  0%   { opacity: 0; transform: scale(0.82); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
 .reactor-anim {
   transform-box: view-box;
   transform-origin: 100px 100px;

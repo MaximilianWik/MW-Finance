@@ -9,6 +9,8 @@ export interface AchievementContext {
   tierIndex: number;
   challengesCompleted: number;
   potCharge: number;
+  savingsSpike: boolean;   // a single contribution was 2x the rolling avg
+  directiveStreak: number; // consecutive weeks with 1+ directive cleared
 }
 
 export interface AchievementDef {
@@ -152,12 +154,31 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "singularity",   name: "Event Horizon",       xp: 4000, color: "#c080e0",
     description: "Reach SINGULARITY. The curve bends.",
     predicate: (c) => c.tierIndex >= 7 },
+
+  // Savings spike (one-time surge event)
+  { id: "savings_spike", name: "Power Surge",          xp: 500,  color: "#e8c545",
+    description: "Made a savings or investment deposit 2x your monthly average.",
+    predicate: (c) => c.savingsSpike },
+
+  // Directive streak
+  { id: "directive_3",   name: "Three-Week Run",       xp: 400,  color: "#e8c545",
+    description: "Clear at least one directive 3 weeks in a row.",
+    predicate: (c) => c.directiveStreak >= 3 },
+
+  { id: "directive_5",   name: "Five-Week Operator",   xp: 800,  color: "#e8c545",
+    description: "Clear at least one directive 5 weeks in a row.",
+    predicate: (c) => c.directiveStreak >= 5 },
 ];
 
 const BY_ID = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
 
 export interface UnlockedAchievement extends AchievementDef {
   unlockedAt: Date;
+}
+
+export async function getUnlockedIds(): Promise<Set<string>> {
+  const rows = await db.select({ id: achievements.id }).from(achievements);
+  return new Set(rows.map((r) => r.id));
 }
 
 export async function getUnlocked(): Promise<UnlockedAchievement[]> {
