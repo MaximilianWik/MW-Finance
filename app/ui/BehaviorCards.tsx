@@ -6,6 +6,7 @@ import { kr, shortDate } from "@/lib/format";
 import { AsciiBar } from "./AsciiBar";
 import { Panel } from "./Panel";
 import type { GoalSummary } from "@/lib/savings";
+import { dismissAnomaly } from "@/app/actions";
 
 export function PrimaryGoalCard({ goal }: { goal: GoalSummary }) {
   return (
@@ -67,6 +68,18 @@ export async function FlaggedCard() {
                 <div className="truncate text-[0.7rem] text-danger">{r.flaggedReason}</div>
               </td>
               <td className="w-24 text-right text-danger">−{kr(r.amount)}</td>
+              <td className="w-6 text-right">
+                <form action={dismissAnomaly}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <button
+                    type="submit"
+                    title="Dismiss anomaly"
+                    className="cursor-pointer border-none bg-transparent p-0 text-[0.7rem] leading-none text-faint hover:text-muted"
+                  >
+                    ×
+                  </button>
+                </form>
+              </td>
             </tr>
           ))}
         </tbody>
