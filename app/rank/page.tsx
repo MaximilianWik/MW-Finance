@@ -8,15 +8,23 @@ import { getWealthVelocity, getFuelEfficiency } from "@/lib/game/velocity";
 import { TIERS } from "@/lib/game/level";
 import { Panel } from "../ui/Panel";
 import { ReactorCore } from "../ui/ReactorCore";
+import { ReactorDevPanel } from "../ui/ReactorDevPanel";
 import { StreakCalendar } from "../ui/StreakCalendar";
 import { XpBreakdown } from "../ui/XpBreakdown";
+import { Tip } from "../ui/Tip";
 import { AiConsole } from "../ui/AiConsole";
 import { QueryLog } from "../ui/QueryLog";
 import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
 
-export default async function RankPage() {
+export default async function RankPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await (searchParams ?? Promise.resolve({}));
+  const devMode = sp.dev === "1";
   const t0 = Date.now();
 
   let snap:       Awaited<ReturnType<typeof getReactorSnapshot>> | null = null;
@@ -116,14 +124,29 @@ export default async function RankPage() {
             {/* Stats: 6-wide on large, 3+3 on mobile */}
             <div className="grid grid-cols-3 gap-3 border-t border-edge pt-3 text-center sm:grid-cols-6">
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">uptime</div>
+                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
+                  uptime
+                  <Tip title="Containment uptime" side="below">
+                    Consecutive days where counted spend (excl. Transfers + Savings) stayed at or
+                    below your daily pace. Zero-spend days count clean. Breaks on a breach unless a
+                    shield absorbs it.
+                  </Tip>
+                </div>
                 <div className={`text-lg tabular-nums ${level.danger ? "text-danger" : "text-accent"}`}>
                   {level.danger ? "BREACH" : `${streak.current}d`}
                 </div>
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">best {streak.best}d</div>
               </div>
+
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">shields</div>
+                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
+                  shields
+                  <Tip title="Shields" side="below">
+                    Earn 1 shield per completed 7-day clean run, up to 3 banked. A breach consumes
+                    a shield and uptime continues unbroken. With no shields, a breach resets the
+                    streak to 0.
+                  </Tip>
+                </div>
                 <div className="flex items-center justify-center gap-0.5 py-0.5">
                   {[0,1,2].map((i) => (
                     <span key={i} style={{ color: i < shields ? "#5cc8e8" : "#252530", fontSize:"1.1rem", lineHeight:1 }}>
@@ -133,25 +156,57 @@ export default async function RankPage() {
                 </div>
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">{shields}/3 banked</div>
               </div>
+
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">charge</div>
+                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
+                  charge
+                  <Tip title="Stored charge" side="below">
+                    Weekly capacitor (Mon to today). Each day under pace banks charge; each day
+                    over drains it. Floored at 0. Resets every Monday.
+                    <br /><br />
+                    Daily pace: {kr(pot.pace)}/day = total budget ÷ salary cycle days.
+                  </Tip>
+                </div>
                 <div className={`text-lg tabular-nums ${pot.discharging ? "text-danger" : "text-accent2"}`}>
                   {kr(pot.charge)}
                 </div>
-                <div className="text-[0.58rem] uppercase tracking-term text-faint">{kr(pot.pace)}/day</div>
+                <div className="text-[0.58rem] uppercase tracking-term text-faint">
+                  pace {kr(pot.pace)}/day
+                </div>
               </div>
+
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">saved</div>
+                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
+                  saved
+                  <Tip title="Savings total" side="below">
+                    All-time sum of outflows categorised as "Savings". Earns 5 XP per 100 kr.
+                  </Tip>
+                </div>
                 <div className="text-lg tabular-nums text-ink2">{kr(savingsTotal)}</div>
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">all-time</div>
               </div>
+
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">invested</div>
+                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
+                  invested
+                  <Tip title="Investments total" side="below">
+                    All-time sum of outflows categorised as "Investments" (e.g. Lysa). Earns
+                    8 XP per 100 kr, more than savings because deployed capital compounds.
+                    Re-categorise Lysa in the ledger to activate this.
+                  </Tip>
+                </div>
                 <div className="text-lg tabular-nums text-accent2">{kr(investmentsTotal)}</div>
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">all-time</div>
               </div>
+
               <div>
-                <div className="text-[0.6rem] uppercase tracking-term text-muted">directives</div>
+                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
+                  directives
+                  <Tip title="Directive streak" side="below">
+                    Consecutive calendar weeks where at least one weekly directive was cleared.
+                    Breaks when a full week passes without completing any directive.
+                  </Tip>
+                </div>
                 <div className="text-lg tabular-nums text-ink2">{directiveStreak}w</div>
                 <div className="text-[0.58rem] uppercase tracking-term text-faint">run streak</div>
               </div>
@@ -160,7 +215,13 @@ export default async function RankPage() {
             {/* Next milestone */}
             {nextMilestone && (
               <div className="flex items-center justify-between rounded border border-edge bg-panel2 px-3 py-2 text-[0.68rem] uppercase tracking-term">
-                <span className="text-faint">next unlock</span>
+                <span className="inline-flex items-center text-faint">
+                  next unlock
+                  <Tip title="Next milestone">
+                    The locked achievement you are numerically closest to, ranked by percentage
+                    of the required value already reached. Click to see all achievements on this page.
+                  </Tip>
+                </span>
                 <span style={{ color: nextMilestone.color }}>
                   {nextMilestone.name}
                 </span>
@@ -199,11 +260,35 @@ export default async function RankPage() {
       {/* ── Reactor metrics (velocity + efficiency) ───────────────────── */}
       {(velocity || efficiency) && (
         <Panel title="REACTOR METRICS">
+          {/* Daily pace (prominently shown) */}
+          <div className="mb-4 flex items-center justify-between border-b border-edge pb-3 text-[0.72rem] uppercase tracking-term">
+            <span className="inline-flex items-center text-muted">
+              daily pace
+              <Tip title="Daily pace: how it is calculated">
+                Total monthly budget ÷ days in the current salary cycle.
+                <br /><br />
+                A day is "clean" when counted spend (outflows excl. Transfers and Savings) is at
+                or below this. Zero-spend days are also clean.
+                <br /><br />
+                Adjust category budgets on the /budgets page to change the pace.
+              </Tip>
+            </span>
+            <span className="text-lg tabular-nums text-ink2">
+              {kr(pot.pace)}<span className="ml-1 text-sm font-normal text-faint">/day</span>
+            </span>
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* Wealth velocity */}
             {velocity && (
               <div className="flex flex-col gap-1.5">
-                <div className="text-[0.65rem] uppercase tracking-term text-muted">wealth velocity</div>
+                <div className="inline-flex items-center text-[0.65rem] uppercase tracking-term text-muted">
+                  wealth velocity
+                  <Tip title="Wealth velocity">
+                    Rolling average of new savings + investments per month, computed from the last
+                    3 complete calendar months. The projection assumes the same split between
+                    savings and investments continues.
+                  </Tip>
+                </div>
                 <div className="text-xl tabular-nums text-accent">
                   {velocity.krPerMonth > 0 ? kr(velocity.krPerMonth) }
                   <span className="ml-1 text-sm font-normal text-faint">/month</span>
@@ -222,7 +307,15 @@ export default async function RankPage() {
             {/* Fuel efficiency */}
             {efficiency && (
               <div className="flex flex-col gap-1.5">
-                <div className="text-[0.65rem] uppercase tracking-term text-muted">fuel efficiency</div>
+                <div className="inline-flex items-center text-[0.65rem] uppercase tracking-term text-muted">
+                  fuel efficiency
+                  <Tip title="Fuel efficiency">
+                    This month's savings + investments divided by your detected salary. Salary is
+                    detected from Income transactions in the range 18 000 to 30 000 kr.
+                    <br /><br />
+                    Green = 20%+ deployed, amber = 10-20%, red = under 10%.
+                  </Tip>
+                </div>
                 <div className="text-xl tabular-nums text-accent">
                   {efficiency.pct != null
                     ? `${Math.round(efficiency.pct * 100)}%`
@@ -250,6 +343,18 @@ export default async function RankPage() {
 
       {/* ── Containment log ────────────────────────────────────────────── */}
       <Panel title="CONTAINMENT LOG">
+        <p className="mb-3 text-[0.65rem] text-faint">
+          84-day clean/breach heatmap. Hover (desktop) or check the legend for colour meanings.
+          <Tip title="Containment log">
+            Each square is one calendar day. Aligned to Mondays so weeks form columns.
+            <br /><br />
+            <strong>Bright green</strong> = no spend at all.
+            <strong> Mid green</strong> = spent something but stayed under daily pace.
+            <strong> Red</strong> = breach (spend exceeded pace).
+            <br /><br />
+            Hover a square for the exact date, spend, and pace.
+          </Tip>
+        </p>
         <StreakCalendar
           records={history}
           currentStreak={streak.current}
@@ -309,6 +414,14 @@ export default async function RankPage() {
           <p className="mb-2 text-[0.7rem] leading-relaxed text-muted">
             Reactor evaluates nightly after each sync. Manual eval refreshes uptime,
             resolves directives and unlocks achievements immediately.
+            <Tip title="Weekly directives" side="above">
+              5 directives are generated every Monday. Complete them before Sunday to earn XP
+              and build your directive run streak.
+              <br /><br />
+              Types: Hold Containment (5 clean days), Dark Reactor (3 zero-spend days),
+              Cold Kitchen (restaurants under 300 kr), Deploy Capital (any investment),
+              Fuel the Reserve (any savings transfer).
+            </Tip>
           </p>
           <AiConsole endpoint="/api/game/eval" label="$ run eval" pendingLabel="evaluating…" />
         </div>
@@ -371,6 +484,19 @@ export default async function RankPage() {
           <Link href="/" className="btn text-[0.65rem]">» overview</Link>
         </div>
       </Panel>
+
+      {/* ── Dev mode: reactor previewer (/rank?dev=1) ──────────────────── */}
+      {devMode && (
+        <Panel title="DEV · REACTOR PREVIEWER" right={
+          <span className="text-[0.62rem] uppercase tracking-term text-amber">[DEV MODE]</span>
+        }>
+          <p className="mb-3 text-[0.68rem] text-muted">
+            All 8 output tiers. Use controls to preview danger state and XP progress.
+            Access: <code className="text-faint">/rank?dev=1</code>
+          </p>
+          <ReactorDevPanel />
+        </Panel>
+      )}
     </main>
   );
 }
