@@ -290,7 +290,7 @@ export default async function RankPage({
                   </Tip>
                 </div>
                 <div className="text-xl tabular-nums text-accent">
-                  {velocity.krPerMonth > 0 ? kr(velocity.krPerMonth) }
+                  {velocity.krPerMonth > 0 ? kr(velocity.krPerMonth) : "n/a"}
                   <span className="ml-1 text-sm font-normal text-faint">/month</span>
                 </div>
                 <div className="text-[0.65rem] text-faint">
@@ -319,7 +319,7 @@ export default async function RankPage({
                 <div className="text-xl tabular-nums text-accent">
                   {efficiency.pct != null
                     ? `${Math.round(efficiency.pct * 100)}%`
-                    }
+                    : "n/a"}
                   <span className="ml-1 text-sm font-normal text-faint">of salary</span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden bg-edge">
