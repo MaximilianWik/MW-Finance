@@ -4,6 +4,7 @@ import { evaluateChallenges, getChallengeXp, getChallengesCompleted } from "./ch
 import { evaluateAchievements, getAchievementXp } from "./achievements";
 import { computeXp, levelFromXp } from "./level";
 import { getSavingsTotal } from "@/lib/savings";
+import { getInvestmentsTotal } from "./history";
 import { sendNtfy } from "@/lib/notify";
 import { env } from "@/lib/env";
 
@@ -44,22 +45,32 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
   }
 
   // 3. Achievement context (tier needs a provisional XP incl. current unlocks).
-  const [savings, achievementXp, challengeXp, challengesCompleted] = await Promise.all([
-    getSavingsTotal(),
-    getAchievementXp(),
-    getChallengeXp(),
-    getChallengesCompleted(),
-  ]);
-  const xp = computeXp({ savingsTotal: savings.total, bestStreak: best, achievementXp, challengeXp });
+  const [savings, investments, achievementXp, challengeXp, challengesCompleted, pot] =
+    await Promise.all([
+      getSavingsTotal(),
+      getInvestmentsTotal(),
+      getAchievementXp(),
+      getChallengeXp(),
+      getChallengesCompleted(),
+      getPot(),
+    ]);
+  const xp = computeXp({
+    savingsTotal: savings.total,
+    investmentsTotal: investments,
+    bestStreak: best,
+    achievementXp,
+    challengeXp,
+  });
   const level = levelFromXp(xp, streak.breachToday);
 
   const unlocked = await evaluateAchievements({
     savingsTotal: savings.total,
+    investmentsTotal: investments,
     bestStreak: best,
     currentStreak: streak.current,
     tierIndex: level.index,
     challengesCompleted,
-    potCharge: (await getPot()).charge,
+    potCharge: pot.charge,
   });
   for (const a of unlocked) {
     log(`[achievement] unlocked: ${a.name} (+${a.xp} XP)`);

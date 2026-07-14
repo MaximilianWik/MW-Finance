@@ -21,19 +21,22 @@ export const TIERS: Tier[] = [
 ];
 
 export interface XpInputs {
-  savingsTotal: number;   // all-time kr saved
-  bestStreak: number;     // days
-  achievementXp: number;  // sum of unlocked achievement rewards
-  challengeXp: number;    // sum of completed challenge rewards
+  savingsTotal: number;
+  investmentsTotal: number; // all-time kr sent to investments
+  bestStreak: number;
+  achievementXp: number;
+  challengeXp: number;
 }
 
-// XP weighting. Savings is the backbone; streak and unlocks accelerate it.
-export const XP_PER_100_KR = 1;   // 1 XP per 100 kr saved
+// XP weighting: savings + investments share the same rate; streak multiplies over time.
+export const XP_PER_100_KR = 1;
+export const XP_PER_100_KR_INVEST = 1; // same rate — investing IS saving
 export const XP_PER_STREAK_DAY = 50;
 
 export function computeXp(i: XpInputs): number {
   return (
-    Math.floor((i.savingsTotal / 100) * XP_PER_100_KR) +
+    Math.floor(i.savingsTotal  / 100) * XP_PER_100_KR +
+    Math.floor(i.investmentsTotal / 100) * XP_PER_100_KR_INVEST +
     i.bestStreak * XP_PER_STREAK_DAY +
     i.achievementXp +
     i.challengeXp

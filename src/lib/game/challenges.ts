@@ -17,6 +17,8 @@ interface Metrics {
   cleanDays: number;
   noSpendDays: number;
   restaurantSpend: number;
+  investmentSpend: number;
+  savingsSpend: number;
   pace: number;
 }
 
@@ -59,6 +61,24 @@ export const TEMPLATES: ChallengeTemplate[] = [
     lowerIsBetter: true,
     measure: (m) => m.restaurantSpend,
   },
+  {
+    key: "invest_capital",
+    title: "Deploy Capital",
+    description: "Make at least one investment transfer this week.",
+    target: 1,
+    rewardXp: 400,
+    lowerIsBetter: false,
+    measure: (m) => m.investmentSpend > 0 ? 1 : 0,
+  },
+  {
+    key: "fuel_reserve",
+    title: "Fuel the Reserve",
+    description: "Make at least one savings transfer this week.",
+    target: 1,
+    rewardXp: 400,
+    lowerIsBetter: false,
+    measure: (m) => m.savingsSpend > 0 ? 1 : 0,
+  },
 ];
 
 const BY_KEY = new Map(TEMPLATES.map((t) => [t.key, t]));
@@ -76,21 +96,34 @@ async function weekMetrics(weekStart: string, today: string, pace: number): Prom
     if (s <= eps) noSpendDays++;
   }
 
-  const [rest] = await db
-    .select({
-      total: sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`,
-    })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(
-      and(
-        eq(categories.name, "Restaurants"),
-        gte(transactions.bookingDate, weekStart),
-        lte(transactions.bookingDate, today)
-      )
-    );
+  const spendExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
+  const catQuery = (catName: string) =>
+    db
+      .select({ total: spendExpr })
+      .from(transactions)
+      .innerJoin(categories, eq(transactions.categoryId, categories.id))
+      .where(
+        and(
+          eq(categories.name, catName),
+          gte(transactions.bookingDate, weekStart),
+          lte(transactions.bookingDate, today)
+        )
+      );
 
-  return { cleanDays, noSpendDays, restaurantSpend: rest?.total ?? 0, pace };
+  const [[rest], [invest], [save]] = await Promise.all([
+    catQuery("Restaurants"),
+    catQuery("Investments"),
+    catQuery("Savings"),
+  ]);
+
+  return {
+    cleanDays,
+    noSpendDays,
+    restaurantSpend:  rest?.total    ?? 0,
+    investmentSpend:  invest?.total  ?? 0,
+    savingsSpend:     save?.total    ?? 0,
+    pace,
+  };
 }
 
 /** Ensure the current week's challenges exist. Idempotent. */
