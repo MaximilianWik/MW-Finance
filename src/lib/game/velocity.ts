@@ -10,7 +10,7 @@ interface MilestoneSpec {
   id: string;
   getValue: (ctx: AchievementContext & { xp: number }) => number;
   target: number;
-  unit: "kr" | "d" | "challenges" | "XP";
+  unit: "kr" | "d" | "challenges" | "XP" | "weeks";
 }
 
 // Each entry maps an achievement id to a single numeric progress value.
@@ -21,14 +21,17 @@ const SPECS: MilestoneSpec[] = [
   { id: "saver_50k",        target: 50000,    unit: "kr",         getValue: c => c.savingsTotal },
   { id: "saver_100k",       target: 100000,   unit: "kr",         getValue: c => c.savingsTotal },
   { id: "saver_200k",       target: 200000,   unit: "kr",         getValue: c => c.savingsTotal },
+  { id: "saver_500k",       target: 500000,   unit: "kr",         getValue: c => c.savingsTotal },
   { id: "first_investment", target: 1,        unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_10k",       target: 10000,    unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_50k",       target: 50000,    unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_100k",      target: 100000,   unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_250k",      target: 250000,   unit: "kr",         getValue: c => c.investmentsTotal },
+  { id: "invest_500k",      target: 500000,   unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "total_50k",        target: 50000,    unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
   { id: "total_200k",       target: 200000,   unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
   { id: "total_500k",       target: 500000,   unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
+  { id: "total_1m",         target: 1000000,  unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
   { id: "uptime_3",         target: 3,        unit: "d",          getValue: c => c.bestStreak },
   { id: "uptime_7",         target: 7,        unit: "d",          getValue: c => c.bestStreak },
   { id: "uptime_14",        target: 14,       unit: "d",          getValue: c => c.bestStreak },
@@ -36,12 +39,18 @@ const SPECS: MilestoneSpec[] = [
   { id: "uptime_60",        target: 60,       unit: "d",          getValue: c => c.bestStreak },
   { id: "uptime_100",       target: 100,      unit: "d",          getValue: c => c.bestStreak },
   { id: "uptime_200",       target: 200,      unit: "d",          getValue: c => c.bestStreak },
+  { id: "uptime_365",       target: 365,      unit: "d",          getValue: c => c.bestStreak },
   { id: "capacitor",        target: 2000,     unit: "kr",         getValue: c => c.potCharge },
   { id: "capacitor_5k",     target: 5000,     unit: "kr",         getValue: c => c.potCharge },
+  { id: "capacitor_10k",    target: 10000,    unit: "kr",         getValue: c => c.potCharge },
   { id: "first_challenge",  target: 1,        unit: "challenges", getValue: c => c.challengesCompleted },
   { id: "challenge_5",      target: 5,        unit: "challenges", getValue: c => c.challengesCompleted },
   { id: "challenge_10",     target: 10,       unit: "challenges", getValue: c => c.challengesCompleted },
   { id: "challenge_25",     target: 25,       unit: "challenges", getValue: c => c.challengesCompleted },
+  { id: "challenge_50",     target: 50,       unit: "challenges", getValue: c => c.challengesCompleted },
+  { id: "directive_3",      target: 3,        unit: "weeks",      getValue: c => c.directiveStreak },
+  { id: "directive_5",      target: 5,        unit: "weeks",      getValue: c => c.directiveStreak },
+  { id: "directive_10",     target: 10,       unit: "weeks",      getValue: c => c.directiveStreak },
   { id: "ignition",         target: TIERS[2].minXp,  unit: "XP", getValue: c => c.xp },
   { id: "overdrive",        target: TIERS[5].minXp,  unit: "XP", getValue: c => c.xp },
   { id: "fusion",           target: TIERS[6].minXp,  unit: "XP", getValue: c => c.xp },

@@ -114,12 +114,14 @@ export function StreakCalendar({
               return (
                 <rect
                   key={`${w}-${d}`}
+                  className="anim-cell"
                   x={w * STRIDE}
                   y={LABEL_H + d * STRIDE}
                   width={CELL}
                   height={CELL}
                   rx={2}
                   fill={cellFill(r, today)}
+                  style={{ animationDelay: `${w * 18 + d * 6}ms` }}
                 >
                   {r.date && <title>{cellTooltip(r)}</title>}
                 </rect>

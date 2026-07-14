@@ -11,6 +11,7 @@ import { ReactorCore } from "../ui/ReactorCore";
 import { ReactorDevPanel } from "../ui/ReactorDevPanel";
 import { StreakCalendar } from "../ui/StreakCalendar";
 import { XpBreakdown } from "../ui/XpBreakdown";
+import { AchievementBadge } from "../ui/AchievementBadge";
 import { Tip } from "../ui/Tip";
 import { AiConsole } from "../ui/AiConsole";
 import { QueryLog } from "../ui/QueryLog";
@@ -112,7 +113,7 @@ export default async function RankPage({
             {/* XP progress to next tier */}
             <div className="flex flex-col gap-1">
               <div className="h-2 w-full overflow-hidden bg-edge">
-                <div className="h-full" style={{ width: `${Math.round(level.progress * 100)}%`, background: hue }} />
+                <div className="anim-bar h-full" style={{ width: `${Math.round(level.progress * 100)}%`, background: hue }} />
               </div>
               <span className="text-[0.65rem] uppercase tracking-term text-faint">
                 {level.next
@@ -255,6 +256,19 @@ export default async function RankPage({
             </div>
           </div>
         </div>
+
+        {/* Run eval, directly below the core */}
+        <div className="mt-4 border-t border-edge pt-3">
+          <div className="mb-2 flex items-center text-[0.68rem] uppercase tracking-term text-muted">
+            manual eval
+            <Tip title="Run eval">
+              Recomputes uptime, resolves this week&apos;s directives, awards shields, detects
+              savings spikes and unlocks achievements. Runs automatically nightly after each
+              bank sync; this button triggers it immediately.
+            </Tip>
+          </div>
+          <AiConsole endpoint="/api/game/eval" label="$ run eval" pendingLabel="evaluating…" />
+        </div>
       </Panel>
 
       {/* ── Reactor metrics (velocity + efficiency) ───────────────────── */}
@@ -324,7 +338,7 @@ export default async function RankPage({
                 </div>
                 <div className="h-1.5 w-full overflow-hidden bg-edge">
                   <div
-                    className="h-full"
+                    className="anim-bar h-full"
                     style={{
                       width: efficiency.pct != null ? `${Math.min(100, Math.round(efficiency.pct * 100))}%` : "0%",
                       background: (efficiency.pct ?? 0) >= 0.2 ? "#4ec96a" : (efficiency.pct ?? 0) >= 0.1 ? "#e8c545" : "#e85252",
@@ -400,7 +414,7 @@ export default async function RankPage({
                     </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden bg-edge">
-                    <div className="h-full" style={{ width: `${Math.round(pct * 100)}%`, background: barColor }} />
+                    <div className="anim-bar h-full" style={{ width: `${Math.round(pct * 100)}%`, background: barColor }} />
                   </div>
                   <span className="text-[0.62rem] lowercase text-faint">
                     {c.description} · +{c.rewardXp} XP
@@ -411,19 +425,17 @@ export default async function RankPage({
           </ul>
         )}
         <div className="mt-4 border-t border-edge pt-3">
-          <p className="mb-2 text-[0.7rem] leading-relaxed text-muted">
-            Reactor evaluates nightly after each sync. Manual eval refreshes uptime,
-            resolves directives and unlocks achievements immediately.
+          <p className="text-[0.7rem] leading-relaxed text-muted">
+            5 directives generate every Monday. Clear them before Sunday to earn XP and grow
+            your directive run streak.
             <Tip title="Weekly directives" side="above">
-              5 directives are generated every Monday. Complete them before Sunday to earn XP
-              and build your directive run streak.
-              <br /><br />
               Types: Hold Containment (5 clean days), Dark Reactor (3 zero-spend days),
               Cold Kitchen (restaurants under 300 kr), Deploy Capital (any investment),
               Fuel the Reserve (any savings transfer).
+              <br /><br />
+              Run an eval from the Reactor Core panel above to resolve them now.
             </Tip>
           </p>
-          <AiConsole endpoint="/api/game/eval" label="$ run eval" pendingLabel="evaluating…" />
         </div>
       </Panel>
 
@@ -434,14 +446,16 @@ export default async function RankPage({
       >
         {/* Recent unlocks spotlighted */}
         {recentUnlocks.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2 border-b border-edge pb-4">
-            {recentUnlocks.map((a) => (
+          <div className="mb-4 flex flex-wrap gap-3 border-b border-edge pb-4">
+            {recentUnlocks.map((a, i) => (
               <div
                 key={a.id}
-                className="flex flex-col items-center gap-1 border border-edge px-3 py-2 text-center"
+                className="flex flex-col items-center gap-1 border bg-panel2/40 px-4 py-3 text-center"
                 style={{ borderColor: a.color + "55" }}
               >
-                <span className="text-lg" style={{ color: a.color }}>◆</span>
+                <span style={{ animationDelay: `${i * 120}ms` }} className="anim-badge-pop inline-flex">
+                  <AchievementBadge color={a.color} unlocked size={46} />
+                </span>
                 <span className="text-[0.65rem] uppercase tracking-term" style={{ color: a.color }}>
                   {a.name}
                 </span>
@@ -457,21 +471,19 @@ export default async function RankPage({
             const has = unlockedIds.has(a.id);
             return (
               <li key={a.id} className="flex items-center justify-between gap-3 py-1.5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span aria-hidden style={{ color: has ? a.color : "#454552" }}>
-                      {has ? "◆" : "◇"}
-                    </span>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <AchievementBadge color={a.color} unlocked={has} size={30} />
+                  <div className="min-w-0">
                     <span
-                      className="text-[0.78rem] uppercase tracking-term"
+                      className="block text-[0.78rem] uppercase tracking-term"
                       style={{ color: has ? a.color : "#454552" }}
                     >
                       {a.name}
                     </span>
+                    <span className={`block text-[0.63rem] ${has ? "text-muted" : "text-faint/60"}`}>
+                      {a.description}
+                    </span>
                   </div>
-                  <span className={`block pl-5 text-[0.63rem] ${has ? "text-muted" : "text-faint/60"}`}>
-                    {a.description}
-                  </span>
                 </div>
                 <span className={`shrink-0 text-[0.62rem] uppercase tracking-term ${has ? "text-faint" : "text-faint/40"}`}>
                   +{a.xp} XP
@@ -480,8 +492,11 @@ export default async function RankPage({
             );
           })}
         </ul>
-        <div className="mt-3 text-center">
+        <div className="mt-3 flex items-center justify-center gap-4">
           <Link href="/" className="btn text-[0.65rem]">» overview</Link>
+          <Link href="/rank?dev=1" className="text-[0.6rem] uppercase tracking-term text-faint/50 hover:text-accent2">
+            [ dev previewer ]
+          </Link>
         </div>
       </Panel>
 

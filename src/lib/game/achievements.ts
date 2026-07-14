@@ -168,6 +168,42 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "directive_5",   name: "Five-Week Operator",   xp: 800,  color: "#e8c545",
     description: "Clear at least one directive 5 weeks in a row.",
     predicate: (c) => c.directiveStreak >= 5 },
+
+  { id: "directive_10",  name: "Relentless",           xp: 1500, color: "#e8c545",
+    description: "Clear a directive 10 weeks in a row.",
+    predicate: (c) => c.directiveStreak >= 10 },
+
+  { id: "challenge_50",  name: "Reactor Marshal",      xp: 3000, color: "#e8c545",
+    description: "Complete 50 weekly challenges.",
+    predicate: (c) => c.challengesCompleted >= 50 },
+
+  { id: "capacitor_10k", name: "Overcharged",          xp: 1000, color: "#5cc8e8",
+    description: "Bank 10 000 kr of stored charge in a week.",
+    predicate: (c) => c.potCharge >= 10000 },
+
+  { id: "balanced",      name: "Balanced Core",        xp: 600,  color: "#4ec96a",
+    description: "Hold at least 25 000 kr in both savings and investments.",
+    predicate: (c) => c.savingsTotal >= 25000 && c.investmentsTotal >= 25000 },
+
+  { id: "invest_dominant", name: "Capital Allocator",  xp: 900,  color: "#5cc8e8",
+    description: "Have more invested than saved (50 000 kr+ invested).",
+    predicate: (c) => c.investmentsTotal >= 50000 && c.investmentsTotal > c.savingsTotal },
+
+  { id: "saver_500k",    name: "Deep Reserve",         xp: 4000, color: "#3ec8b0",
+    description: "500 000 kr saved all-time.",
+    predicate: (c) => c.savingsTotal >= 500000 },
+
+  { id: "invest_500k",   name: "Whale",                xp: 5000, color: "#5cc8e8",
+    description: "500 000 kr invested all-time.",
+    predicate: (c) => c.investmentsTotal >= 500000 },
+
+  { id: "uptime_365",    name: "Year of Iron",         xp: 6000, color: "#c080e0",
+    description: "365-day containment streak. One full year.",
+    predicate: (c) => c.bestStreak >= 365 },
+
+  { id: "total_1m",      name: "Millionaire",          xp: 10000, color: "#c080e0",
+    description: "Savings + investments cross 1 000 000 kr.",
+    predicate: (c) => c.savingsTotal + c.investmentsTotal >= 1000000 },
 ];
 
 const BY_ID = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
