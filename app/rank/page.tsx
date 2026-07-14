@@ -14,10 +14,40 @@ export const dynamic = "force-dynamic";
 
 export default async function RankPage() {
   const t0 = Date.now();
-  const [[snap, unlocked, challenges], queryLog] = await withQueryLog(() =>
-    Promise.all([getReactorSnapshot(), getUnlocked(), getActiveChallenges()])
-  );
+
+  let snap: Awaited<ReturnType<typeof getReactorSnapshot>> | null = null;
+  let unlocked: Awaited<ReturnType<typeof getUnlocked>> = [];
+  let challenges: Awaited<ReturnType<typeof getActiveChallenges>> = [];
+  let queryLog: { sql: string }[] = [];
+  let dbError: string | null = null;
+
+  try {
+    const [[s, u, c], ql] = await withQueryLog(() =>
+      Promise.all([getReactorSnapshot(), getUnlocked(), getActiveChallenges()])
+    );
+    snap = s; unlocked = u; challenges = c; queryLog = ql;
+  } catch (e) {
+    dbError = e instanceof Error ? e.message : String(e);
+  }
+
   const tookMs = Date.now() - t0;
+
+  if (dbError) {
+    return (
+      <main className="flex flex-col gap-4">
+        <Panel title="REACTOR CORE">
+          <p className="text-sm text-muted">
+            Reactor offline. Run the phase 5 migration in Neon, then reload.
+          </p>
+          <pre className="mt-2 overflow-x-auto border border-edge bg-ink p-2 text-[0.7rem] text-danger">
+            {dbError}
+          </pre>
+        </Panel>
+      </main>
+    );
+  }
+
+  if (!snap) return null;
 
   const { level, streak, pot } = snap;
   const hue = level.danger ? "#e85252" : level.tier.color;

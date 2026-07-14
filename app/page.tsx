@@ -5,6 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { getAccounts, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getPrimaryGoal } from "@/lib/savings";
+import { getReactorSnapshot, type ReactorSnapshot } from "@/lib/game/snapshot";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
 import { BudgetBar } from "./ui/BudgetBar";
@@ -56,6 +57,7 @@ export default async function Home({
   };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
   let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
+  let snap: ReactorSnapshot | null = null;
   let dbError: string | null = null;
   let topInsights: AiInsightRow[] = [];
   const t0 = Date.now();
@@ -87,6 +89,11 @@ export default async function Home({
         .limit(4);
     } catch {
       // AI insights are non-critical — never block the dashboard on them.
+    }
+    try {
+      snap = await getReactorSnapshot();
+    } catch {
+      // Reactor tables may not exist yet; never block the dashboard on them.
     }
   });
   const queryLog = _ql;
@@ -200,7 +207,7 @@ export default async function Home({
 
       <FlaggedCard />
 
-      <ReactorStatus />
+      <ReactorStatus snap={snap} />
 
       {topInsights.length > 0 && (
         <Panel

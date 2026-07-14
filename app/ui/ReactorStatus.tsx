@@ -1,41 +1,34 @@
 import Link from "next/link";
 import { kr } from "@/lib/format";
-import { getReactorSnapshot } from "@/lib/game/snapshot";
+import type { ReactorSnapshot } from "@/lib/game/snapshot";
 import { Panel } from "./Panel";
 import { ReactorCore } from "./ReactorCore";
 
-/** Thin labelled meter. */
 function Meter({ value, color, track = "#252530" }: { value: number; color: string; track?: string }) {
   return (
     <div className="h-1.5 w-full overflow-hidden" style={{ background: track }}>
-      <div className="h-full" style={{ width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`, background: color }} />
+      <div
+        className="h-full"
+        style={{ width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`, background: color }}
+      />
     </div>
   );
 }
 
 /**
- * Overview reactor panel: the animated core, output tier + XP progress, the
- * containment-uptime counter and the stored-charge capacitor. Loss-framed:
- * every number is something to protect, not earn.
+ * Overview reactor panel. Receives a pre-fetched snapshot from the parent
+ * page so error handling stays in the page's try/catch. Returns null when
+ * no snapshot is available (DB not yet migrated, etc.).
  */
-export async function ReactorStatus() {
-  let snap;
-  try {
-    snap = await getReactorSnapshot();
-  } catch {
-    return null; // never block the dashboard on the reactor
-  }
+export function ReactorStatus({ snap }: { snap: ReactorSnapshot | null }) {
+  if (!snap) return null;
   const { level, streak, pot } = snap;
   const hue = level.danger ? "#e85252" : level.tier.color;
 
   return (
     <Panel
       title="REACTOR CORE"
-      right={
-        <Link href="/rank" className="text-accent2 hover:underline">
-          » rank
-        </Link>
-      }
+      right={<Link href="/rank" className="text-accent2 hover:underline">» rank</Link>}
     >
       <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
         <div className="shrink-0">
@@ -49,6 +42,7 @@ export async function ReactorStatus() {
         </div>
 
         <div className="flex w-full flex-col gap-3">
+          {/* Tier + XP */}
           <div className="flex items-baseline justify-between">
             <span className="text-lg font-bold uppercase tracking-term" style={{ color: hue }}>
               {level.tier.name}
@@ -58,7 +52,6 @@ export async function ReactorStatus() {
             </span>
           </div>
 
-          {/* XP → next tier */}
           <div className="flex flex-col gap-1">
             <Meter value={level.progress} color={hue} />
             <span className="text-[0.62rem] uppercase tracking-term text-faint">
@@ -75,7 +68,10 @@ export async function ReactorStatus() {
               <span className="text-danger">[!] containment breach</span>
             ) : (
               <span className="text-accent">
-                {streak.current}d {streak.best > streak.current && <span className="text-faint">· best {streak.best}d</span>}
+                {streak.current}d{" "}
+                {streak.best > streak.current && (
+                  <span className="text-faint">· best {streak.best}d</span>
+                )}
               </span>
             )}
           </div>
