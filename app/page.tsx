@@ -207,19 +207,6 @@ export default async function Home({
 
       <FlaggedCard />
 
-      <ReactorStatus snap={snap} />
-
-      {topInsights.length > 0 && (
-        <Panel
-          title="AI INSIGHTS"
-          right={<Link href="/insights" className="text-accent2 hover:underline">» all</Link>}
-        >
-          <AiInsights initial={topInsights} />
-        </Panel>
-      )}
-
-      <InvestmentsPanel />
-
       {budgetRows.length > 0 && (
         <Panel title="MONTHLY BUDGET" right={`${kr(budget.totalSpent)} / ${kr(budget.totalBudget)}`}>
           <div className="overflow-x-auto">
@@ -239,6 +226,19 @@ export default async function Home({
               » what-if
             </Link>
           </div>
+        </Panel>
+      )}
+
+      <ReactorStatus snap={snap} />
+
+      <InvestmentsPanel />
+
+      {topInsights.length > 0 && (
+        <Panel
+          title="AI INSIGHTS"
+          right={<Link href="/insights" className="text-accent2 hover:underline">» all</Link>}
+        >
+          <AiInsights initial={topInsights} />
         </Panel>
       )}
 

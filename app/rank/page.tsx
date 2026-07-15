@@ -4,7 +4,6 @@ import { getReactorSnapshot } from "@/lib/game/snapshot";
 import { getUnlocked, ACHIEVEMENTS } from "@/lib/game/achievements";
 import { getActiveChallenges } from "@/lib/game/challenges";
 import { getDayHistory } from "@/lib/game/history";
-import { getWealthVelocity, getFuelEfficiency } from "@/lib/game/velocity";
 import { TIERS } from "@/lib/game/level";
 import { Panel } from "../ui/Panel";
 import { ReactorCore } from "../ui/ReactorCore";
@@ -32,8 +31,6 @@ export default async function RankPage({
   let unlocked:   Awaited<ReturnType<typeof getUnlocked>>        = [];
   let challenges: Awaited<ReturnType<typeof getActiveChallenges>> = [];
   let history:    Awaited<ReturnType<typeof getDayHistory>>       = [];
-  let velocity:   Awaited<ReturnType<typeof getWealthVelocity>> | null = null;
-  let efficiency: Awaited<ReturnType<typeof getFuelEfficiency>>  | null = null;
   let queryLog:   { sql: string }[]                              = [];
   let dbError:    string | null                                  = null;
 
@@ -42,13 +39,6 @@ export default async function RankPage({
       Promise.all([getReactorSnapshot(), getUnlocked(), getActiveChallenges(), getDayHistory()])
     );
     snap = s; unlocked = u; challenges = c; history = h; queryLog = ql;
-    // Velocity + efficiency are non-critical; fetch after core data.
-    if (snap) {
-      [velocity, efficiency] = await Promise.all([
-        getWealthVelocity(snap.level.xp, snap.level.index),
-        getFuelEfficiency(),
-      ]).catch(() => [null, null]);
-    }
   } catch (e) {
     dbError = e instanceof Error ? e.message : String(e);
   }
@@ -270,90 +260,6 @@ export default async function RankPage({
           <AiConsole endpoint="/api/game/eval" label="$ run eval" pendingLabel="evaluating…" />
         </div>
       </Panel>
-
-      {/* ── Reactor metrics (velocity + efficiency) ───────────────────── */}
-      {(velocity || efficiency) && (
-        <Panel title="REACTOR METRICS">
-          {/* Daily pace (prominently shown) */}
-          <div className="mb-4 flex items-center justify-between border-b border-edge pb-3 text-[0.72rem] uppercase tracking-term">
-            <span className="inline-flex items-center text-muted">
-              daily pace
-              <Tip title="Daily pace: how it is calculated">
-                Total monthly budget ÷ days in the current salary cycle.
-                <br /><br />
-                A day is "clean" when counted spend (outflows excl. Transfers and Savings) is at
-                or below this. Zero-spend days are also clean.
-                <br /><br />
-                Adjust category budgets on the /budgets page to change the pace.
-              </Tip>
-            </span>
-            <span className="text-lg tabular-nums text-ink2">
-              {kr(pot.pace)}<span className="ml-1 text-sm font-normal text-faint">/day</span>
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Wealth velocity */}
-            {velocity && (
-              <div className="flex flex-col gap-1.5">
-                <div className="inline-flex items-center text-[0.65rem] uppercase tracking-term text-muted">
-                  wealth velocity
-                  <Tip title="Wealth velocity">
-                    Rolling average of new savings + investments per month, computed from the last
-                    3 complete calendar months. The projection assumes the same split between
-                    savings and investments continues.
-                  </Tip>
-                </div>
-                <div className="text-xl tabular-nums text-accent">
-                  {velocity.krPerMonth > 0 ? kr(velocity.krPerMonth) : "n/a"}
-                  <span className="ml-1 text-sm font-normal text-faint">/month</span>
-                </div>
-                <div className="text-[0.65rem] text-faint">
-                  rolling 3-month average (savings + investments)
-                </div>
-                {velocity.projectedMonths != null && velocity.projectedTierName && (
-                  <div className="mt-1 text-[0.68rem] uppercase tracking-term text-accent2">
-                    at this rate: {velocity.projectedTierName} in ~{velocity.projectedMonths}mo
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Fuel efficiency */}
-            {efficiency && (
-              <div className="flex flex-col gap-1.5">
-                <div className="inline-flex items-center text-[0.65rem] uppercase tracking-term text-muted">
-                  fuel efficiency
-                  <Tip title="Fuel efficiency">
-                    This month's savings + investments divided by your detected salary. Salary is
-                    detected from Income transactions in the range 18 000 to 30 000 kr.
-                    <br /><br />
-                    Green = 20%+ deployed, amber = 10-20%, red = under 10%.
-                  </Tip>
-                </div>
-                <div className="text-xl tabular-nums text-accent">
-                  {efficiency.pct != null
-                    ? `${Math.round(efficiency.pct * 100)}%`
-                    : "n/a"}
-                  <span className="ml-1 text-sm font-normal text-faint">of salary</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden bg-edge">
-                  <div
-                    className="anim-bar h-full"
-                    style={{
-                      width: efficiency.pct != null ? `${Math.min(100, Math.round(efficiency.pct * 100))}%` : "0%",
-                      background: (efficiency.pct ?? 0) >= 0.2 ? "#4ec96a" : (efficiency.pct ?? 0) >= 0.1 ? "#e8c545" : "#e85252",
-                    }}
-                  />
-                </div>
-                <div className="text-[0.65rem] text-faint">
-                  {kr(efficiency.monthlySavingsInvest)} saved+invested this month
-                  {efficiency.salary && ` of ${kr(efficiency.salary)} salary`}
-                </div>
-              </div>
-            )}
-          </div>
-        </Panel>
-      )}
 
       {/* ── Containment log ────────────────────────────────────────────── */}
       <Panel title="CONTAINMENT LOG">
