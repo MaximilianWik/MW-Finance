@@ -85,25 +85,48 @@ async function searchTheme(
   return { text, urls };
 }
 
-// ─── Step 2: JSON structuring (SDK JSON mode, no tools) ─────────────────────
-async function structureEvents(
-  mergedText: string,
+// ─── Step 2: JSON structuring — per-theme (SDK JSON mode, no tools) ─────────
+// One small call per theme instead of one giant merged call. Each fires as
+// soon as its search completes (pipelined), keeping wall-clock time low.
+async function structureTheme(
+  text: string,
+  urls: string[],
+  theme: Theme,
   from: string,
   to: string
 ): Promise<StructuredEvent[]> {
+  if (!text.trim()) return [];
   const model = geminiModel({ system: STRUCTURE_PROMPT, json: true, temperature: 0.3 });
   const prompt = [
     `Date window: ${from} to ${to}. Today is ${from}.`,
+    `Theme: ${theme.label}. Default audience hint: "${theme.audience}" (override per event if clearer).`,
     "Structure the following raw event notes into JSON. Extract the direct URL for each event.",
+    urls.length ? `Reference source URLs:\n${urls.join("\n")}` : "",
     "",
-    mergedText,
+    text.slice(0, 18_000), // cap per-theme to avoid token bloat
     "",
     "Produce the JSON now. JSON only.",
   ].join("\n");
-  const res = await model.generateContent(prompt);
-  const parsed = JSON.parse(res.response.text()) as { events?: unknown };
-  const list = Array.isArray(parsed.events) ? parsed.events : [];
 
+  let raw: string;
+  try {
+    const res = await model.generateContent(prompt);
+    raw = res.response.text().trim();
+  } catch {
+    return [];
+  }
+
+  // Strip optional markdown fences (model sometimes wraps even in JSON mode).
+  const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  let parsed: { events?: unknown };
+  try {
+    parsed = JSON.parse(jsonStr) as { events?: unknown };
+  } catch {
+    return [];
+  }
+
+  const list = Array.isArray(parsed.events) ? parsed.events : [];
   const tagSet = new Set<string>(EVENT_TAGS);
   const audSet = new Set<string>(AUDIENCES);
   const lvlSet = new Set<string>(PRICE_LEVELS);
@@ -120,8 +143,8 @@ async function structureEvents(
       title: raw.title.trim().slice(0, 200),
       url: raw.url.trim(),
       description: typeof raw.description === "string" ? raw.description.trim() : null,
-      tag: tagSet.has(raw.tag as string) ? (raw.tag as EventTag) : "misc",
-      audience: audSet.has(raw.audience as string) ? (raw.audience as Audience) : "both",
+      tag: tagSet.has(raw.tag as string) ? (raw.tag as EventTag) : theme.key,
+      audience: audSet.has(raw.audience as string) ? (raw.audience as Audience) : theme.audience,
       whenText: typeof raw.whenText === "string" ? raw.whenText.trim() : null,
       eventDate,
       price: typeof raw.price === "string" ? raw.price.trim() : null,
@@ -229,39 +252,31 @@ export async function runEventSuggestions(
   const hint = await budgetHint();
   push(`[..]   ${hint}`);
 
-  // Fan out all themes in parallel. A single failed theme must not kill the run.
-  push(`[..]   searching ${THEMES.length} themes…`);
-  const results = await Promise.all(
+  // Fan out: search + structure pipelined per theme. Each theme starts
+  // structuring as soon as its search completes — no waiting for all themes.
+  push(`[..]   searching & structuring ${THEMES.length} themes in parallel…`);
+  const themeResults = await Promise.all(
     THEMES.map((t) =>
       searchTheme(t, from, to, hint)
-        .then((r) => {
+        .then(async (r) => {
           push(`[OK]   ${t.label}: ${r.urls.length} source(s)`);
-          return r;
+          const events = await structureTheme(r.text, r.urls, t, from, to);
+          push(`[..]   ${t.label}: ${events.length} event(s) structured`);
+          return events;
         })
         .catch((e) => {
           push(`[~]    ${t.label}: ${e instanceof Error ? e.message : String(e)}`);
-          return { text: "", urls: [] as string[] };
+          return [] as StructuredEvent[];
         })
     )
   );
 
-  const mergedText = results
-    .map((r) => r.text)
-    .filter(Boolean)
-    .join("\n\n----\n\n");
-  const groundedUrls = [...new Set(results.flatMap((r) => r.urls))];
-  if (!mergedText.trim()) {
-    push("[DONE] no event text returned from search");
+  const structured = themeResults.flat();
+  if (structured.length === 0) {
+    push("[DONE] no events returned from any theme");
     return { inserted: 0 };
   }
-
-  push("[AI]   structuring events…");
-  const structured = await structureEvents(
-    `${mergedText}\n\nReference source URLs:\n${groundedUrls.join("\n")}`,
-    from,
-    to
-  );
-  push(`[OK]   model returned ${structured.length} event(s)`);
+  push(`[OK]   ${structured.length} raw event(s) across all themes`);
 
   // Don't resurface events the user already dismissed (any window).
   const dismissedRows = await db
