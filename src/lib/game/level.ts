@@ -1,5 +1,5 @@
-// Reactor output tiers. XP is DERIVED from savings, streak and unlocks, never
-// stored, so it can never drift out of sync with the underlying data.
+// Reactor output tiers. XP is DERIVED from investments, streak and unlocks,
+// never stored, so it can never drift out of sync with the underlying data.
 
 export interface Tier {
   name: string;
@@ -9,18 +9,20 @@ export interface Tier {
 }
 
 export const TIERS: Tier[] = [
-  { name: "COLD",        minXp: 0,     color: "#5a6b7a", blurb: "Reactor offline. Cold iron." },
-  { name: "EMBER",       minXp: 500,   color: "#b0603a", blurb: "First heat. Containment holding." },
-  { name: "IGNITION",    minXp: 1500,  color: "#e8863a", blurb: "Sustained burn achieved." },
-  { name: "STABLE",      minXp: 3500,  color: "#4ec96a", blurb: "Green band. Nominal output." },
-  { name: "CRITICAL",    minXp: 7000,  color: "#e8c545", blurb: "High yield. Watch the gauges." },
-  { name: "OVERDRIVE",   minXp: 12000, color: "#e85252", blurb: "Past redline and holding." },
-  { name: "FUSION",      minXp: 20000, color: "#5cc8e8", blurb: "Self-sustaining fusion." },
-  { name: "SINGULARITY", minXp: 35000, color: "#c080e0", blurb: "Bends the curve. Unbounded." },
+  { name: "COLD",        minXp: 0,      color: "#5a6b7a", blurb: "Reactor offline. Cold iron." },
+  { name: "EMBER",       minXp: 500,    color: "#b0603a", blurb: "First heat. Containment holding." },
+  { name: "IGNITION",    minXp: 1500,   color: "#e8863a", blurb: "Sustained burn achieved." },
+  { name: "STABLE",      minXp: 3500,   color: "#4ec96a", blurb: "Green band. Nominal output." },
+  { name: "CRITICAL",    minXp: 7000,   color: "#e8c545", blurb: "High yield. Watch the gauges." },
+  { name: "OVERDRIVE",   minXp: 12000,  color: "#e85252", blurb: "Past redline and holding." },
+  { name: "FUSION",      minXp: 20000,  color: "#5cc8e8", blurb: "Self-sustaining fusion." },
+  { name: "SINGULARITY", minXp: 35000,  color: "#c080e0", blurb: "Bends the curve. Unbounded." },
+  { name: "QUASAR",      minXp: 55000,  color: "#63f2ff", blurb: "Relativistic jets rip through spacetime." },
+  { name: "BIG BANG",    minXp: 90000,  color: "#ffcf4d", blurb: "Genesis event. A universe ignites." },
+  { name: "OMNIVERSE",   minXp: 150000, color: "#d891ff", blurb: "All realities, nested and infinite." },
 ];
 
 export interface XpInputs {
-  savingsTotal: number;
   investmentsTotal: number;
   bestStreak: number;
   achievementXp: number;
@@ -29,10 +31,8 @@ export interface XpInputs {
 }
 
 // ── XP weights ───────────────────────────────────────────────────────────────
-// Investing is the primary driver: deployed capital compounds, so it fuels the
-// reactor harder than idle reserves. Savings is the secondary reserve track.
-export const XP_PER_100_KR        = 3;   // per 100 kr saved (secondary reserve)
-export const XP_PER_100_KR_INVEST = 10;  // per 100 kr invested (primary driver)
+// Investing is the sole capital driver of the reactor: deployed capital compounds.
+export const XP_PER_100_KR_INVEST = 10;  // per 100 kr invested
 
 // Streak XP: the per-day rate grows by +5 for every day you maintain containment.
 //
@@ -64,7 +64,6 @@ export function computeStreakXp(d: number): number {
 
 export function computeXp(i: XpInputs): number {
   return (
-    Math.floor(i.savingsTotal     / 100) * XP_PER_100_KR +
     Math.floor(i.investmentsTotal / 100) * XP_PER_100_KR_INVEST +
     computeStreakXp(i.bestStreak) +
     i.achievementXp +

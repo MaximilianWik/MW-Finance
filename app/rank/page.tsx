@@ -62,7 +62,7 @@ export default async function RankPage({
 
   if (!snap) return null;
 
-  const { level, streak, pot, savingsTotal, investmentsTotal, xpInputs, shields, directiveStreak, nextMilestone } = snap;
+  const { level, streak, pot, investmentsTotal, xpInputs, shields, directiveStreak, nextMilestone } = snap;
   const hue = level.danger ? "#e85252" : level.tier.color;
   const unlockedIds   = new Set(unlocked.map((a) => a.id));
   const recentUnlocks = unlocked.slice(0, 3);
@@ -112,8 +112,8 @@ export default async function RankPage({
               </span>
             </div>
 
-            {/* Stats: 6-wide on large, 3+3 on mobile */}
-            <div className="grid grid-cols-3 gap-3 border-t border-edge pt-3 text-center sm:grid-cols-6">
+            {/* Stats: 5-wide on large, 3+2 on mobile */}
+            <div className="grid grid-cols-3 gap-3 border-t border-edge pt-3 text-center sm:grid-cols-5">
               <div>
                 <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
                   uptime
@@ -168,23 +168,12 @@ export default async function RankPage({
 
               <div>
                 <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
-                  saved
-                  <Tip title="Savings total" side="below">
-                    All-time sum of outflows categorised as "Savings". Earns 3 XP per 100 kr
-                    as the secondary reserve track.
-                  </Tip>
-                </div>
-                <div className="text-lg tabular-nums text-ink2">{kr(savingsTotal)}</div>
-                <div className="text-[0.58rem] uppercase tracking-term text-faint">all-time</div>
-              </div>
-
-              <div>
-                <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
                   invested
                   <Tip title="Investments total" side="below">
                     The Investments box total (each account's seed balance plus its matching
-                    transactions). Earns 10 XP per 100 kr as the primary driver, since deployed
-                    capital compounds. Add or update accounts in the Investments box to move this.
+                    transactions). Earns 10 XP per 100 kr and is the sole capital driver of the
+                    reactor, since deployed capital compounds. Add or update accounts in the
+                    Investments box to move this.
                   </Tip>
                 </div>
                 <div className="text-lg tabular-nums text-accent2">{kr(investmentsTotal)}</div>
@@ -416,7 +405,7 @@ export default async function RankPage({
           <span className="text-[0.62rem] uppercase tracking-term text-amber">[DEV MODE]</span>
         }>
           <p className="mb-3 text-[0.68rem] text-muted">
-            All 8 output tiers. Use controls to preview danger state and XP progress.
+            All 11 output tiers. Use controls to preview danger state and XP progress.
             Access: <code className="text-faint">/rank?dev=1</code>
           </p>
           <ReactorDevPanel />

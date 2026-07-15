@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { transactions, categories } from "@/db/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { ACHIEVEMENTS, type AchievementContext } from "./achievements";
-import { TIERS, XP_PER_100_KR, XP_PER_100_KR_INVEST } from "./level";
+import { TIERS, XP_PER_100_KR_INVEST } from "./level";
 
 // ─── Next milestone ─────────────────────────────────────────────────────────
 
@@ -15,13 +15,6 @@ interface MilestoneSpec {
 
 // Each entry maps an achievement id to a single numeric progress value.
 const SPECS: MilestoneSpec[] = [
-  { id: "first_spark",      target: 1,        unit: "kr",         getValue: c => c.savingsTotal },
-  { id: "saver_5k",         target: 5000,     unit: "kr",         getValue: c => c.savingsTotal },
-  { id: "saver_10k",        target: 10000,    unit: "kr",         getValue: c => c.savingsTotal },
-  { id: "saver_50k",        target: 50000,    unit: "kr",         getValue: c => c.savingsTotal },
-  { id: "saver_100k",       target: 100000,   unit: "kr",         getValue: c => c.savingsTotal },
-  { id: "saver_200k",       target: 200000,   unit: "kr",         getValue: c => c.savingsTotal },
-  { id: "saver_500k",       target: 500000,   unit: "kr",         getValue: c => c.savingsTotal },
   { id: "first_investment", target: 1,        unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_10k",       target: 10000,    unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_25k",       target: 25000,    unit: "kr",         getValue: c => c.investmentsTotal },
@@ -30,10 +23,6 @@ const SPECS: MilestoneSpec[] = [
   { id: "invest_250k",      target: 250000,   unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_500k",      target: 500000,   unit: "kr",         getValue: c => c.investmentsTotal },
   { id: "invest_1m",        target: 1000000,  unit: "kr",         getValue: c => c.investmentsTotal },
-  { id: "total_50k",        target: 50000,    unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
-  { id: "total_200k",       target: 200000,   unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
-  { id: "total_500k",       target: 500000,   unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
-  { id: "total_1m",         target: 1000000,  unit: "kr",         getValue: c => c.savingsTotal + c.investmentsTotal },
   { id: "uptime_3",         target: 3,        unit: "d",          getValue: c => c.bestStreak },
   { id: "uptime_7",         target: 7,        unit: "d",          getValue: c => c.bestStreak },
   { id: "uptime_14",        target: 14,       unit: "d",          getValue: c => c.bestStreak },
@@ -60,6 +49,9 @@ const SPECS: MilestoneSpec[] = [
   { id: "overdrive",        target: TIERS[5].minXp,  unit: "XP", getValue: c => c.xp },
   { id: "fusion",           target: TIERS[6].minXp,  unit: "XP", getValue: c => c.xp },
   { id: "singularity",      target: TIERS[7].minXp,  unit: "XP", getValue: c => c.xp },
+  { id: "quasar",           target: TIERS[8].minXp,  unit: "XP", getValue: c => c.xp },
+  { id: "big_bang",         target: TIERS[9].minXp,  unit: "XP", getValue: c => c.xp },
+  { id: "omniverse",        target: TIERS[10].minXp, unit: "XP", getValue: c => c.xp },
 ];
 
 const SPEC_BY_ID = new Map(SPECS.map((s) => [s.id, s]));
@@ -138,7 +130,7 @@ export async function getWealthVelocity(
   currentXp: number,
   currentTierIndex: number
 ): Promise<VelocityInfo> {
-  // Sum savings + investments outflows for the last 3 complete months.
+  // Sum investment outflows for the last 3 complete months.
   const months = [isoMonth(-1), isoMonth(-2), isoMonth(-3)];
   const outflowExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
 
@@ -153,7 +145,7 @@ export async function getWealthVelocity(
     .where(
       and(
         sql`to_char(${transactions.bookingDate}, 'YYYY-MM') IN (${months[0]}, ${months[1]}, ${months[2]})`,
-        sql`${categories.name} IN ('Savings','Investments')`
+        eq(categories.name, "Investments")
       )
     )
     .groupBy(
@@ -169,15 +161,12 @@ export async function getWealthVelocity(
   const totals = months.map((m) => byMonth.get(m) ?? 0);
   const avgMonthly = totals.reduce((s, n) => s + n, 0) / 3;
 
-  // How many months to next tier?
+  // How many months to next tier? All new capital fuels the reactor as investment.
   const next = currentTierIndex < TIERS.length - 1 ? TIERS[currentTierIndex + 1] : null;
   let projectedMonths: number | null = null;
   let projectedTierName: string | null = null;
   if (next && avgMonthly > 0) {
-    // Each month adds avgMonthly in savings and assume half goes to investments.
-    const savMonthly = avgMonthly * 0.5;
-    const invMonthly = avgMonthly * 0.5;
-    const xpPerMonth = (savMonthly / 100) * XP_PER_100_KR + (invMonthly / 100) * XP_PER_100_KR_INVEST;
+    const xpPerMonth = (avgMonthly / 100) * XP_PER_100_KR_INVEST;
     const xpNeeded = next.minXp - currentXp;
     projectedMonths = xpNeeded > 0 && xpPerMonth > 0 ? Math.ceil(xpNeeded / xpPerMonth) : null;
     projectedTierName = next.name;

@@ -6,7 +6,6 @@ import { evaluateChallenges, getChallengeXp, getChallengesCompleted } from "./ch
 import { evaluateAchievements, getAchievementXp } from "./achievements";
 import { computeXp, levelFromXp } from "./level";
 import { evaluateBudgetDiscipline } from "./budget-xp";
-import { getSavingsTotal } from "@/lib/savings";
 import { getInvestmentAccountsTotal } from "@/lib/investments";
 import { sendNtfy } from "@/lib/notify";
 import { env } from "@/lib/env";
@@ -29,8 +28,8 @@ const STREAK_MILESTONES = new Set([7, 14, 30, 50, 100]);
 const MAX_SHIELDS = 3;
 const kr = (n: number) => `${Math.round(n).toLocaleString("sv-SE")} kr`;
 
-async function detectSavingsSpike(savingsTotal: number, investmentsTotal: number): Promise<boolean> {
-  // Compare this month's new savings+investments to 3-month rolling avg.
+async function detectInvestmentSpike(): Promise<boolean> {
+  // Compare this month's new investments to the 3-month rolling avg.
   const today = todayIso();
   const thisMonth = today.slice(0, 7);
   const outflowExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
@@ -44,12 +43,12 @@ async function detectSavingsSpike(savingsTotal: number, investmentsTotal: number
   const [currRow] = await db
     .select({ total: outflowExpr })
     .from(transactions).innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(and(sql`to_char(${transactions.bookingDate},'YYYY-MM') = ${thisMonth}`, sql`${categories.name} IN ('Savings','Investments')`));
+    .where(and(sql`to_char(${transactions.bookingDate},'YYYY-MM') = ${thisMonth}`, eq(categories.name, "Investments")));
 
   const pastRows = await db
     .select({ total: outflowExpr, month: sql<string>`to_char(${transactions.bookingDate},'YYYY-MM')` })
     .from(transactions).innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(and(sql`to_char(${transactions.bookingDate},'YYYY-MM') IN (${pastMonths[0]}, ${pastMonths[1]}, ${pastMonths[2]})`, sql`${categories.name} IN ('Savings','Investments')`))
+    .where(and(sql`to_char(${transactions.bookingDate},'YYYY-MM') IN (${pastMonths[0]}, ${pastMonths[1]}, ${pastMonths[2]})`, eq(categories.name, "Investments")))
     .groupBy(sql`to_char(${transactions.bookingDate},'YYYY-MM')`);
 
   const curr = currRow?.total ?? 0;
@@ -151,12 +150,12 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
     }
   }
 
-  // 5. Savings spike detection + budget discipline.
-  const [savings, investments, achievementXp, challengeXp, challengesCompleted] = await Promise.all([
-    getSavingsTotal(), getInvestmentAccountsTotal(), getAchievementXp(), getChallengeXp(), getChallengesCompleted(),
+  // 5. Investment spike detection + budget discipline.
+  const [investments, achievementXp, challengeXp, challengesCompleted] = await Promise.all([
+    getInvestmentAccountsTotal(), getAchievementXp(), getChallengeXp(), getChallengesCompleted(),
   ]);
-  const spike = await detectSavingsSpike(savings.total, investments);
-  if (spike) log(`[SURGE] Savings spike detected this month.`);
+  const spike = await detectInvestmentSpike();
+  if (spike) log(`[SURGE] Investment spike detected this month.`);
 
   // Budget discipline: award XP when a salary cycle closes under total budget.
   const budgetResult = await evaluateBudgetDiscipline(lastBudgetPeriod);
@@ -174,16 +173,16 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
 
   // 6. Achievements.
   const xp = computeXp({
-    savingsTotal: savings.total, investmentsTotal: investments,
+    investmentsTotal: investments,
     bestStreak: newBest, achievementXp, challengeXp, budgetXp,
   });
   const level = levelFromXp(xp, streak.breachToday && !shielded);
 
   const unlocked = await evaluateAchievements({
-    savingsTotal: savings.total, investmentsTotal: investments,
+    investmentsTotal: investments,
     bestStreak: newBest, currentStreak: effectiveStreak,
     tierIndex: level.index, challengesCompleted, potCharge: pot.charge,
-    savingsSpike: spike, directiveStreak, budgetXp,
+    investmentSpike: spike, directiveStreak, budgetXp,
   });
   for (const a of unlocked) {
     log(`[ACHIEVEMENT] Unlocked: ${a.name} (+${a.xp} XP)`);

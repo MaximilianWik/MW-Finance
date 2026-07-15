@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * The reactor core. Eight bespoke, escalating visuals; each tier is a wholly
+ * The reactor core. Eleven bespoke, escalating visuals; each tier is a wholly
  * different machine, growing larger, sharper and more violent:
  *
  *   0 COLD        dormant cold-iron sphere, inert
@@ -12,6 +12,9 @@ import type { ReactNode } from "react";
  *   5 OVERDRIVE   violent red plasma, lightning, shaking containment
  *   6 FUSION      blazing cyan-white star, corona rays, lens flare
  *   7 SINGULARITY a black hole with event horizon, streaming accretion disk
+ *   8 QUASAR      black hole firing bipolar relativistic jets through spacetime
+ *   9 BIG BANG    a universe igniting: expanding shockwaves, ejecta, genesis core
+ *  10 OMNIVERSE   nested fractal realities, hue-shifting mandala, bubble universes
  *
  * Pure SVG + CSS animation. Honours prefers-reduced-motion (all animated
  * elements carry a reactor- class which the global reduced-motion rule freezes).
@@ -393,7 +396,203 @@ function Singularity({ color, uid }: TierProps) {
   );
 }
 
-const RENDERERS = [Cold, Ember, Ignition, Stable, Critical, Overdrive, Fusion, Singularity];
+// ── 8 · QUASAR ──────────────────────────────────────────────────────────────
+function Quasar({ color, progress, uid }: TierProps) {
+  const jet = (up: boolean) => {
+    const tipY = up ? 6 : 194;
+    const w = 15;
+    return `${C},${C} ${C - w},${tipY} ${C + w},${tipY}`;
+  };
+  return (
+    <>
+      <defs>
+        <linearGradient id={`${uid}-jet`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="45%" stopColor={color} />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${uid}-disk`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={color} stopOpacity="0" />
+          <stop offset="30%" stopColor={color} />
+          <stop offset="50%" stopColor="#ffffff" />
+          <stop offset="70%" stopColor={color} />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id={`${uid}-halo`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.5" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.1" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+        <filter id={`${uid}-b`} x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="4" /></filter>
+      </defs>
+      <circle cx={C} cy={C} r="94" fill={`url(#${uid}-halo)`}
+        className="reactor-anim" style={{ animation: "reactor-bloom 3s ease-in-out infinite" }} />
+      <Arc r={90} color={color} progress={progress} />
+      {/* space-warp rings */}
+      {[84, 72].map((r, i) => (
+        <circle key={i} cx={C} cy={C} r={r} fill="none" stroke={color} strokeWidth="0.7"
+          className="reactor-anim" style={{ animation: `reactor-warp ${5 + i}s ease-in-out ${i * 0.5}s infinite` }} />
+      ))}
+      {/* bipolar relativistic jets */}
+      <g filter={`url(#${uid}-b)`}>
+        <polygon className="reactor-anim" points={jet(true)} fill={`url(#${uid}-jet)`}
+          style={{ animation: "reactor-jet 1.6s ease-in-out infinite" }} />
+        <polygon className="reactor-anim" points={jet(false)} fill={`url(#${uid}-jet)`}
+          style={{ animation: "reactor-jet 1.6s ease-in-out 0.2s infinite" }} />
+      </g>
+      {/* jet particle streams */}
+      <g stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" opacity="0.8">
+        <line x1={C} y1={C} x2={C} y2="10" strokeDasharray="3 9" className="reactor-anim"
+          style={{ animation: "reactor-stream 1.4s linear infinite" }} />
+        <line x1={C} y1={C} x2={C} y2="190" strokeDasharray="3 9" className="reactor-anim"
+          style={{ animation: "reactor-stream 1.4s linear infinite" }} />
+      </g>
+      {/* edge-on accretion disk */}
+      <ellipse cx={C} cy={C} rx="80" ry="13" fill="none" stroke={`url(#${uid}-disk)`} strokeWidth="7"
+        strokeDasharray="9 5" className="reactor-anim"
+        style={{ animation: "reactor-stream 2s linear infinite" }} opacity="0.9" />
+      {/* event horizon + photon ring */}
+      <circle cx={C} cy={C} r="20" fill="#050506" />
+      <circle cx={C} cy={C} r="21" fill="none" stroke="#ffffff" strokeWidth="1.6" opacity="0.95"
+        className="reactor-anim" style={{ animation: "reactor-bloom 2.4s ease-in-out infinite" }} />
+      <circle cx={C} cy={C} r="23.5" fill="none" stroke={color} strokeWidth="1.4" opacity="0.6" filter={`url(#${uid}-b)`} />
+    </>
+  );
+}
+
+// ── 9 · BIG BANG ──────────────────────────────────────────────────────────
+function BigBang({ color, progress, uid }: TierProps) {
+  return (
+    <>
+      <defs>
+        <radialGradient id={`${uid}-core`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="35%" stopColor="#fff2c0" />
+          <stop offset="70%" stopColor={color} />
+          <stop offset="100%" stopColor="#e8863a" stopOpacity="0.15" />
+        </radialGradient>
+        <radialGradient id={`${uid}-halo`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fff2c0" stopOpacity="0.7" />
+          <stop offset="55%" stopColor={color} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+        <filter id={`${uid}-b`} x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="5" /></filter>
+      </defs>
+      <circle cx={C} cy={C} r="96" fill={`url(#${uid}-halo)`}
+        className="reactor-anim" style={{ animation: "reactor-bloom 2s ease-in-out infinite" }} />
+      <Arc r={90} color={color} progress={progress} />
+      {/* expanding shockwaves */}
+      {[0, 0.8, 1.6].map((d, i) => (
+        <circle key={i} cx={C} cy={C} r="40" fill="none" stroke={color} strokeWidth="2"
+          className="reactor-anim" style={{ animation: `reactor-burst 2.4s ease-out ${d}s infinite` }} />
+      ))}
+      {/* radial light rays bursting */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin 50s linear infinite" }}>
+        {Array.from({ length: 28 }, (_, i) => {
+          const a = i * (360 / 28);
+          const [x1, y1] = polar(20, a);
+          const [x2, y2] = polar(74, a);
+          return <line key={i} className="reactor-anim" x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke={i % 2 ? "#fff2c0" : color} strokeWidth={i % 2 ? 1 : 1.8} strokeLinecap="round"
+            style={{ animation: `reactor-ray ${1.4 + (i % 5) * 0.3}s ease-in-out ${i * 0.05}s infinite` }} />;
+        })}
+      </g>
+      {/* ejecta debris flung outward */}
+      {[0, 1.2].map((d, k) => (
+        <g key={k} className="reactor-anim" style={{ animation: `reactor-burst 2.4s ease-out ${d}s infinite` }}>
+          {Array.from({ length: 10 }, (_, i) => {
+            const [x, y] = polar(30, i * 36);
+            return <circle key={i} cx={x} cy={y} r="1.8" fill={i % 2 ? "#ffffff" : color} />;
+          })}
+        </g>
+      ))}
+      {/* lens flare cross */}
+      <g stroke="#fff6d8" strokeLinecap="round" opacity="0.85" filter={`url(#${uid}-b)`}>
+        <line x1="10" y1={C} x2="190" y2={C} strokeWidth="1.6" />
+        <line x1={C} y1="12" x2={C} y2="188" strokeWidth="1.3" />
+      </g>
+      {/* genesis core */}
+      <g className="reactor-anim" style={{ animation: "reactor-throb 0.8s ease-in-out infinite" }}>
+        <circle cx={C} cy={C} r="26" fill={`url(#${uid}-core)`} filter={`url(#${uid}-b)`} />
+      </g>
+      <circle cx={C} cy={C} r="11" fill="#ffffff" />
+    </>
+  );
+}
+
+// ── 10 · OMNIVERSE ────────────────────────────────────────────────────────
+function Omniverse({ color, progress, uid }: TierProps) {
+  const tri = (r: number, rot: number) => [0, 120, 240].map((d) => polar(r, d + rot).join(",")).join(" ");
+  return (
+    <g className="reactor-anim" style={{ animation: "reactor-hue 12s linear infinite" }}>
+      <defs>
+        <radialGradient id={`${uid}-core`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="40%" stopColor={color} />
+          <stop offset="100%" stopColor={color} stopOpacity="0.1" />
+        </radialGradient>
+        <radialGradient id={`${uid}-halo`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.45" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.12" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+        <filter id={`${uid}-b`} x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="3" /></filter>
+      </defs>
+      <circle cx={C} cy={C} r="96" fill={`url(#${uid}-halo)`}
+        className="reactor-anim" style={{ animation: "reactor-bloom 3.4s ease-in-out infinite" }} />
+      <Arc r={92} color={color} progress={progress} />
+      {/* space-warp rings */}
+      {[86, 76].map((r, i) => (
+        <circle key={i} cx={C} cy={C} r={r} fill="none" stroke={color} strokeWidth="0.6"
+          className="reactor-anim" style={{ animation: `reactor-warp ${6 + i}s ease-in-out ${i * 0.6}s infinite` }} />
+      ))}
+      {/* drifting bubble universes */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin 60s linear infinite" }}>
+        {Array.from({ length: 6 }, (_, i) => {
+          const [x, y] = polar(58, i * 60);
+          return <circle key={i} cx={x} cy={y} r="17" fill={color} opacity="0.09"
+            stroke={color} strokeOpacity="0.3" strokeWidth="0.6" />;
+        })}
+      </g>
+      {/* nested counter-rotating polygons */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin 34s linear infinite" }}>
+        <polygon points={hex(78)} fill="none" stroke={color} strokeWidth="0.8" opacity="0.4" />
+      </g>
+      <g className="reactor-anim" style={{ animation: "reactor-spin-rev 26s linear infinite" }}>
+        <polygon points={hex(62)} fill="none" stroke="#ffffff" strokeWidth="0.7" opacity="0.35" />
+      </g>
+      <g className="reactor-anim" style={{ animation: "reactor-spin 20s linear infinite" }}>
+        <polygon points={tri(58, 0)} fill="none" stroke={color} strokeWidth="0.8" opacity="0.5" />
+      </g>
+      <g className="reactor-anim" style={{ animation: "reactor-spin-rev 15s linear infinite" }}>
+        <polygon points={tri(50, 60)} fill="none" stroke={color} strokeWidth="0.8" opacity="0.5" />
+      </g>
+      <Orbit r={70} n={16} dot={1.6} color={color} dur={30} />
+      <Orbit r={40} n={10} dot={1.5} color="#ffffff" dur={12} rev op={0.85} />
+      {/* corona rays */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin 44s linear infinite" }}>
+        {Array.from({ length: 20 }, (_, i) => {
+          const a = i * 18;
+          const [x1, y1] = polar(30, a);
+          const [x2, y2] = polar(44, a);
+          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth="1.4"
+            strokeLinecap="round" opacity="0.5" className="reactor-anim"
+            style={{ animation: `reactor-ray ${2 + (i % 4) * 0.4}s ease-in-out ${i * 0.08}s infinite` }} />;
+        })}
+      </g>
+      {/* mandala core */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin-rev 18s linear infinite" }}>
+        <polygon points={hex(22)} fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.6" />
+      </g>
+      <g className="reactor-anim" style={{ animation: "reactor-throb 2.2s ease-in-out infinite" }}>
+        <circle cx={C} cy={C} r="20" fill={`url(#${uid}-core)`} filter={`url(#${uid}-b)`} />
+      </g>
+      <circle cx={C} cy={C} r="8" fill="#ffffff" />
+    </g>
+  );
+}
+
+const RENDERERS = [Cold, Ember, Ignition, Stable, Critical, Overdrive, Fusion, Singularity, Quasar, BigBang, Omniverse];
 
 interface Props {
   tierIndex: number;

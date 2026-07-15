@@ -2,14 +2,13 @@ import { db } from "@/db";
 import { achievements } from "@/db/schema";
 
 export interface AchievementContext {
-  savingsTotal: number;
   investmentsTotal: number;
   bestStreak: number;
   currentStreak: number;
   tierIndex: number;
   challengesCompleted: number;
   potCharge: number;
-  savingsSpike: boolean;
+  investmentSpike: boolean;
   directiveStreak: number;
   budgetXp: number;    // accumulated XP from salary cycles finished under budget
 }
@@ -23,35 +22,10 @@ export interface AchievementDef {
   predicate: (c: AchievementContext) => boolean;
 }
 
-// Reactor events, ordered roughly by ease of unlocking. Investing is the primary
-// track (boosted XP); savings is a lesser reserve track (reduced XP).
+// Reactor events, ordered roughly by ease of unlocking. Investing is the sole
+// capital driver; savings does not fuel the reactor.
 export const ACHIEVEMENTS: AchievementDef[] = [
-  // Savings milestones (secondary reserve track — reduced XP)
-  { id: "first_spark",   name: "First Spark",        xp: 50,   color: "#b0603a",
-    description: "Put your first krona into savings.",
-    predicate: (c) => c.savingsTotal > 0 },
-
-  { id: "saver_5k",      name: "Five Thousand",       xp: 75,   color: "#3ec8b0",
-    description: "5 000 kr saved all-time.",
-    predicate: (c) => c.savingsTotal >= 5000 },
-
-  { id: "saver_10k",     name: "Ten Kilo",            xp: 150,  color: "#3ec8b0",
-    description: "10 000 kr saved all-time.",
-    predicate: (c) => c.savingsTotal >= 10000 },
-
-  { id: "saver_50k",     name: "Half Ton",            xp: 400,  color: "#3ec8b0",
-    description: "50 000 kr saved all-time.",
-    predicate: (c) => c.savingsTotal >= 50000 },
-
-  { id: "saver_100k",    name: "Six Figures",         xp: 750,  color: "#3ec8b0",
-    description: "100 000 kr saved all-time.",
-    predicate: (c) => c.savingsTotal >= 100000 },
-
-  { id: "saver_200k",    name: "Double Century",      xp: 1250, color: "#3ec8b0",
-    description: "200 000 kr saved all-time.",
-    predicate: (c) => c.savingsTotal >= 200000 },
-
-  // Investment milestones (primary track — boosted XP)
+  // Investment milestones (primary capital track)
   { id: "first_investment", name: "Capital Deployed", xp: 200,  color: "#5cc8e8",
     description: "Made your first investment transfer.",
     predicate: (c) => c.investmentsTotal > 0 },
@@ -75,19 +49,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "invest_250k",   name: "Institutional",       xp: 4500, color: "#5cc8e8",
     description: "250 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 250000 },
-
-  // Combined wealth milestones
-  { id: "total_50k",     name: "Net Worth Rising",    xp: 400,  color: "#4ec96a",
-    description: "Savings + investments exceed 50 000 kr.",
-    predicate: (c) => c.savingsTotal + c.investmentsTotal >= 50000 },
-
-  { id: "total_200k",    name: "Solid Foundation",    xp: 1200, color: "#4ec96a",
-    description: "Savings + investments exceed 200 000 kr.",
-    predicate: (c) => c.savingsTotal + c.investmentsTotal >= 200000 },
-
-  { id: "total_500k",    name: "Half Million",        xp: 3500, color: "#4ec96a",
-    description: "Savings + investments exceed 500 000 kr.",
-    predicate: (c) => c.savingsTotal + c.investmentsTotal >= 500000 },
 
   // Streak (uptime) milestones
   { id: "uptime_3",      name: "Online",              xp:  75,  color: "#4ec96a",
@@ -161,10 +122,22 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     description: "Reach SINGULARITY. The curve bends.",
     predicate: (c) => c.tierIndex >= 7 },
 
-  // Savings spike (one-time surge event)
+  { id: "quasar",        name: "Relativistic",        xp: 7000, color: "#63f2ff",
+    description: "Reach the QUASAR output tier.",
+    predicate: (c) => c.tierIndex >= 8 },
+
+  { id: "big_bang",      name: "Genesis",             xp: 12000, color: "#ffcf4d",
+    description: "Reach the BIG BANG output tier.",
+    predicate: (c) => c.tierIndex >= 9 },
+
+  { id: "omniverse",     name: "Transcendent",        xp: 20000, color: "#d891ff",
+    description: "Reach OMNIVERSE. All realities, nested.",
+    predicate: (c) => c.tierIndex >= 10 },
+
+  // Investment surge (one-time spike event)
   { id: "savings_spike", name: "Power Surge",          xp: 500,  color: "#e8c545",
-    description: "Made a savings or investment deposit 2x your monthly average.",
-    predicate: (c) => c.savingsSpike },
+    description: "Made an investment deposit 2x your monthly average.",
+    predicate: (c) => c.investmentSpike },
 
   // Directive streak
   { id: "directive_3",   name: "Three-Week Run",       xp: 400,  color: "#e8c545",
@@ -187,18 +160,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     description: "Bank 10 000 kr of stored charge in a week.",
     predicate: (c) => c.potCharge >= 10000 },
 
-  { id: "balanced",      name: "Balanced Core",        xp: 600,  color: "#4ec96a",
-    description: "Hold at least 25 000 kr in both savings and investments.",
-    predicate: (c) => c.savingsTotal >= 25000 && c.investmentsTotal >= 25000 },
-
-  { id: "invest_dominant", name: "Capital Allocator",  xp: 900,  color: "#5cc8e8",
-    description: "Have more invested than saved (50 000 kr+ invested).",
-    predicate: (c) => c.investmentsTotal >= 50000 && c.investmentsTotal > c.savingsTotal },
-
-  { id: "saver_500k",    name: "Deep Reserve",         xp: 2000, color: "#3ec8b0",
-    description: "500 000 kr saved all-time.",
-    predicate: (c) => c.savingsTotal >= 500000 },
-
   { id: "invest_500k",   name: "Whale",                xp: 7000, color: "#5cc8e8",
     description: "500 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 500000 },
@@ -210,10 +171,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "uptime_365",    name: "Year of Iron",         xp: 6000, color: "#c080e0",
     description: "365-day containment streak. One full year.",
     predicate: (c) => c.bestStreak >= 365 },
-
-  { id: "total_1m",      name: "Millionaire",          xp: 10000, color: "#c080e0",
-    description: "Savings + investments cross 1 000 000 kr.",
-    predicate: (c) => c.savingsTotal + c.investmentsTotal >= 1000000 },
 
   // Budget discipline
   { id: "budget_first",  name: "Under Containment",    xp: 200,   color: "#4ec96a",

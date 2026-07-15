@@ -1,7 +1,7 @@
 import { kr } from "@/lib/format";
 import type { XpInputs } from "@/lib/game/level";
 import {
-  XP_PER_100_KR, XP_PER_100_KR_INVEST,
+  XP_PER_100_KR_INVEST,
   XP_STREAK_BASE, XP_STREAK_STEP, XP_BUDGET_PER_100_KR,
   streakDailyRate, computeStreakXp,
 } from "@/lib/game/level";
@@ -24,13 +24,12 @@ function bar(frac: number, color: string) {
 }
 
 export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
-  const savXp    = Math.floor(inputs.savingsTotal     / 100) * XP_PER_100_KR;
   const invXp    = Math.floor(inputs.investmentsTotal / 100) * XP_PER_100_KR_INVEST;
   const strXp    = computeStreakXp(inputs.bestStreak);
   const achXp    = inputs.achievementXp;
   const chalXp   = inputs.challengeXp;
   const budgXp   = inputs.budgetXp;
-  const total    = savXp + invXp + strXp + achXp + chalXp + budgXp;
+  const total    = invXp + strXp + achXp + chalXp + budgXp;
 
   const d         = inputs.bestStreak;
   const rate      = streakDailyRate(d);
@@ -50,11 +49,8 @@ export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
 
   const rows: Row[] = [
     { label: "Investments",
-      detail: `${kr(inputs.investmentsTotal)} × ${XP_PER_100_KR_INVEST}/100 kr · primary driver`,
+      detail: `${kr(inputs.investmentsTotal)} × ${XP_PER_100_KR_INVEST}/100 kr · sole capital driver`,
       xp: invXp, color: "#5cc8e8" },
-    { label: "Savings",
-      detail: `${kr(inputs.savingsTotal)} × ${XP_PER_100_KR}/100 kr · reserve track`,
-      xp: savXp, color: "#3ec8b0" },
     { label: "Uptime",
       detail: strDetail,
       sub: strSub,
@@ -74,10 +70,9 @@ export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[0.7rem] text-muted">
-        XP is derived live. Investing is the primary driver at{" "}
-        <span className="text-accent2">{XP_PER_100_KR_INVEST} XP per 100 kr</span> deployed;
-        savings is the reserve track at {XP_PER_100_KR} XP per 100 kr. Streak compounds: rate
-        starts at {XP_STREAK_BASE} XP/day and adds{" "}
+        XP is derived live. Investing is the sole capital driver at{" "}
+        <span className="text-accent2">{XP_PER_100_KR_INVEST} XP per 100 kr</span> deployed.
+        Streak compounds: rate starts at {XP_STREAK_BASE} XP/day and adds{" "}
         <span className="text-accent">+{XP_STREAK_STEP} XP/day</span> for every day of
         containment. Finishing a salary cycle under total budget adds{" "}
         <span className="text-accent2">{XP_BUDGET_PER_100_KR} XP per 100 kr</span> saved.

@@ -5,7 +5,7 @@ import { ReactorCore } from "./ReactorCore";
 import { TIERS } from "@/lib/game/level";
 
 /**
- * Dev-mode reactor previewer. Shows all 8 output tiers simultaneously with
+ * Dev-mode reactor previewer. Shows all 11 output tiers simultaneously with
  * interactive controls. Accessible at /rank?dev=1.
  */
 export function ReactorDevPanel() {

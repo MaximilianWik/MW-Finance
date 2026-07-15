@@ -29,8 +29,7 @@ Financial discipline powers a reactor core. XP is derived live from real financi
 
 **XP Formula:**
 ```
-floor(investments / 100) × 10 XP       (primary driver — Investments box total: seed + txns)
-floor(savings / 100) × 3 XP            (secondary reserve track)
+floor(investments / 100) × 10 XP       (sole capital driver — Investments box total: seed + txns)
 streak days × (40 + days × 5) XP       (+5 XP/day rate increase per day of streak)
 budget: 3 XP per 100 kr under budget at end of salary cycle
 + achievement XP + challenge XP
@@ -57,14 +56,17 @@ budget: 3 XP per 100 kr under budget at end of salary cycle
 | OVERDRIVE | 12 000 | Violent red plasma, lightning, shaking |
 | FUSION | 20 000 | Blazing star, corona rays, lens flare |
 | SINGULARITY | 35 000 | Black hole: event horizon + accretion disk |
+| QUASAR | 55 000 | Black hole firing bipolar relativistic jets |
+| BIG BANG | 90 000 | A universe igniting: expanding shockwaves + ejecta |
+| OMNIVERSE | 150 000 | Nested fractal realities, hue-shifting mandala |
 
 **Shields:** earn 1 per completed 7-day streak block (max 3). A breach consumes a shield rather than resetting uptime.
 
 **Weekly directives (5 challenges):** Hold Containment, Dark Reactor, Cold Kitchen, Deploy Capital, Fuel the Reserve. Resolve on eval or nightly after sync.
 
-**48 achievements** spanning investment/savings/wealth milestones, streak milestones, directive streaks, capacitor charges and tier reaches (up to "Fund Manager" +12k XP for 1M invested, "Millionaire" +10k XP, "Year of Iron" +6k XP). Investing is the primary track and carries the heaviest rewards.
+**38 achievements** spanning investment/wealth milestones, streak milestones, directive streaks, capacitor charges and tier reaches (up to "Fund Manager" +12k XP for 1M invested, "Transcendent" +20k XP for OMNIVERSE, "Year of Iron" +6k XP). Investing is the sole capital track; savings does not fuel the reactor.
 
-**Reactor eval** runs after every sync. Manual trigger on `/rank`. Streak eval, challenge resolution, achievement unlocks, shield awards, savings-spike detection and ntfy alerts all happen here.
+**Reactor eval** runs after every sync. Manual trigger on `/rank`. Streak eval, challenge resolution, achievement unlocks, shield awards, investment-spike detection and ntfy alerts all happen here.
 
 Preview all 8 animated reactor cores at **`/rank?dev=1`**.
 
@@ -174,13 +176,13 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 ### Reactor Core game engine (`src/lib/game/`)
 | File | Role |
 |---|---|
-| `level.ts` | XP formula (scaling streak, investment-primary weights), 8 tiers, `computeXp`, `levelFromXp` |
+| `level.ts` | XP formula (scaling streak, investment-only capital), 11 tiers, `computeXp`, `levelFromXp` |
 | `pace.ts` | Daily pace (budget / cycle days), daily spend map, week/ISO-week helpers |
 | `streak.ts` | Containment uptime, `getStreakAsOf` for shield absorption |
 | `pot.ts` | Stored charge capacitor (weekly under-pace surplus) |
 | `history.ts` | 42/84-day containment log data (`getDayHistory`) |
 | `velocity.ts` | Next milestone, wealth velocity projection, fuel efficiency |
-| `achievements.ts` | 48 badge definitions + predicates, unlock persistence |
+| `achievements.ts` | 38 badge definitions + predicates, unlock persistence |
 | `challenges.ts` | 5 weekly directive templates, generation, eval |
 | `snapshot.ts` | `getReactorSnapshot`: assembles full game state for pages |
 | `eval.ts` | `runGameEval`: streak, shields, directives, achievements, ntfy |
@@ -188,9 +190,9 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 ### UI
 | File | Role |
 |---|---|
-| `app/ui/ReactorCore.tsx` | 8 bespoke animated SVG cores (Cold through Singularity) |
+| `app/ui/ReactorCore.tsx` | 11 bespoke animated SVG cores (Cold through Omniverse) |
 | `app/ui/ReactorStatus.tsx` | Overview panel: core badge + stats |
-| `app/ui/ReactorDevPanel.tsx` | `/rank?dev=1` previewer for all 8 tiers |
+| `app/ui/ReactorDevPanel.tsx` | `/rank?dev=1` previewer for all 11 tiers |
 | `app/ui/FuelRods.tsx` | 42-day fuel-rod containment log (interactive, animated) |
 | `app/ui/XpBreakdown.tsx` | Per-source XP breakdown with scaling streak detail |
 | `app/ui/AchievementBadge.tsx` | Animated hexagonal badge (glow + rotating ring) |
