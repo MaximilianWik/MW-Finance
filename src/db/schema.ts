@@ -317,6 +317,35 @@ export const challenges = pgTable(
   })
 );
 
+// ─── Event suggestions (Phase 6 — month-ahead lifestyle picks) ─────────────
+// AI-curated Stockholm events for the next ~30 days, refreshed weekly by cron.
+// A batch is grouped by `windowStart` (the run's "from" date); past-window rows
+// expire naturally on the /weekend page's `eventDate >= today` filter.
+export const eventSuggestions = pgTable(
+  "event_suggestions",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull(),
+    url: text("url").notNull(),
+    description: text("description"),
+    tag: text("tag"),        // techno | rave | metal | market | minerals | noise | gaming | gym | misc
+    audience: text("audience"), // me | date | both
+    whenText: text("when_text"), // human string, e.g. "Sat 26 Jul · 20:00"
+    eventDate: date("event_date"), // nullable — used for sorting + expiry
+    isWeekend: boolean("is_weekend").notNull().default(false), // computed from eventDate
+    price: text("price"),        // short string, e.g. "Free" | "150 kr"
+    priceLevel: text("price_level"), // free | cheap | moderate
+    imageUrl: text("image_url"), // scraped og:image; null → ASCII fallback in UI
+    windowStart: date("window_start"), // the run's "from" = today; groups a batch
+    dismissed: boolean("dismissed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    eventDateIdx: index("event_suggestions_date_idx").on(t.eventDate),
+    dismissedIdx: index("event_suggestions_dismissed_idx").on(t.dismissed),
+  })
+);
+
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type Category = typeof categories.$inferSelect;
@@ -335,3 +364,5 @@ export type GameState = typeof gameState.$inferSelect;
 export type Achievement = typeof achievements.$inferSelect;
 export type Challenge = typeof challenges.$inferSelect;
 export type NewChallenge = typeof challenges.$inferInsert;
+export type EventSuggestion = typeof eventSuggestions.$inferSelect;
+export type NewEventSuggestion = typeof eventSuggestions.$inferInsert;

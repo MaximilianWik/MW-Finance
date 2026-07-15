@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { transactions } from "@/db/schema";
+import { transactions, eventSuggestions } from "@/db/schema";
 import { runSync } from "@/lib/sync";
 
 /** Manual "Sync now" trigger from the dashboard. Uses Gemini to categorize
@@ -20,4 +20,12 @@ export async function dismissAnomaly(formData: FormData) {
   if (!id) return;
   await db.update(transactions).set({ flaggedReason: null }).where(eq(transactions.id, id));
   revalidatePath("/");
+}
+
+/** Soft-dismiss an event suggestion so it stops showing (and won't resurface). */
+export async function dismissEvent(formData: FormData) {
+  const id = Number(formData.get("id"));
+  if (!id) return;
+  await db.update(eventSuggestions).set({ dismissed: true }).where(eq(eventSuggestions.id, id));
+  revalidatePath("/weekend");
 }

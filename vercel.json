@@ -2,6 +2,7 @@
   "crons": [
     { "path": "/api/sync", "schedule": "0 6 * * *" },
     { "path": "/api/sync?gemini=1", "schedule": "0 6 * * 1" },
-    { "path": "/api/analysis/run", "schedule": "30 6 * * *" }
+    { "path": "/api/analysis/run", "schedule": "30 6 * * *" },
+    { "path": "/api/lifestyle/run", "schedule": "0 6 * * 1" }
   ]
 }
