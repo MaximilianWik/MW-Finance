@@ -111,7 +111,7 @@ export function buildThemePrompt(
     "- Only include events you can back with a real, working source URL. Never invent events or links.",
     "",
     "For EACH event write a short block containing: the event name, the exact date and start time, the venue, the price (or \"free\"), a one-line description, and the DIRECT event or ticket URL on its own line.",
-    "List as many distinct, real events as you can find in this window (aim for 6–10).",
+    "List as many distinct, real events as you can find in this window (aim for 8–12).",
   ].join("\n");
 }
 
@@ -128,8 +128,9 @@ export const STRUCTURE_PROMPT = [
   "- audience: 'date' = suits a partner who loves rocks/minerals and noise/alternative music; 'me' = solo interests (techno, metal, markets, gaming, gym); 'both' = works either way.",
   "- whenText = short human string like 'Sat 26 Jul · 20:00'. eventDate = ISO YYYY-MM-DD of the event (null only if genuinely unknown).",
   "- DROP any weekday (Mon–Fri) event that starts before 18:00. KEEP all weekend events.",
-  "- DROP events with no usable URL or clearly outside the given date window.",
+  "- url MUST be the direct, permanent event or venue page URL. NEVER use Google search redirect URLs, grounding redirect URLs, or any URL containing 'vertexaisearch' or 'google.com/search'. If you only have a redirect URL, use the venue's main website instead.",
+  "- DROP events with no usable direct URL.",
   "- price = short string ('Free', '150 kr', '~200 kr'). priceLevel: free = 0 kr, cheap = ≤150 kr, moderate = >150 kr.",
-  "- description = 1 tight sentence. No markdown, no emoji, no bullet glyphs.",
+  "- description = 2 tight sentences max. No markdown, no emoji, no bullet glyphs.",
   "- Deduplicate. Return every valid distinct event you find (up to 40).",
 ].join("\n");

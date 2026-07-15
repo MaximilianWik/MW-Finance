@@ -87,11 +87,15 @@ async function searchTheme(
 // One small call per theme instead of one giant merged call. Each fires as
 // soon as its search completes (pipelined), keeping wall-clock time low.
 
-/** Normalize a URL string the model might return without a protocol prefix. */
+/** Normalize a URL string the model might return without a protocol prefix.
+ *  Rejects Gemini grounding redirect URLs — they expire and aren't real event links. */
 function normalizeUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   let s = raw.trim();
   if (!s || s === "#" || s.startsWith("javascript:")) return null;
+  // Reject grounding redirect URLs (temporary, not real event pages).
+  if (s.includes("vertexaisearch.cloud.google.com")) return null;
+  if (s.includes("google.com/search")) return null;
   if (/^https?:\/\//i.test(s)) return s;
   if (s.startsWith("//")) return `https:${s}`;
   // Bare domain or path — prepend https
@@ -116,7 +120,7 @@ async function structureTheme(
     "Structure the following raw event notes into JSON. Extract the direct URL for each event.",
     urls.length ? `Reference source URLs:\n${urls.join("\n")}` : "",
     "",
-    text.slice(0, 18_000), // cap per-theme to avoid token bloat
+    text.slice(0, 6_000), // cap per-theme: smaller input = faster structuring
     "",
     "Produce the JSON now. JSON only.",
   ].join("\n");

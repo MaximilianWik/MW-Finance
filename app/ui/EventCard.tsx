@@ -87,7 +87,7 @@ export function EventCard({ event }: { event: EventCardData }) {
         <div className="text-[0.8rem] leading-tight text-ink2">{event.title}</div>
 
         {event.description && (
-          <p className="text-[0.68rem] leading-relaxed text-muted line-clamp-2">{event.description}</p>
+          <p className="text-[0.68rem] leading-relaxed text-muted">{event.description}</p>
         )}
 
         <div className="mt-auto flex items-center justify-between pt-1.5">
