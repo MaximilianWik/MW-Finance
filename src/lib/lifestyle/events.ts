@@ -88,13 +88,28 @@ async function searchTheme(
 // ─── Step 2: JSON structuring — per-theme (SDK JSON mode, no tools) ─────────
 // One small call per theme instead of one giant merged call. Each fires as
 // soon as its search completes (pipelined), keeping wall-clock time low.
+
+/** Normalize a URL string the model might return without a protocol prefix. */
+function normalizeUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let s = raw.trim();
+  if (!s || s === "#" || s.startsWith("javascript:")) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("//")) return `https:${s}`;
+  // Bare domain or path — prepend https
+  if (/^[a-zA-Z0-9]/.test(s)) return `https://${s}`;
+  return null;
+}
+
 async function structureTheme(
   text: string,
   urls: string[],
   theme: Theme,
   from: string,
-  to: string
+  to: string,
+  pushLog?: (line: string) => void
 ): Promise<StructuredEvent[]> {
+  const push = (l: string) => pushLog?.(l);
   if (!text.trim()) return [];
   const model = geminiModel({ system: STRUCTURE_PROMPT, json: true, temperature: 0.3 });
   const prompt = [
@@ -112,7 +127,8 @@ async function structureTheme(
   try {
     const res = await model.generateContent(prompt);
     raw = res.response.text().trim();
-  } catch {
+  } catch (e) {
+    push(`[~]    ${theme.label} structuring failed: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 
@@ -123,6 +139,7 @@ async function structureTheme(
   try {
     parsed = JSON.parse(jsonStr) as { events?: unknown };
   } catch {
+    push(`[~]    ${theme.label} JSON parse failed — raw[0..120]: ${jsonStr.slice(0, 120)}`);
     return [];
   }
 
@@ -132,25 +149,28 @@ async function structureTheme(
   const lvlSet = new Set<string>(PRICE_LEVELS);
 
   const out: StructuredEvent[] = [];
-  for (const raw of list as Array<Record<string, unknown>>) {
-    if (!raw || typeof raw.title !== "string" || typeof raw.url !== "string") continue;
-    if (!raw.title.trim() || !/^https?:\/\//i.test(raw.url)) continue;
+  let dropped = 0;
+  for (const item of list as Array<Record<string, unknown>>) {
+    if (!item || typeof item.title !== "string" || !item.title.trim()) { dropped++; continue; }
+    const url = normalizeUrl(item.url);
+    if (!url) { dropped++; continue; }
     const eventDate =
-      typeof raw.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.eventDate)
-        ? raw.eventDate
+      typeof item.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.eventDate)
+        ? item.eventDate
         : null;
     out.push({
-      title: raw.title.trim().slice(0, 200),
-      url: raw.url.trim(),
-      description: typeof raw.description === "string" ? raw.description.trim() : null,
-      tag: tagSet.has(raw.tag as string) ? (raw.tag as EventTag) : theme.key,
-      audience: audSet.has(raw.audience as string) ? (raw.audience as Audience) : theme.audience,
-      whenText: typeof raw.whenText === "string" ? raw.whenText.trim() : null,
+      title: item.title.trim().slice(0, 200),
+      url,
+      description: typeof item.description === "string" ? item.description.trim() : null,
+      tag: tagSet.has(item.tag as string) ? (item.tag as EventTag) : theme.key,
+      audience: audSet.has(item.audience as string) ? (item.audience as Audience) : theme.audience,
+      whenText: typeof item.whenText === "string" ? item.whenText.trim() : null,
       eventDate,
-      price: typeof raw.price === "string" ? raw.price.trim() : null,
-      priceLevel: lvlSet.has(raw.priceLevel as string) ? (raw.priceLevel as PriceLevel) : "cheap",
+      price: typeof item.price === "string" ? item.price.trim() : null,
+      priceLevel: lvlSet.has(item.priceLevel as string) ? (item.priceLevel as PriceLevel) : "cheap",
     });
   }
+  if (dropped > 0) push(`[~]    ${theme.label}: dropped ${dropped} event(s) (no title or url)`);
   return out;
 }
 
@@ -260,7 +280,7 @@ export async function runEventSuggestions(
       searchTheme(t, from, to, hint)
         .then(async (r) => {
           push(`[OK]   ${t.label}: ${r.urls.length} source(s)`);
-          const events = await structureTheme(r.text, r.urls, t, from, to);
+          const events = await structureTheme(r.text, r.urls, t, from, to, push);
           push(`[..]   ${t.label}: ${events.length} event(s) structured`);
           return events;
         })

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { eventSuggestions } from "@/db/schema";
-import { and, eq, or, gte, isNull, asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { Panel } from "../ui/Panel";
 import { AiConsole } from "../ui/AiConsole";
 import { AsciiSigil } from "../ui/AsciiSigil";
@@ -27,8 +27,6 @@ function SectionGrid({ title, events }: { title: string; events: EventCardData[]
 }
 
 export default async function WeekendPage() {
-  const today = new Date().toISOString().slice(0, 10);
-
   const t0 = Date.now();
   const [rows, queryLog] = await withQueryLog(async () => {
     return await db
@@ -47,13 +45,7 @@ export default async function WeekendPage() {
         eventDate: eventSuggestions.eventDate,
       })
       .from(eventSuggestions)
-      .where(
-        and(
-          eq(eventSuggestions.dismissed, false),
-          or(gte(eventSuggestions.eventDate, today), isNull(eventSuggestions.eventDate))
-        )
-      )
-      // NULLS LAST by Postgres default on ASC → dated events first, undated trail.
+      .where(eq(eventSuggestions.dismissed, false))
       .orderBy(asc(eventSuggestions.eventDate), asc(eventSuggestions.id));
   });
   const tookMs = Date.now() - t0;
