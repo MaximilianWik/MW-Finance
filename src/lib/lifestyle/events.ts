@@ -33,8 +33,6 @@ import {
 
 const WINDOW_DAYS = 30;
 const MAX_EVENTS = 40;
-const OG_CONCURRENCY = 8;
-const OG_TIMEOUT_MS = 3000;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface StructuredEvent {
@@ -191,44 +189,14 @@ function dedupe(events: StructuredEvent[], dismissedUrls: Set<string>): Structur
   return out;
 }
 
-// ─── Best-effort og:image enrichment (8-concurrency, 3s timeout) ───────────
-async function ogImage(pageUrl: string): Promise<string | null> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), OG_TIMEOUT_MS);
-  try {
-    const res = await fetch(pageUrl, {
-      signal: ctrl.signal,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; MWFinanceBot/1.0)" },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const html = (await res.text()).slice(0, 120_000);
-    const m =
-      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ??
-      html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
-    const src = m?.[1]?.trim();
-    if (!src) return null;
-    return src.startsWith("//") ? `https:${src}` : src;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function enrichImages(events: StructuredEvent[]): Promise<(string | null)[]> {
-  const images = new Array<string | null>(events.length).fill(null);
-  let cursor = 0;
-  async function worker() {
-    for (;;) {
-      const i = cursor++;
-      if (i >= events.length) return;
-      images[i] = await ogImage(events[i].url);
-    }
-  }
-  await Promise.all(Array.from({ length: OG_CONCURRENCY }, worker));
-  return images;
+// ─── Per-theme timeout guard ───────────────────────────────────────────────
+// Prevents a single slow Gemini call from holding up the whole run and
+// causing a Vercel 60s timeout. Each theme gets 45s; if it misses the
+// deadline the theme is skipped with a [~] log line.
+function themeTimeout(ms: number): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`timed out after ${ms / 1000}s`)), ms)
+  );
 }
 
 // ─── Budget headroom hint ──────────────────────────────────────────────────
@@ -274,20 +242,24 @@ export async function runEventSuggestions(
 
   // Fan out: search + structure pipelined per theme. Each theme starts
   // structuring as soon as its search completes — no waiting for all themes.
+  // Each theme is raced against a 45s deadline so a slow Gemini call can't
+  // blow the Vercel 60s limit.
   push(`[..]   searching & structuring ${THEMES.length} themes in parallel…`);
   const themeResults = await Promise.all(
     THEMES.map((t) =>
-      searchTheme(t, from, to, hint)
-        .then(async (r) => {
-          push(`[OK]   ${t.label}: ${r.urls.length} source(s)`);
-          const events = await structureTheme(r.text, r.urls, t, from, to, push);
-          push(`[..]   ${t.label}: ${events.length} event(s) structured`);
-          return events;
-        })
-        .catch((e) => {
-          push(`[~]    ${t.label}: ${e instanceof Error ? e.message : String(e)}`);
-          return [] as StructuredEvent[];
-        })
+      Promise.race([
+        searchTheme(t, from, to, hint)
+          .then(async (r) => {
+            push(`[OK]   ${t.label}: ${r.urls.length} source(s)`);
+            const events = await structureTheme(r.text, r.urls, t, from, to, push);
+            push(`[..]   ${t.label}: ${events.length} event(s) structured`);
+            return events;
+          }),
+        themeTimeout(45_000),
+      ]).catch((e) => {
+        push(`[~]    ${t.label}: ${e instanceof Error ? e.message : String(e)}`);
+        return [] as StructuredEvent[];
+      })
     )
   );
 
@@ -315,14 +287,12 @@ export async function runEventSuggestions(
     return { inserted: 0 };
   }
 
-  push("[..]   fetching event images…");
-  const images = await enrichImages(picked);
-  push(`[OK]   ${images.filter(Boolean).length}/${picked.length} images resolved`);
-
   // Replace the current non-dismissed set with the fresh batch.
   await db.delete(eventSuggestions).where(eq(eventSuggestions.dismissed, false));
 
-  const rows: NewEventSuggestion[] = picked.map((e, i) => ({
+  // Images are null (ASCII sigil fallback in UI). og:image scraping removed
+  // to keep the run safely within Vercel's 60s timeout limit.
+  const rows: NewEventSuggestion[] = picked.map((e) => ({
     title: e.title,
     url: e.url,
     description: e.description,
@@ -333,7 +303,7 @@ export async function runEventSuggestions(
     isWeekend: computeIsWeekend(e.eventDate),
     price: e.price,
     priceLevel: e.priceLevel,
-    imageUrl: images[i],
+    imageUrl: null,
     windowStart: from,
   }));
 
