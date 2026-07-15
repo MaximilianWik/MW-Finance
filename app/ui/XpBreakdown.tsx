@@ -14,15 +14,6 @@ interface Row {
   color: string;
 }
 
-function bar(frac: number, color: string) {
-  const w = Math.round(Math.max(0, Math.min(1, frac)) * 100);
-  return (
-    <div className="mt-0.5 h-1 w-full overflow-hidden bg-edge">
-      <div className="anim-bar h-full" style={{ width: `${w}%`, background: color }} />
-    </div>
-  );
-}
-
 export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
   const invXp    = Math.floor(inputs.investmentsTotal / 100) * XP_PER_100_KR_INVEST;
   const strXp    = computeStreakXp(inputs.bestStreak);
@@ -105,16 +96,6 @@ export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
           </tr>
         </tfoot>
       </table>
-
-      {rows.filter((r) => r.xp > 0).map((r) => (
-        <div key={r.label} className="flex flex-col gap-0.5">
-          <div className="flex items-center justify-between text-[0.62rem] uppercase tracking-term">
-            <span style={{ color: r.color }}>{r.label}</span>
-            <span className="text-faint">{total > 0 ? Math.round((r.xp / total) * 100) : 0}%</span>
-          </div>
-          {bar(total > 0 ? r.xp / total : 0, r.color)}
-        </div>
-      ))}
     </div>
   );
 }

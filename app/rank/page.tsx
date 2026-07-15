@@ -291,33 +291,45 @@ export default async function RankPage({
             No directives yet. Run an eval to generate this week&apos;s slate.
           </p>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2">
             {challenges.map((c) => {
-              const progress  = Number(c.progress);
-              const target    = Number(c.target);
-              const pct       = target > 0 ? Math.min(1, progress / target) : 0;
-              const barColor  = c.status === "complete" ? "#4ec96a" : c.status === "failed" ? "#e85252" : "#5cc8e8";
+              const progress = Number(c.progress);
+              const target   = Number(c.target);
+              const pct      = target > 0 ? Math.min(1, progress / target) : 0;
+              const complete = c.status === "complete";
+              const failed   = c.status === "failed";
+              const fillColor = complete ? "#4ec96a" : failed ? "#e85252" : "#5cc8e8";
+              const statusText = complete
+                ? `CLEARED +${c.rewardXp} XP`
+                : failed ? "FAILED"
+                : c.lowerIsBetter ? `${kr(progress)} / ${kr(target)}`
+                : `${Math.floor(progress)} / ${Math.floor(target)}`;
+              const statusClass = complete ? "text-accent" : failed ? "text-danger" : "text-faint";
               return (
-                <li key={c.id} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-[0.72rem] uppercase tracking-term">
-                    <span className="text-ink2">{c.title}</span>
-                    <span className={
-                      c.status === "complete" ? "text-accent"
-                      : c.status === "failed"  ? "text-danger"
-                      : "text-faint"
-                    }>
-                      {c.status === "complete" ? `[ CLEARED +${c.rewardXp} XP ]`
-                        : c.status === "failed" ? "[ FAILED ]"
-                        : c.lowerIsBetter ? `${kr(progress)} / ${kr(target)}`
-                        : `${Math.floor(progress)} / ${Math.floor(target)}`}
+                <li
+                  key={c.id}
+                  className="relative overflow-hidden"
+                  style={{ border: `1px solid ${fillColor}28` }}
+                >
+                  {/* flood fill */}
+                  <div
+                    className="anim-bar absolute inset-y-0 left-0"
+                    style={{ width: `${Math.round(pct * 100)}%`, background: fillColor, opacity: 0.14 }}
+                  />
+                  {/* content */}
+                  <div className="relative flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <span className="block text-[0.72rem] uppercase tracking-term text-ink2 leading-snug">
+                        {c.title}
+                      </span>
+                      <span className="block text-[0.6rem] lowercase text-faint mt-0.5">
+                        {c.description} · +{c.rewardXp} XP
+                      </span>
+                    </div>
+                    <span className={`shrink-0 text-[0.68rem] uppercase tracking-term ${statusClass}`}>
+                      {statusText}
                     </span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden bg-edge">
-                    <div className="anim-bar h-full" style={{ width: `${Math.round(pct * 100)}%`, background: barColor }} />
-                  </div>
-                  <span className="text-[0.62rem] lowercase text-faint">
-                    {c.description} · +{c.rewardXp} XP
-                  </span>
                 </li>
               );
             })}
