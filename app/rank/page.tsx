@@ -8,7 +8,7 @@ import { TIERS } from "@/lib/game/level";
 import { Panel } from "../ui/Panel";
 import { ReactorCore } from "../ui/ReactorCore";
 import { ReactorDevPanel } from "../ui/ReactorDevPanel";
-import { StreakCalendar } from "../ui/StreakCalendar";
+import { FuelRods } from "../ui/FuelRods";
 import { XpBreakdown } from "../ui/XpBreakdown";
 import { AchievementBadge } from "../ui/AchievementBadge";
 import { Tip } from "../ui/Tip";
@@ -170,7 +170,8 @@ export default async function RankPage({
                 <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
                   saved
                   <Tip title="Savings total" side="below">
-                    All-time sum of outflows categorised as "Savings". Earns 5 XP per 100 kr.
+                    All-time sum of outflows categorised as "Savings". Earns 3 XP per 100 kr
+                    as the secondary reserve track.
                   </Tip>
                 </div>
                 <div className="text-lg tabular-nums text-ink2">{kr(savingsTotal)}</div>
@@ -181,9 +182,9 @@ export default async function RankPage({
                 <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
                   invested
                   <Tip title="Investments total" side="below">
-                    All-time sum of outflows categorised as "Investments" (e.g. Lysa). Earns
-                    8 XP per 100 kr, more than savings because deployed capital compounds.
-                    Re-categorise Lysa in the ledger to activate this.
+                    The Investments box total (each account's seed balance plus its matching
+                    transactions). Earns 10 XP per 100 kr as the primary driver, since deployed
+                    capital compounds. Add or update accounts in the Investments box to move this.
                   </Tip>
                 </div>
                 <div className="text-lg tabular-nums text-accent2">{kr(investmentsTotal)}</div>
@@ -264,21 +265,24 @@ export default async function RankPage({
       {/* ── Containment log ────────────────────────────────────────────── */}
       <Panel title="CONTAINMENT LOG">
         <p className="mb-3 text-[0.65rem] text-faint">
-          84-day clean/breach heatmap. Hover (desktop) or check the legend for colour meanings.
-          <Tip title="Containment log">
-            Each square is one calendar day. Aligned to Mondays so weeks form columns.
+          42-day fuel-rod bank. Each rod is one day; column height is the containment margin
+          (headroom under daily pace). Hover or tap a rod for detail, click to pin.
+          <Tip title="Fuel-rod containment log">
+            Each vertical rod is one calendar day, most recent on the right.
             <br /><br />
-            <strong>Bright green</strong> = no spend at all.
-            <strong> Mid green</strong> = spent something but stayed under daily pace.
-            <strong> Red</strong> = breach (spend exceeded pace).
+            <strong>Bright cyan (full):</strong> zero spend, maximum containment.
+            <strong> Green:</strong> spent something but stayed under daily pace; taller rod = more headroom.
+            <strong> Red hot stub:</strong> breach (spend exceeded pace); the control-rod cap drops and the rod overheats below the pace line.
             <br /><br />
-            Hover a square for the exact date, spend, and pace.
+            The dashed line marks the minimum-containment (pace) threshold. Hover or tap a rod
+            for its exact date, spend and pace.
           </Tip>
         </p>
-        <StreakCalendar
+        <FuelRods
           records={history}
           currentStreak={streak.current}
           bestStreak={streak.best}
+          pace={snap.pot.pace}
         />
       </Panel>
 

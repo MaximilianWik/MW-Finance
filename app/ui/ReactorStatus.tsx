@@ -71,8 +71,8 @@ export function ReactorStatus({ snap }: { snap: ReactorSnapshot | null }) {
               <span className="text-[0.6rem] uppercase tracking-term text-faint">xp</span>
               <Tip title="How XP is calculated">
                 <strong>Formula (derived live, never stored):</strong>
-                <br />· floor(savings / 100) × 5
-                <br />· floor(investments / 100) × 8
+                <br />· floor(investments / 100) × 10  (primary)
+                <br />· floor(savings / 100) × 3  (reserve)
                 <br />· streak: days × (40 + days × 5)
                 <br />  day 7 = 75/d, day 30 = 190/d, day 100 = 540/d
                 <br />· budget: 3 XP per 100 kr under budget at cycle end

@@ -7,7 +7,7 @@ import { evaluateAchievements, getAchievementXp } from "./achievements";
 import { computeXp, levelFromXp } from "./level";
 import { evaluateBudgetDiscipline } from "./budget-xp";
 import { getSavingsTotal } from "@/lib/savings";
-import { getInvestmentsTotal } from "./history";
+import { getInvestmentAccountsTotal } from "@/lib/investments";
 import { sendNtfy } from "@/lib/notify";
 import { env } from "@/lib/env";
 import { todayIso, shiftIso, isoWeek } from "./pace";
@@ -153,7 +153,7 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
 
   // 5. Savings spike detection + budget discipline.
   const [savings, investments, achievementXp, challengeXp, challengesCompleted] = await Promise.all([
-    getSavingsTotal(), getInvestmentsTotal(), getAchievementXp(), getChallengeXp(), getChallengesCompleted(),
+    getSavingsTotal(), getInvestmentAccountsTotal(), getAchievementXp(), getChallengeXp(), getChallengesCompleted(),
   ]);
   const spike = await detectSavingsSpike(savings.total, investments);
   if (spike) log(`[SURGE] Savings spike detected this month.`);

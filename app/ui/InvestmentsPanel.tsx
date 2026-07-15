@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { kr } from "@/lib/format";
+import { XP_PER_100_KR_INVEST } from "@/lib/game/level";
 
 interface AccountRow {
   id: number;
@@ -437,6 +439,17 @@ export function InvestmentsPanel() {
           </div>
         ) : (
           <button onClick={() => setAddOpen(true)} className="mt-3 btn self-start text-xs">+ account</button>
+        )}
+
+        {/* ─── Reactor feed line ───────────────────────── */}
+        {accounts.length > 0 && (
+          <Link
+            href="/rank"
+            className="mt-3 flex items-center justify-center gap-1 border-t border-edge pt-2 text-[0.65rem] uppercase tracking-term text-faint hover:text-accent2"
+          >
+            <span className="text-accent2">⚡</span>
+            feeds {(Math.floor((data?.total ?? 0) / 100) * XP_PER_100_KR_INVEST).toLocaleString("sv-SE")} XP into the reactor core →
+          </Link>
         )}
       </div>
     </div>

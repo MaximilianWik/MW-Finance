@@ -29,8 +29,8 @@ Financial discipline powers a reactor core. XP is derived live from real financi
 
 **XP Formula:**
 ```
-floor(savings / 100) × 5 XP
-floor(investments / 100) × 8 XP        (Lysa: categorize as "Investments")
+floor(investments / 100) × 10 XP       (primary driver — Investments box total: seed + txns)
+floor(savings / 100) × 3 XP            (secondary reserve track)
 streak days × (40 + days × 5) XP       (+5 XP/day rate increase per day of streak)
 budget: 3 XP per 100 kr under budget at end of salary cycle
 + achievement XP + challenge XP
@@ -62,7 +62,7 @@ budget: 3 XP per 100 kr under budget at end of salary cycle
 
 **Weekly directives (5 challenges):** Hold Containment, Dark Reactor, Cold Kitchen, Deploy Capital, Fuel the Reserve. Resolve on eval or nightly after sync.
 
-**44 achievements** spanning savings/investment/wealth milestones, streak milestones, directive streaks, capacitor charges and tier reaches (up to "Millionaire" +10k XP, "Year of Iron" +6k XP).
+**48 achievements** spanning investment/savings/wealth milestones, streak milestones, directive streaks, capacitor charges and tier reaches (up to "Fund Manager" +12k XP for 1M invested, "Millionaire" +10k XP, "Year of Iron" +6k XP). Investing is the primary track and carries the heaviest rewards.
 
 **Reactor eval** runs after every sync. Manual trigger on `/rank`. Streak eval, challenge resolution, achievement unlocks, shield awards, savings-spike detection and ntfy alerts all happen here.
 
@@ -166,20 +166,21 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `src/lib/sync.ts` | Full sync orchestration |
 | `src/lib/budget.ts` | Salary-cycle budget status |
 | `src/lib/period.ts` | `getSalaryCycle`, `getAllSalaryCycles` |
-| `src/lib/savings.ts` | Goals, contributions, monthly sweep, savings/investments totals |
+| `src/lib/savings.ts` | Goals, contributions, monthly sweep, savings total |
+| `src/lib/investments.ts` | Investment accounts (seed + txn delta), `getInvestmentAccountsTotal` (reactor invested source) |
 | `src/lib/behavior/` | Recurring detection, anomaly flagging, adaptive budgets |
 | `src/lib/gemini/` | Context builder, assistant, budget recalibration, analysis |
 
 ### Reactor Core game engine (`src/lib/game/`)
 | File | Role |
 |---|---|
-| `level.ts` | XP formula (scaling streak), 8 tiers, `computeXp`, `levelFromXp` |
+| `level.ts` | XP formula (scaling streak, investment-primary weights), 8 tiers, `computeXp`, `levelFromXp` |
 | `pace.ts` | Daily pace (budget / cycle days), daily spend map, week/ISO-week helpers |
 | `streak.ts` | Containment uptime, `getStreakAsOf` for shield absorption |
 | `pot.ts` | Stored charge capacitor (weekly under-pace surplus) |
-| `history.ts` | 84-day spend heatmap data, `getInvestmentsTotal` |
+| `history.ts` | 42/84-day containment log data (`getDayHistory`) |
 | `velocity.ts` | Next milestone, wealth velocity projection, fuel efficiency |
-| `achievements.ts` | 44 badge definitions + predicates, unlock persistence |
+| `achievements.ts` | 48 badge definitions + predicates, unlock persistence |
 | `challenges.ts` | 5 weekly directive templates, generation, eval |
 | `snapshot.ts` | `getReactorSnapshot`: assembles full game state for pages |
 | `eval.ts` | `runGameEval`: streak, shields, directives, achievements, ntfy |
@@ -190,7 +191,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `app/ui/ReactorCore.tsx` | 8 bespoke animated SVG cores (Cold through Singularity) |
 | `app/ui/ReactorStatus.tsx` | Overview panel: core badge + stats |
 | `app/ui/ReactorDevPanel.tsx` | `/rank?dev=1` previewer for all 8 tiers |
-| `app/ui/StreakCalendar.tsx` | 84-day clean/breach heatmap |
+| `app/ui/FuelRods.tsx` | 42-day fuel-rod containment log (interactive, animated) |
 | `app/ui/XpBreakdown.tsx` | Per-source XP breakdown with scaling streak detail |
 | `app/ui/AchievementBadge.tsx` | Animated hexagonal badge (glow + rotating ring) |
 | `app/ui/Tip.tsx` | Click-to-toggle info tooltip |

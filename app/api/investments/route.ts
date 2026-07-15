@@ -1,59 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { investmentAccounts, transactions } from "@/db/schema";
-import { and, asc, eq, ilike, sql } from "drizzle-orm";
+import { investmentAccounts } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { fetchQuote } from "@/lib/quote";
+import { getInvestmentAccounts } from "@/lib/investments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Compute balance delta for one account from its linked transactions. */
-async function computeDelta(merchant: string, seedDate: string | null) {
-  const merchantMatch = ilike(transactions.merchant, `%${merchant}%`);
-  const where = seedDate
-    ? and(merchantMatch, sql`${transactions.bookingDate} > ${seedDate}`)
-    : merchantMatch;
-
-  const [row] = await db
-    .select({
-      deposits:    sql<number>`coalesce(sum(case when ${transactions.direction}='DBIT' then ${transactions.amount}::float else 0 end),0)::float`,
-      withdrawals: sql<number>`coalesce(sum(case when ${transactions.direction}='CRDT' then ${transactions.amount}::float else 0 end),0)::float`,
-      txCount:     sql<number>`count(*)::int`,
-    })
-    .from(transactions)
-    .where(where);
-
-  const deposits    = row?.deposits    ?? 0;
-  const withdrawals = row?.withdrawals ?? 0;
-  return { delta: deposits - withdrawals, deposits, withdrawals, txCount: row?.txCount ?? 0 };
-}
-
 /** List all accounts with their computed current balances. */
 export async function GET() {
   try {
-    const accs = await db
-      .select()
-      .from(investmentAccounts)
-      .orderBy(asc(investmentAccounts.sort), asc(investmentAccounts.id));
-
-    const enriched = await Promise.all(
-      accs.map(async (acc) => {
-        const seed = Number(acc.seedBalance);
-        const priceMeta = {
-          ticker:    acc.ticker,
-          basePrice: acc.basePrice != null ? Number(acc.basePrice) : null,
-          shares:    acc.shares != null ? Number(acc.shares) : null,
-        };
-        if (!acc.merchant) {
-          return { ...acc, ...priceMeta, seedBalance: seed, currentBalance: seed, delta: 0, deposits: 0, withdrawals: 0, txCount: 0 };
-        }
-        const { delta, deposits, withdrawals, txCount } = await computeDelta(acc.merchant, acc.seedDate);
-        return { ...acc, ...priceMeta, seedBalance: seed, currentBalance: Math.round((seed + delta) * 100) / 100, delta: Math.round(delta * 100) / 100, deposits: Math.round(deposits * 100) / 100, withdrawals: Math.round(withdrawals * 100) / 100, txCount };
-      })
-    );
-
-    const total = enriched.reduce((s, a) => s + a.currentBalance, 0);
-    return NextResponse.json({ accounts: enriched, total: Math.round(total * 100) / 100 });
+    const { accounts, total } = await getInvestmentAccounts();
+    return NextResponse.json({ accounts, total });
   } catch (e) {
     console.error("[GET /api/investments]", e);
     return NextResponse.json({ error: String(e instanceof Error ? e.message : e) }, { status: 500 });

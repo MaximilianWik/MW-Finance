@@ -1,6 +1,3 @@
-import { db } from "@/db";
-import { transactions, categories } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
 import { getDailyPace, getDailySpendMap, todayIso, shiftIso } from "./pace";
 
 export interface DayRecord {
@@ -15,7 +12,7 @@ export interface DayRecord {
 /**
  * Last `days` calendar days (aligned to a Monday so the week-grid is clean),
  * each labelled clean/breach/no-spend relative to the daily pace. Used by
- * the streak calendar heatmap on /rank.
+ * the fuel-rod containment log on /rank.
  */
 export async function getDayHistory(days = 84): Promise<DayRecord[]> {
   const { pace } = await getDailyPace();
@@ -53,16 +50,4 @@ export async function getDayHistory(days = 84): Promise<DayRecord[]> {
   }
 
   return records;
-}
-
-/** Total kr invested (DBIT outflows categorised as "Investments"). */
-export async function getInvestmentsTotal(): Promise<number> {
-  const [row] = await db
-    .select({
-      total: sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`,
-    })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(eq(categories.name, "Investments"));
-  return row?.total ?? 0;
 }

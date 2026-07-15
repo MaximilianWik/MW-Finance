@@ -29,8 +29,10 @@ export interface XpInputs {
 }
 
 // ── XP weights ───────────────────────────────────────────────────────────────
-export const XP_PER_100_KR        = 5;   // per 100 kr saved
-export const XP_PER_100_KR_INVEST = 8;   // per 100 kr invested (more: deployed capital)
+// Investing is the primary driver: deployed capital compounds, so it fuels the
+// reactor harder than idle reserves. Savings is the secondary reserve track.
+export const XP_PER_100_KR        = 3;   // per 100 kr saved (secondary reserve)
+export const XP_PER_100_KR_INVEST = 10;  // per 100 kr invested (primary driver)
 
 // Streak XP: the per-day rate grows by +5 for every day you maintain containment.
 //

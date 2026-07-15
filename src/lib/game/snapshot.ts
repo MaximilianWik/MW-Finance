@@ -6,7 +6,7 @@ import { getAchievementXp, getUnlockedIds } from "./achievements";
 import { getChallengeXp, getChallengesCompleted } from "./challenges";
 import { computeXp, levelFromXp, type LevelInfo, type XpInputs } from "./level";
 import { getSavingsTotal } from "@/lib/savings";
-import { getInvestmentsTotal } from "./history";
+import { getInvestmentAccountsTotal } from "@/lib/investments";
 import { getNextMilestone, type MilestoneInfo } from "./velocity";
 
 export interface ReactorSnapshot {
@@ -27,7 +27,7 @@ export async function getReactorSnapshot(): Promise<ReactorSnapshot> {
     achievementXp, challengeXp, challengesCompleted,
     unlockedIds, gs,
   ] = await Promise.all([
-    getStreak(), getPot(), getSavingsTotal(), getInvestmentsTotal(),
+    getStreak(), getPot(), getSavingsTotal(), getInvestmentAccountsTotal(),
     getAchievementXp(), getChallengeXp(), getChallengesCompleted(),
     getUnlockedIds(),
     db.select().from(gameState).limit(1),

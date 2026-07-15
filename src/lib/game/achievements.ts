@@ -23,51 +23,56 @@ export interface AchievementDef {
   predicate: (c: AchievementContext) => boolean;
 }
 
-// 31 reactor events, ordered roughly by ease of unlocking.
+// Reactor events, ordered roughly by ease of unlocking. Investing is the primary
+// track (boosted XP); savings is a lesser reserve track (reduced XP).
 export const ACHIEVEMENTS: AchievementDef[] = [
-  // Savings milestones
-  { id: "first_spark",   name: "First Spark",        xp: 100,  color: "#b0603a",
+  // Savings milestones (secondary reserve track — reduced XP)
+  { id: "first_spark",   name: "First Spark",        xp: 50,   color: "#b0603a",
     description: "Put your first krona into savings.",
     predicate: (c) => c.savingsTotal > 0 },
 
-  { id: "saver_5k",      name: "Five Thousand",       xp: 150,  color: "#3ec8b0",
+  { id: "saver_5k",      name: "Five Thousand",       xp: 75,   color: "#3ec8b0",
     description: "5 000 kr saved all-time.",
     predicate: (c) => c.savingsTotal >= 5000 },
 
-  { id: "saver_10k",     name: "Ten Kilo",            xp: 300,  color: "#3ec8b0",
+  { id: "saver_10k",     name: "Ten Kilo",            xp: 150,  color: "#3ec8b0",
     description: "10 000 kr saved all-time.",
     predicate: (c) => c.savingsTotal >= 10000 },
 
-  { id: "saver_50k",     name: "Half Ton",            xp: 800,  color: "#3ec8b0",
+  { id: "saver_50k",     name: "Half Ton",            xp: 400,  color: "#3ec8b0",
     description: "50 000 kr saved all-time.",
     predicate: (c) => c.savingsTotal >= 50000 },
 
-  { id: "saver_100k",    name: "Six Figures",         xp: 1500, color: "#3ec8b0",
+  { id: "saver_100k",    name: "Six Figures",         xp: 750,  color: "#3ec8b0",
     description: "100 000 kr saved all-time.",
     predicate: (c) => c.savingsTotal >= 100000 },
 
-  { id: "saver_200k",    name: "Double Century",      xp: 2500, color: "#3ec8b0",
+  { id: "saver_200k",    name: "Double Century",      xp: 1250, color: "#3ec8b0",
     description: "200 000 kr saved all-time.",
     predicate: (c) => c.savingsTotal >= 200000 },
 
-  // Investment milestones
-  { id: "first_investment", name: "Capital Deployed", xp: 150,  color: "#5cc8e8",
+  // Investment milestones (primary track — boosted XP)
+  { id: "first_investment", name: "Capital Deployed", xp: 200,  color: "#5cc8e8",
     description: "Made your first investment transfer.",
     predicate: (c) => c.investmentsTotal > 0 },
 
-  { id: "invest_10k",    name: "Seed Round",          xp: 300,  color: "#5cc8e8",
+  { id: "invest_10k",    name: "Seed Round",          xp: 500,  color: "#5cc8e8",
     description: "10 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 10000 },
 
-  { id: "invest_50k",    name: "Series A",            xp: 700,  color: "#5cc8e8",
+  { id: "invest_25k",    name: "Growth Round",        xp: 800,  color: "#5cc8e8",
+    description: "25 000 kr invested all-time.",
+    predicate: (c) => c.investmentsTotal >= 25000 },
+
+  { id: "invest_50k",    name: "Series A",            xp: 1200, color: "#5cc8e8",
     description: "50 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 50000 },
 
-  { id: "invest_100k",   name: "Six-Figure Portfolio",xp: 1500, color: "#5cc8e8",
+  { id: "invest_100k",   name: "Six-Figure Portfolio",xp: 2500, color: "#5cc8e8",
     description: "100 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 100000 },
 
-  { id: "invest_250k",   name: "Institutional",       xp: 3000, color: "#5cc8e8",
+  { id: "invest_250k",   name: "Institutional",       xp: 4500, color: "#5cc8e8",
     description: "250 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 250000 },
 
@@ -190,13 +195,17 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     description: "Have more invested than saved (50 000 kr+ invested).",
     predicate: (c) => c.investmentsTotal >= 50000 && c.investmentsTotal > c.savingsTotal },
 
-  { id: "saver_500k",    name: "Deep Reserve",         xp: 4000, color: "#3ec8b0",
+  { id: "saver_500k",    name: "Deep Reserve",         xp: 2000, color: "#3ec8b0",
     description: "500 000 kr saved all-time.",
     predicate: (c) => c.savingsTotal >= 500000 },
 
-  { id: "invest_500k",   name: "Whale",                xp: 5000, color: "#5cc8e8",
+  { id: "invest_500k",   name: "Whale",                xp: 7000, color: "#5cc8e8",
     description: "500 000 kr invested all-time.",
     predicate: (c) => c.investmentsTotal >= 500000 },
+
+  { id: "invest_1m",     name: "Fund Manager",         xp: 12000, color: "#5cc8e8",
+    description: "1 000 000 kr invested all-time.",
+    predicate: (c) => c.investmentsTotal >= 1000000 },
 
   { id: "uptime_365",    name: "Year of Iron",         xp: 6000, color: "#c080e0",
     description: "365-day containment streak. One full year.",
