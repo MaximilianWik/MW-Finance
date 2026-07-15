@@ -59,6 +59,7 @@ export async function getReactorSnapshot(): Promise<ReactorSnapshot> {
     potCharge:           pot.charge,
     savingsSpike:        false,
     directiveStreak,
+    budgetXp,
     xp,
   });
 
