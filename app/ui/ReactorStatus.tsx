@@ -73,12 +73,13 @@ export function ReactorStatus({ snap }: { snap: ReactorSnapshot | null }) {
                 <strong>Formula (derived live, never stored):</strong>
                 <br />· floor(savings / 100) × 5
                 <br />· floor(investments / 100) × 8
-                <br />· best streak days × 50
+                <br />· streak XP scales: days × (40 + floor(days/7) × 12)
+                <br />  e.g. 30d = 88 XP/day, 100d = 208 XP/day
                 <br />· unlocked achievement XP
                 <br />· completed challenge XP
                 <br /><br />
-                Investing earns more per kr because it is deployed, compounding capital.
-                Re-categorise Lysa to "Investments" in the ledger to unlock investment XP.
+                Streak XP accelerates every 7 clean days. Longer containment
+                compounds the reactor output dramatically.
               </Tip>
             </div>
             <Meter value={level.progress} color={hue} />

@@ -22,22 +22,47 @@ export const TIERS: Tier[] = [
 
 export interface XpInputs {
   savingsTotal: number;
-  investmentsTotal: number; // all-time kr sent to investments
+  investmentsTotal: number;
   bestStreak: number;
   achievementXp: number;
   challengeXp: number;
 }
 
-// XP weighting: savings + investments are the backbone; streak multiplies over time.
+// ── XP weights ───────────────────────────────────────────────────────────────
 export const XP_PER_100_KR        = 5;  // 5 XP per 100 kr saved
-export const XP_PER_100_KR_INVEST = 8;  // 8 XP per 100 kr invested (deployed capital earns more)
-export const XP_PER_STREAK_DAY    = 50;
+export const XP_PER_100_KR_INVEST = 8;  // 8 XP per 100 kr invested
+
+// Streak XP scales with streak length. Each completed 7-day block adds
+// XP_STREAK_BONUS extra XP per day, rewarding sustained containment.
+//
+//   daily rate(d) = XP_STREAK_BASE + floor(d / 7) × XP_STREAK_BONUS
+//   streak XP     = d × daily rate(d)
+//
+// Examples (d = days):
+//   1 d  →   40 XP/d   =       40 XP
+//   7 d  →   52 XP/d   =      364 XP
+//  30 d  →   88 XP/d   =    2 640 XP
+//  60 d  →  136 XP/d   =    8 160 XP
+// 100 d  →  208 XP/d   =   20 800 XP   (FUSION territory from streak alone)
+// 365 d  →  664 XP/d   =  242 360 XP
+export const XP_STREAK_BASE  = 40;  // base XP per streak day
+export const XP_STREAK_BONUS = 12;  // additional XP/day earned per completed 7-day block
+
+/** XP per day at a given streak length (always >= XP_STREAK_BASE). */
+export function streakDailyRate(days: number): number {
+  return XP_STREAK_BASE + Math.floor(days / 7) * XP_STREAK_BONUS;
+}
+
+/** Total streak XP for a given best streak. */
+export function computeStreakXp(days: number): number {
+  return days * streakDailyRate(days);
+}
 
 export function computeXp(i: XpInputs): number {
   return (
-    Math.floor(i.savingsTotal  / 100) * XP_PER_100_KR +
+    Math.floor(i.savingsTotal     / 100) * XP_PER_100_KR +
     Math.floor(i.investmentsTotal / 100) * XP_PER_100_KR_INVEST +
-    i.bestStreak * XP_PER_STREAK_DAY +
+    computeStreakXp(i.bestStreak) +
     i.achievementXp +
     i.challengeXp
   );
@@ -46,12 +71,12 @@ export function computeXp(i: XpInputs): number {
 export interface LevelInfo {
   xp: number;
   tier: Tier;
-  index: number;          // 0..7
-  next: Tier | null;      // null at max tier
+  index: number;
+  next: Tier | null;
   xpIntoTier: number;
   xpForNext: number | null;
-  progress: number;       // 0..1 toward next tier (1 at max)
-  danger: boolean;        // containment breach → destabilized core
+  progress: number;  // 0..1 toward next tier
+  danger: boolean;
 }
 
 export function levelFromXp(xp: number, danger = false): LevelInfo {
