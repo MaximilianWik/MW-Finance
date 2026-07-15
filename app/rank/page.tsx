@@ -417,7 +417,7 @@ export default async function RankPage({
           <span className="text-[0.62rem] uppercase tracking-term text-amber">[DEV MODE]</span>
         }>
           <p className="mb-3 text-[0.68rem] text-muted">
-            All 11 output tiers. Use controls to preview danger state and XP progress.
+            All 12 output tiers. Use controls to preview danger state and XP progress.
             Access: <code className="text-faint">/rank?dev=1</code>
           </p>
           <ReactorDevPanel />

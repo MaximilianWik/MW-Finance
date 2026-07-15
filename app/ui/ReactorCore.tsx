@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
  *   8 QUASAR      black hole firing bipolar relativistic jets through spacetime
  *   9 BIG BANG    a universe igniting: expanding shockwaves, ejecta, genesis core
  *  10 OMNIVERSE   nested fractal realities, hue-shifting mandala, bubble universes
+ *  11 OBLIVION    fast, spiked, flashing crimson blades around an ominous void core
  *
  * Pure SVG + CSS animation. Honours prefers-reduced-motion (all animated
  * elements carry a reactor- class which the global reduced-motion rule freezes).
@@ -592,7 +593,93 @@ function Omniverse({ color, progress, uid }: TierProps) {
   );
 }
 
-const RENDERERS = [Cold, Ember, Ignition, Stable, Critical, Overdrive, Fusion, Singularity, Quasar, BigBang, Omniverse];
+// ── 11 · OBLIVION ─────────────────────────────────────────────────────────
+function Oblivion({ color, progress, uid }: TierProps) {
+  const spike = (rIn: number, rOut: number, a: number, w: number) => {
+    const [bx1, by1] = polar(rIn, a - w);
+    const [tx, ty]   = polar(rOut, a);
+    const [bx2, by2] = polar(rIn, a + w);
+    return `${bx1},${by1} ${tx},${ty} ${bx2},${by2}`;
+  };
+  const bolt = (a: number) => {
+    const [x1, y1] = polar(24, a);
+    const [mx, my] = polar(46, a + 10);
+    const [nx, ny] = polar(64, a - 8);
+    const [x2, y2] = polar(86, a + 4);
+    return `${x1},${y1} ${mx},${my} ${nx},${ny} ${x2},${y2}`;
+  };
+  return (
+    <g className="reactor-anim" style={{ animation: "reactor-shake 0.18s ease-in-out infinite" }}>
+      <defs>
+        <radialGradient id={`${uid}-core`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="30%" stopColor="#ffd0d0" />
+          <stop offset="62%" stopColor={color} />
+          <stop offset="100%" stopColor="#2a0008" stopOpacity="0.2" />
+        </radialGradient>
+        <radialGradient id={`${uid}-halo`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.6" />
+          <stop offset="55%" stopColor={color} stopOpacity="0.14" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+        <filter id={`${uid}-warp`}>
+          <feTurbulence type="turbulence" baseFrequency="0.06 0.11" numOctaves="2" seed="19" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="10" />
+        </filter>
+        <filter id={`${uid}-b`} x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="5" /></filter>
+      </defs>
+      {/* aggressive halo, fast bloom */}
+      <circle cx={C} cy={C} r="94" fill={`url(#${uid}-halo)`}
+        className="reactor-anim" style={{ animation: "reactor-bloom 1.1s ease-in-out infinite" }} />
+      <Arc r={90} color={color} progress={progress} />
+      {/* fast warp rings */}
+      {[86, 74].map((r, i) => (
+        <circle key={i} cx={C} cy={C} r={r} fill="none" stroke={color} strokeWidth="0.8"
+          className="reactor-anim" style={{ animation: `reactor-warp ${1.6 + i * 0.5}s ease-in-out ${i * 0.2}s infinite` }} />
+      ))}
+      {/* outer spike ring — fast spin, flashing blades */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin 3.5s linear infinite" }}>
+        {Array.from({ length: 18 }, (_, i) => (
+          <polygon key={i} className="reactor-anim" points={spike(58, 88, i * 20, 4)}
+            fill={i % 2 ? color : "#ff8080"} opacity="0.85"
+            style={{ animation: `reactor-flicker ${0.5 + (i % 4) * 0.12}s steps(2, jump-none) ${i * 0.03}s infinite` }} />
+        ))}
+      </g>
+      {/* inner spike ring — reverse, sharper */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin-rev 2.4s linear infinite" }}>
+        {Array.from({ length: 12 }, (_, i) => (
+          <polygon key={i} points={spike(34, 60, i * 30 + 15, 6)} fill={color} opacity="0.55" />
+        ))}
+      </g>
+      {/* erratic lightning */}
+      <g fill="none" stroke="#ffd0d0" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round">
+        {[0, 60, 120, 180, 240, 300].map((a, i) => (
+          <polyline key={i} className="reactor-anim" points={bolt(a)}
+            style={{ animation: `reactor-arc ${0.4 + i * 0.07}s linear ${i * 0.05}s infinite` }} />
+        ))}
+      </g>
+      {/* spiked star, fast spin, distorted */}
+      <g className="reactor-anim" style={{ animation: "reactor-spin 1.8s linear infinite" }}>
+        <g filter={`url(#${uid}-warp)`}>
+          {Array.from({ length: 8 }, (_, i) => (
+            <polygon key={i} points={spike(14, 44, i * 45, 9)} fill={color} opacity="0.7" />
+          ))}
+        </g>
+      </g>
+      {/* ominous void core with searing flashing eye */}
+      <g className="reactor-anim" style={{ animation: "reactor-throb 0.6s ease-in-out infinite" }}>
+        <circle cx={C} cy={C} r="26" fill={`url(#${uid}-core)`} filter={`url(#${uid}-warp)`} />
+      </g>
+      <circle cx={C} cy={C} r="15" fill="#120004" />
+      <circle cx={C} cy={C} r="15.5" fill="none" stroke={color} strokeWidth="1.8"
+        className="reactor-anim" style={{ animation: "reactor-flicker 0.35s steps(2, jump-none) infinite" }} />
+      <circle cx={C} cy={C} r="5" fill="#ffffff"
+        className="reactor-anim" style={{ animation: "reactor-flicker 0.5s steps(2, jump-none) infinite" }} />
+    </g>
+  );
+}
+
+const RENDERERS = [Cold, Ember, Ignition, Stable, Critical, Overdrive, Fusion, Singularity, Quasar, BigBang, Omniverse, Oblivion];
 
 interface Props {
   tierIndex: number;

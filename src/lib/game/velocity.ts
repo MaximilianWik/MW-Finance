@@ -52,6 +52,7 @@ const SPECS: MilestoneSpec[] = [
   { id: "quasar",           target: TIERS[8].minXp,  unit: "XP", getValue: c => c.xp },
   { id: "big_bang",         target: TIERS[9].minXp,  unit: "XP", getValue: c => c.xp },
   { id: "omniverse",        target: TIERS[10].minXp, unit: "XP", getValue: c => c.xp },
+  { id: "oblivion",         target: TIERS[11].minXp, unit: "XP", getValue: c => c.xp },
 ];
 
 const SPEC_BY_ID = new Map(SPECS.map((s) => [s.id, s]));

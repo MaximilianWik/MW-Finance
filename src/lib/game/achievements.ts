@@ -134,6 +134,10 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     description: "Reach OMNIVERSE. All realities, nested.",
     predicate: (c) => c.tierIndex >= 10 },
 
+  { id: "oblivion",      name: "Annihilation",        xp: 35000, color: "#ff2b4e",
+    description: "Reach OBLIVION, the final output tier.",
+    predicate: (c) => c.tierIndex >= 11 },
+
   // Investment surge (one-time spike event)
   { id: "savings_spike", name: "Power Surge",          xp: 500,  color: "#e8c545",
     description: "Made an investment deposit 2x your monthly average.",

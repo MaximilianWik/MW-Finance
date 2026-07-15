@@ -20,6 +20,7 @@ export const TIERS: Tier[] = [
   { name: "QUASAR",      minXp: 55000,  color: "#63f2ff", blurb: "Relativistic jets rip through spacetime." },
   { name: "BIG BANG",    minXp: 90000,  color: "#ffcf4d", blurb: "Genesis event. A universe ignites." },
   { name: "OMNIVERSE",   minXp: 150000, color: "#d891ff", blurb: "All realities, nested and infinite." },
+  { name: "OBLIVION",    minXp: 250000, color: "#ff2b4e", blurb: "The final state. It devours all light." },
 ];
 
 export interface XpInputs {
