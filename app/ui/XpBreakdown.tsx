@@ -2,7 +2,7 @@ import { kr } from "@/lib/format";
 import type { XpInputs } from "@/lib/game/level";
 import {
   XP_PER_100_KR, XP_PER_100_KR_INVEST,
-  XP_STREAK_BASE, XP_STREAK_BONUS,
+  XP_STREAK_BASE, XP_STREAK_STEP, XP_BUDGET_PER_100_KR,
   streakDailyRate, computeStreakXp,
 } from "@/lib/game/level";
 
@@ -23,30 +23,30 @@ function bar(frac: number, color: string) {
   );
 }
 
-/**
- * Breakdown of where the reactor's XP comes from. Streak XP now scales with
- * streak length: each 7-day block raises the per-day rate by XP_STREAK_BONUS.
- */
 export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
-  const savXp  = Math.floor(inputs.savingsTotal     / 100) * XP_PER_100_KR;
-  const invXp  = Math.floor(inputs.investmentsTotal / 100) * XP_PER_100_KR_INVEST;
-  const strXp  = computeStreakXp(inputs.bestStreak);
-  const achXp  = inputs.achievementXp;
-  const chalXp = inputs.challengeXp;
-  const total  = savXp + invXp + strXp + achXp + chalXp;
+  const savXp    = Math.floor(inputs.savingsTotal     / 100) * XP_PER_100_KR;
+  const invXp    = Math.floor(inputs.investmentsTotal / 100) * XP_PER_100_KR_INVEST;
+  const strXp    = computeStreakXp(inputs.bestStreak);
+  const achXp    = inputs.achievementXp;
+  const chalXp   = inputs.challengeXp;
+  const budgXp   = inputs.budgetXp;
+  const total    = savXp + invXp + strXp + achXp + chalXp + budgXp;
 
   const d         = inputs.bestStreak;
   const rate      = streakDailyRate(d);
-  const nextBlock = (Math.floor(d / 7) + 1) * 7;
-  const toNext    = nextBlock - d;
-  const nextRate  = rate + XP_STREAK_BONUS;
+  const nextBlock = d + 1; // rate increases every single day now
+  const nextRate  = rate + XP_STREAK_STEP;
 
-  const streakDetail = d > 0
-    ? `${d}d × ${rate} XP/d (scaling: +${XP_STREAK_BONUS}/d per 7-day block)`
-    : `${XP_STREAK_BASE} XP/day base (scales every 7 days)`;
-  const streakSub = d > 0
-    ? `${toNext}d until ${nextBlock}d block: rate rises to ${nextRate} XP/d`
+  const strDetail = d > 0
+    ? `${d}d × ${rate} XP/d · +${XP_STREAK_STEP} XP/d every day`
+    : `${XP_STREAK_BASE} XP/day base · +${XP_STREAK_STEP}/day per day of streak`;
+  const strSub = d > 0
+    ? `tomorrow (day ${d + 1}): rate rises to ${nextRate} XP/d`
     : undefined;
+
+  const budgSurplus = budgXp > 0
+    ? `${((budgXp / XP_BUDGET_PER_100_KR) * 100).toLocaleString("sv-SE")} kr saved under budget`
+    : "no completed salary cycles under budget yet";
 
   const rows: Row[] = [
     { label: "Savings",
@@ -56,9 +56,13 @@ export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
       detail: `${kr(inputs.investmentsTotal)} × ${XP_PER_100_KR_INVEST}/100 kr`,
       xp: invXp, color: "#5cc8e8" },
     { label: "Uptime",
-      detail: streakDetail,
-      sub: streakSub,
+      detail: strDetail,
+      sub: strSub,
       xp: strXp, color: "#4ec96a" },
+    { label: "Budget",
+      detail: `${XP_BUDGET_PER_100_KR} XP per 100 kr under budget at cycle end`,
+      sub: budgSurplus,
+      xp: budgXp, color: "#e8c545" },
     { label: "Achievements",
       detail: "sum of unlocked badges",
       xp: achXp, color: "#e8c545" },
@@ -70,9 +74,10 @@ export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[0.7rem] text-muted">
-        XP is derived live. Streak XP accelerates: each 7-day clean block adds{" "}
-        <span className="text-accent">+{XP_STREAK_BONUS} XP/day</span> to the rate, compounding
-        over time. Base rate is {XP_STREAK_BASE} XP/day.
+        XP is derived live. Streak compounds: rate starts at {XP_STREAK_BASE} XP/day and
+        adds <span className="text-accent">+{XP_STREAK_STEP} XP/day</span> for every day of
+        containment. Finishing a salary cycle under total budget adds{" "}
+        <span className="text-accent2">{XP_BUDGET_PER_100_KR} XP per 100 kr</span> saved.
       </p>
       <table className="w-full text-[0.72rem]">
         <tbody>

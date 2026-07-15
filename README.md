@@ -31,18 +31,20 @@ Financial discipline powers a reactor core. XP is derived live from real financi
 ```
 floor(savings / 100) × 5 XP
 floor(investments / 100) × 8 XP        (Lysa: categorize as "Investments")
-streak days × (40 + floor(days/7) × 12) XP   (scales: each 7-day block +12 XP/d)
+streak days × (40 + days × 5) XP       (+5 XP/day rate increase per day of streak)
+budget: 3 XP per 100 kr under budget at end of salary cycle
 + achievement XP + challenge XP
 ```
 
 **Streak scaling examples:**
 | Streak | XP/day | Total streak XP |
 |--------|--------|-----------------|
-| 7d | 52 | 364 |
-| 30d | 88 | 2 640 |
-| 60d | 136 | 8 160 |
-| 100d | 208 | 20 800 |
-| 365d | 664 | 242 360 |
+| 7d | 75 | 525 |
+| 14d | 110 | 1 540 |
+| 30d | 190 | 5 700 |
+| 60d | 340 | 20 400 |
+| 100d | 540 | 54 000 |
+| 365d | 1 865 | 680 725 |
 
 **Output tiers** (cumulative XP thresholds):
 | Tier | XP | Visual |

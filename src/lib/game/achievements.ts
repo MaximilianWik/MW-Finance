@@ -9,8 +9,9 @@ export interface AchievementContext {
   tierIndex: number;
   challengesCompleted: number;
   potCharge: number;
-  savingsSpike: boolean;   // a single contribution was 2x the rolling avg
-  directiveStreak: number; // consecutive weeks with 1+ directive cleared
+  savingsSpike: boolean;
+  directiveStreak: number;
+  budgetXp: number;    // accumulated XP from salary cycles finished under budget
 }
 
 export interface AchievementDef {
@@ -204,6 +205,19 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "total_1m",      name: "Millionaire",          xp: 10000, color: "#c080e0",
     description: "Savings + investments cross 1 000 000 kr.",
     predicate: (c) => c.savingsTotal + c.investmentsTotal >= 1000000 },
+
+  // Budget discipline
+  { id: "budget_first",  name: "Under Containment",    xp: 200,   color: "#4ec96a",
+    description: "Finish a salary cycle under total budget for the first time.",
+    predicate: (c) => c.budgetXp > 0 },
+
+  { id: "budget_5k",     name: "Tight Reactor",        xp: 500,   color: "#4ec96a",
+    description: "Accumulate 5 000 kr of budget surplus across salary cycles.",
+    predicate: (c) => c.budgetXp >= Math.floor(5000 / 100) * 3 },
+
+  { id: "budget_20k",    name: "Surplus Engine",       xp: 1200,  color: "#4ec96a",
+    description: "Accumulate 20 000 kr of budget surplus across salary cycles.",
+    predicate: (c) => c.budgetXp >= Math.floor(20000 / 100) * 3 },
 ];
 
 const BY_ID = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));

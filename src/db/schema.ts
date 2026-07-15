@@ -274,16 +274,16 @@ export type InvestmentAccount = typeof investmentAccounts.$inferSelect;
 // Tracks the streak high-water mark and last evaluation so the nightly eval is
 // idempotent. XP/level are DERIVED (not stored) to avoid drift.
 export const gameState = pgTable("game_state", {
-  key:             text("key").primaryKey().default("singleton"),
-  bestStreak:      integer("best_streak").notNull().default(0),
-  lastEvalDate:    date("last_eval_date"),
-  // Shields absorb a breach instead of resetting uptime. Earn 1 per completed
-  // 7-day clean run; max 3 banked at a time.
-  shields:         integer("shields").notNull().default(0),
-  // Consecutive weeks where at least one weekly directive was cleared.
-  directiveStreak: integer("directive_streak").notNull().default(0),
+  key:               text("key").primaryKey().default("singleton"),
+  bestStreak:        integer("best_streak").notNull().default(0),
+  lastEvalDate:      date("last_eval_date"),
+  shields:           integer("shields").notNull().default(0),
+  directiveStreak:   integer("directive_streak").notNull().default(0),
   lastDirectiveWeek: text("last_directive_week"),
-  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Budget discipline: accumulated XP from salary cycles ended under budget.
+  budgetXp:          integer("budget_xp").notNull().default(0),
+  lastBudgetPeriod:  text("last_budget_period"), // YYYY-MM of last evaluated cycle
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ─── Achievements (Phase 5, logged reactor events) ─────────────────────────

@@ -4,11 +4,10 @@
 export interface Tier {
   name: string;
   minXp: number;
-  color: string;   // core hue at this tier
+  color: string;
   blurb: string;
 }
 
-// 8 tiers, cold → runaway. Thresholds are cumulative XP.
 export const TIERS: Tier[] = [
   { name: "COLD",        minXp: 0,     color: "#5a6b7a", blurb: "Reactor offline. Cold iron." },
   { name: "EMBER",       minXp: 500,   color: "#b0603a", blurb: "First heat. Containment holding." },
@@ -26,36 +25,39 @@ export interface XpInputs {
   bestStreak: number;
   achievementXp: number;
   challengeXp: number;
+  budgetXp: number;       // accumulated XP from finishing salary cycles under budget
 }
 
 // ── XP weights ───────────────────────────────────────────────────────────────
-export const XP_PER_100_KR        = 5;  // 5 XP per 100 kr saved
-export const XP_PER_100_KR_INVEST = 8;  // 8 XP per 100 kr invested
+export const XP_PER_100_KR        = 5;   // per 100 kr saved
+export const XP_PER_100_KR_INVEST = 8;   // per 100 kr invested (more: deployed capital)
 
-// Streak XP scales with streak length. Each completed 7-day block adds
-// XP_STREAK_BONUS extra XP per day, rewarding sustained containment.
+// Streak XP: the per-day rate grows by +5 for every day you maintain containment.
 //
-//   daily rate(d) = XP_STREAK_BASE + floor(d / 7) × XP_STREAK_BONUS
-//   streak XP     = d × daily rate(d)
+//   daily rate(d) = XP_STREAK_BASE + d × XP_STREAK_STEP
+//   total XP      = d × (40 + d × 5)  =  40d + 5d²
 //
-// Examples (d = days):
-//   1 d  →   40 XP/d   =       40 XP
-//   7 d  →   52 XP/d   =      364 XP
-//  30 d  →   88 XP/d   =    2 640 XP
-//  60 d  →  136 XP/d   =    8 160 XP
-// 100 d  →  208 XP/d   =   20 800 XP   (FUSION territory from streak alone)
-// 365 d  →  664 XP/d   =  242 360 XP
-export const XP_STREAK_BASE  = 40;  // base XP per streak day
-export const XP_STREAK_BONUS = 12;  // additional XP/day earned per completed 7-day block
+//    7 d:    75/d =      525 XP
+//   14 d:   110/d =    1 540 XP
+//   30 d:   190/d =    5 700 XP
+//   60 d:   340/d =   20 400 XP
+//  100 d:   540/d =   54 000 XP
+//  365 d: 1 865/d =  680 725 XP
+export const XP_STREAK_BASE = 40;
+export const XP_STREAK_STEP = 5;
 
-/** XP per day at a given streak length (always >= XP_STREAK_BASE). */
-export function streakDailyRate(days: number): number {
-  return XP_STREAK_BASE + Math.floor(days / 7) * XP_STREAK_BONUS;
+// Budget discipline XP: at end of each salary cycle where total spend <
+// total budget, you earn XP_BUDGET_PER_100_KR per 100 kr saved.
+export const XP_BUDGET_PER_100_KR = 3;
+
+/** XP per day at streak length d. */
+export function streakDailyRate(d: number): number {
+  return XP_STREAK_BASE + d * XP_STREAK_STEP;
 }
 
-/** Total streak XP for a given best streak. */
-export function computeStreakXp(days: number): number {
-  return days * streakDailyRate(days);
+/** Total streak XP for a best-streak of d days. */
+export function computeStreakXp(d: number): number {
+  return d * streakDailyRate(d);
 }
 
 export function computeXp(i: XpInputs): number {
@@ -64,7 +66,8 @@ export function computeXp(i: XpInputs): number {
     Math.floor(i.investmentsTotal / 100) * XP_PER_100_KR_INVEST +
     computeStreakXp(i.bestStreak) +
     i.achievementXp +
-    i.challengeXp
+    i.challengeXp +
+    i.budgetXp
   );
 }
 
@@ -75,7 +78,7 @@ export interface LevelInfo {
   next: Tier | null;
   xpIntoTier: number;
   xpForNext: number | null;
-  progress: number;  // 0..1 toward next tier
+  progress: number;
   danger: boolean;
 }
 

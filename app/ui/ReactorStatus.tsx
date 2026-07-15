@@ -73,13 +73,14 @@ export function ReactorStatus({ snap }: { snap: ReactorSnapshot | null }) {
                 <strong>Formula (derived live, never stored):</strong>
                 <br />· floor(savings / 100) × 5
                 <br />· floor(investments / 100) × 8
-                <br />· streak XP scales: days × (40 + floor(days/7) × 12)
-                <br />  e.g. 30d = 88 XP/day, 100d = 208 XP/day
+                <br />· streak: days × (40 + days × 5)
+                <br />  day 7 = 75/d, day 30 = 190/d, day 100 = 540/d
+                <br />· budget: 3 XP per 100 kr under budget at cycle end
                 <br />· unlocked achievement XP
                 <br />· completed challenge XP
                 <br /><br />
-                Streak XP accelerates every 7 clean days. Longer containment
-                compounds the reactor output dramatically.
+                Streak compounds every single day. Longer containment
+                accelerates the reactor exponentially.
               </Tip>
             </div>
             <Meter value={level.progress} color={hue} />

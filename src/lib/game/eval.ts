@@ -5,6 +5,7 @@ import { getPot } from "./pot";
 import { evaluateChallenges, getChallengeXp, getChallengesCompleted } from "./challenges";
 import { evaluateAchievements, getAchievementXp } from "./achievements";
 import { computeXp, levelFromXp } from "./level";
+import { evaluateBudgetDiscipline } from "./budget-xp";
 import { getSavingsTotal } from "@/lib/savings";
 import { getInvestmentsTotal } from "./history";
 import { sendNtfy } from "@/lib/notify";
@@ -73,10 +74,12 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
 
   // 1. Load stored state.
   const [gs] = await db.select().from(gameState).limit(1);
-  let shields         = gs?.shields         ?? 0;
-  let directiveStreak = gs?.directiveStreak ?? 0;
+  let shields           = gs?.shields           ?? 0;
+  let directiveStreak   = gs?.directiveStreak   ?? 0;
   let lastDirectiveWeek = gs?.lastDirectiveWeek ?? null;
-  const storedBest    = gs?.bestStreak      ?? 0;
+  let budgetXp          = gs?.budgetXp          ?? 0;
+  let lastBudgetPeriod  = gs?.lastBudgetPeriod  ?? null;
+  const storedBest      = gs?.bestStreak        ?? 0;
 
   // 2. Raw streak.
   const streak = await getStreak();
@@ -148,22 +151,39 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
     }
   }
 
-  // 5. Savings spike detection.
+  // 5. Savings spike detection + budget discipline.
   const [savings, investments, achievementXp, challengeXp, challengesCompleted] = await Promise.all([
     getSavingsTotal(), getInvestmentsTotal(), getAchievementXp(), getChallengeXp(), getChallengesCompleted(),
   ]);
   const spike = await detectSavingsSpike(savings.total, investments);
   if (spike) log(`[SURGE] Savings spike detected this month.`);
 
+  // Budget discipline: award XP when a salary cycle closes under total budget.
+  const budgetResult = await evaluateBudgetDiscipline(lastBudgetPeriod);
+  if (budgetResult) {
+    budgetXp += budgetResult.bonusXp;
+    lastBudgetPeriod = budgetResult.period;
+    log(`[BUDGET] Cycle ${budgetResult.period} ended ${Math.round(budgetResult.surplusKr).toLocaleString("sv-SE")} kr under budget. +${budgetResult.bonusXp} XP.`);
+    if (budgetResult.bonusXp > 0) {
+      await sendNtfy(
+        `Budget discipline: ${Math.round(budgetResult.surplusKr).toLocaleString("sv-SE")} kr under budget this cycle. +${budgetResult.bonusXp} XP.`,
+        { title: "Reactor · budget", tags: ["chart_with_upwards_trend"], priority: 3, click: env.appUrl + "/rank" }
+      );
+    }
+  }
+
   // 6. Achievements.
-  const xp = computeXp({ savingsTotal: savings.total, investmentsTotal: investments, bestStreak: newBest, achievementXp, challengeXp });
+  const xp = computeXp({
+    savingsTotal: savings.total, investmentsTotal: investments,
+    bestStreak: newBest, achievementXp, challengeXp, budgetXp,
+  });
   const level = levelFromXp(xp, streak.breachToday && !shielded);
 
   const unlocked = await evaluateAchievements({
     savingsTotal: savings.total, investmentsTotal: investments,
     bestStreak: newBest, currentStreak: effectiveStreak,
     tierIndex: level.index, challengesCompleted, potCharge: pot.charge,
-    savingsSpike: spike, directiveStreak,
+    savingsSpike: spike, directiveStreak, budgetXp,
   });
   for (const a of unlocked) {
     log(`[ACHIEVEMENT] Unlocked: ${a.name} (+${a.xp} XP)`);
@@ -174,10 +194,10 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
 
   // 7. Write game state.
   await db.insert(gameState)
-    .values({ key: "singleton", bestStreak: newBest, shields, directiveStreak, lastDirectiveWeek, lastEvalDate: sql`current_date`, updatedAt: new Date() })
+    .values({ key: "singleton", bestStreak: newBest, shields, directiveStreak, lastDirectiveWeek, budgetXp, lastBudgetPeriod, lastEvalDate: sql`current_date`, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: gameState.key,
-      set: { bestStreak: newBest, shields, directiveStreak, lastDirectiveWeek, lastEvalDate: sql`current_date`, updatedAt: new Date() },
+      set: { bestStreak: newBest, shields, directiveStreak, lastDirectiveWeek, budgetXp, lastBudgetPeriod, lastEvalDate: sql`current_date`, updatedAt: new Date() },
     });
 
   // 8. Breach + milestone ntfy.

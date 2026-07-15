@@ -35,6 +35,7 @@ export async function getReactorSnapshot(): Promise<ReactorSnapshot> {
 
   const shields         = gs[0]?.shields         ?? 0;
   const directiveStreak = gs[0]?.directiveStreak ?? 0;
+  const budgetXp        = gs[0]?.budgetXp        ?? 0;
 
   const xpInputs: XpInputs = {
     savingsTotal:     savings.total,
@@ -42,6 +43,7 @@ export async function getReactorSnapshot(): Promise<ReactorSnapshot> {
     bestStreak:       streak.best,
     achievementXp,
     challengeXp,
+    budgetXp,
   };
 
   const xp    = computeXp(xpInputs);
