@@ -3,13 +3,12 @@ import {
   savingsGoals,
   savingsContributions,
   settings,
-  syncRuns,
   categories,
   transactions,
   budgetAdjustments,
   savingsEntries,
 } from "@/db/schema";
-import { and, desc, eq, inArray, sql, gte, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql, gte, lte } from "drizzle-orm";
 import { sendNtfy } from "@/lib/notify";
 import { kr } from "@/lib/format";
 import { env } from "@/lib/env";
@@ -23,13 +22,6 @@ function prevMonth(month: string): string {
   const [y, m] = month.split("-").map((n) => parseInt(n, 10));
   const d = new Date(Date.UTC(y, m - 2, 1));
   return d.toISOString().slice(0, 7);
-}
-
-function monthRange(month: string) {
-  const [y, m] = month.split("-").map((n) => parseInt(n, 10));
-  const from = new Date(Date.UTC(y, m - 1, 1));
-  const to = new Date(Date.UTC(y, m, 0));
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
 export interface GoalSummary {
@@ -129,6 +121,9 @@ export async function getGoalContributions(goalId: number) {
       source: savingsContributions.source,
       month: savingsContributions.month,
       note: savingsContributions.note,
+      transactionId: savingsContributions.transactionId,
+      periodStart: savingsContributions.periodStart,
+      pending: savingsContributions.pending,
       createdAt: savingsContributions.createdAt,
     })
     .from(savingsContributions)
@@ -136,91 +131,125 @@ export async function getGoalContributions(goalId: number) {
     .orderBy(desc(savingsContributions.createdAt));
 }
 
-/** Add a contribution and bump the goal's current_amount atomically. */
+/** Add a contribution and bump the goal's current_amount atomically (unless pending). */
 export async function addContribution(params: {
   goalId: number;
   amount: number;
   source?: "manual" | "sweep";
   month?: string;
   note?: string;
+  transactionId?: number;
+  periodStart?: string;
+  pending?: boolean;
 }) {
-  const { goalId, amount, source = "manual", month, note } = params;
+  const { goalId, amount, source = "manual", month, note, transactionId, periodStart, pending = false } = params;
   if (amount <= 0) throw new Error("amount must be > 0");
-  await db.insert(savingsContributions).values({
+  const [row] = await db.insert(savingsContributions).values({
     goalId,
     amount: amount.toFixed(2),
     source,
     month: month ?? monthOf(new Date()),
     note,
-  });
-  await db
-    .update(savingsGoals)
-    .set({
-      currentAmount: sql`${savingsGoals.currentAmount} + ${amount.toFixed(2)}`,
-    })
-    .where(eq(savingsGoals.id, goalId));
+    transactionId: transactionId ?? null,
+    periodStart: periodStart ?? null,
+    pending,
+  }).returning();
+  // Pending contributions are suggestions only — don't credit the goal yet.
+  if (!pending) {
+    await db
+      .update(savingsGoals)
+      .set({
+        currentAmount: sql`${savingsGoals.currentAmount} + ${amount.toFixed(2)}`,
+      })
+      .where(eq(savingsGoals.id, goalId));
+  }
+  return row;
+}
+
+const SALARY_MIN = 18_000;
+const SALARY_MAX = 30_000;
+
+function addDays(isoStr: string, days: number): string {
+  const d = new Date(isoStr + "T00:00:00Z");
+  return new Date(d.getTime() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
 /**
- * Monthly sweep. Runs on the first sync of a new month:
- *   1. Look at the just-closed month.
- *   2. Sum positive slack across categories with a base budget.
- *      slack(cat) = max(0, effective - spent)   where effective = base + adjustments
- *   3. Move sweep_percent % of that total to the primary goal.
- *   4. Persist a sweep contribution and push an ntfy summary.
+ * Salary-period sweep. Fires when a new salary lands:
+ *   1. Detects the two most recent salary txns to define the just-closed period
+ *      [prevSalaryDate, salaryDate − 1].
+ *   2. Computes slack over that period (same category/budget logic as before).
+ *   3. Records a *pending* sweep contribution (amount = slack × sweepPercent%).
+ *      The pending row does NOT credit the goal yet.
+ *   4. The user then tags the real Lysa tx via classifyTransactionAsSweep(),
+ *      which confirms the pending row and credits the goal with the actual amount.
  *
- * "First sync of a new month" means: the previous sync run (before this one)
- * finished in an earlier month than "now". This piggybacks on the sync_runs
- * table without needing extra state.
+ * Idempotency key: source = "sweep" AND periodStart = salaryDate.
  */
-export async function runMonthlySweep(now = new Date()): Promise<{
+export async function runPeriodSweep(): Promise<{
   executed: boolean;
-  month: string;
+  salaryDate?: string;
   sweptTotal?: number;
   goalId?: number;
 }> {
-  const nowMonth = monthOf(now);
-  const targetMonth = prevMonth(nowMonth);
+  // Two most recent salary txns.
+  const salaryRows = await db
+    .select({ bookingDate: transactions.bookingDate })
+    .from(transactions)
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(
+      and(
+        eq(transactions.direction, "CRDT"),
+        eq(categories.name, "Income"),
+        sql`${transactions.amount}::float between ${SALARY_MIN} and ${SALARY_MAX}`,
+        isNotNull(transactions.bookingDate)
+      )
+    )
+    .orderBy(desc(transactions.bookingDate))
+    .limit(2);
 
-  // The current sync writes its row with finishedAt=NULL, then invokes the
-  // behavior pipeline. So filtering finishedAt IS NOT NULL naturally excludes
-  // the in-progress run. The most recent match is the actual previous sync.
-  const [prevRun] = await db
-    .select({ finishedAt: syncRuns.finishedAt })
-    .from(syncRuns)
-    .where(sql`${syncRuns.finishedAt} is not null`)
-    .orderBy(desc(syncRuns.finishedAt))
-    .limit(1);
-
-  if (prevRun && prevRun.finishedAt) {
-    const prevMonthStr = monthOf(prevRun.finishedAt);
-    if (prevMonthStr === nowMonth) {
-      return { executed: false, month: targetMonth };
-    }
+  if (salaryRows.length < 2) {
+    // Need at least two salaries to bound a closed period.
+    return { executed: false };
   }
 
-  // Already swept? Check for any 'sweep' contribution for targetMonth.
+  const salaryDate = salaryRows[0].bookingDate!;     // most recent salary
+  const prevSalaryDate = salaryRows[1].bookingDate!; // period start
+
+  // Idempotency: already swept for this salary's period?
   const [existing] = await db
     .select({ id: savingsContributions.id })
     .from(savingsContributions)
     .where(
       and(
         eq(savingsContributions.source, "sweep"),
-        eq(savingsContributions.month, targetMonth)
+        eq(savingsContributions.periodStart, salaryDate)
       )
     )
     .limit(1);
-  if (existing) return { executed: false, month: targetMonth };
+  if (existing) return { executed: false, salaryDate };
 
-  // Compute slack for targetMonth.
-  const { from, to } = monthRange(targetMonth);
+  // Guard: only fire if this salary is newer than the last sweep's periodStart.
+  const [lastSweep] = await db
+    .select({ periodStart: savingsContributions.periodStart })
+    .from(savingsContributions)
+    .where(eq(savingsContributions.source, "sweep"))
+    .orderBy(desc(savingsContributions.createdAt))
+    .limit(1);
+  if (lastSweep?.periodStart && lastSweep.periodStart >= salaryDate) {
+    return { executed: false, salaryDate };
+  }
 
-  // Sanity gate — sweep only if the target month has actual booked activity.
+  // Closed period: [prevSalaryDate, salaryDate − 1].
+  const from = prevSalaryDate;
+  const to = addDays(salaryDate, -1);
+
+  // Sanity gate: period must have actual booked activity.
   const [{ txCount }] = await db
     .select({ txCount: sql<number>`count(*)::int` })
     .from(transactions)
     .where(and(gte(transactions.bookingDate, from), lte(transactions.bookingDate, to)));
-  if (txCount === 0) return { executed: false, month: targetMonth };
+  if (txCount === 0) return { executed: false, salaryDate };
 
   const spentExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
 
@@ -241,13 +270,15 @@ export async function runMonthlySweep(now = new Date()): Promise<{
     )
     .groupBy(categories.id);
 
+  // Budget adjustments keyed to the period-start month.
+  const adjMonth = prevSalaryDate.slice(0, 7);
   const adjRows = await db
     .select({
       categoryId: budgetAdjustments.categoryId,
       total: sql<number>`coalesce(sum(${budgetAdjustments.delta}::float), 0)::float`,
     })
     .from(budgetAdjustments)
-    .where(eq(budgetAdjustments.month, targetMonth))
+    .where(eq(budgetAdjustments.month, adjMonth))
     .groupBy(budgetAdjustments.categoryId);
 
   const adjMap = new Map(adjRows.map((r) => [r.categoryId, r.total]));
@@ -260,41 +291,135 @@ export async function runMonthlySweep(now = new Date()): Promise<{
     const slack = eff - r.spent;
     if (slack > 0) totalSlack += slack;
   }
-  if (totalSlack <= 0) return { executed: false, month: targetMonth };
+  if (totalSlack <= 0) return { executed: false, salaryDate };
 
   const [s] = await db.select().from(settings).limit(1);
   const sweepPct = s ? Number(s.sweepPercent) : 80;
   const toSweep = totalSlack * (sweepPct / 100);
-  if (toSweep <= 0) return { executed: false, month: targetMonth };
+  if (toSweep <= 0) return { executed: false, salaryDate };
 
-  // Primary goal.
   const [primary] = await db
     .select()
     .from(savingsGoals)
     .where(and(eq(savingsGoals.isPrimary, true), eq(savingsGoals.paused, false)))
     .limit(1);
-  if (!primary) return { executed: false, month: targetMonth };
+  if (!primary) return { executed: false, salaryDate };
 
   await addContribution({
     goalId: primary.id,
     amount: toSweep,
     source: "sweep",
-    month: targetMonth,
-    note: `Auto-sweep from ${targetMonth} (${sweepPct}% of ${kr(totalSlack)} slack)`,
+    month: prevSalaryDate.slice(0, 7),
+    note: `Suggested sweep for period ${from} – ${to} (${sweepPct}% of ${kr(totalSlack)} slack)`,
+    periodStart: salaryDate,
+    pending: true,
   });
 
   await sendNtfy(
-    `${targetMonth} sweep: +${kr(toSweep)} → ${primary.name}`,
+    `Salary landed — suggested sweep: ${kr(toSweep)} → ${primary.name}`,
     {
-      title: "Savings sweep",
+      title: "Savings sweep ready",
       tags: ["moneybag"],
       priority: 3,
       click: env.appUrl + "/goals",
     }
   );
 
-  return { executed: true, month: targetMonth, sweptTotal: toSweep, goalId: primary.id };
+  return { executed: true, salaryDate, sweptTotal: toSweep, goalId: primary.id };
 }
+
+/**
+ * Classify an existing DBIT transaction as the real Lysa sweep transfer.
+ *
+ *   - Finds the most recent pending sweep contribution for the primary goal.
+ *   - If found: confirms it — sets pending=false, links the tx, overrides amount
+ *     with the real transfer amount, and credits the goal.
+ *   - If not found: creates a new (non-pending) sweep contribution directly.
+ */
+export async function classifyTransactionAsSweep(txId: number): Promise<{
+  ok: boolean;
+  contribution?: typeof savingsContributions.$inferSelect;
+  error?: string;
+}> {
+  const [tx] = await db
+    .select({
+      id: transactions.id,
+      direction: transactions.direction,
+      amount: sql<number>`${transactions.amount}::float`,
+      bookingDate: transactions.bookingDate,
+    })
+    .from(transactions)
+    .where(eq(transactions.id, txId))
+    .limit(1);
+
+  if (!tx) return { ok: false, error: "transaction not found" };
+  if (tx.direction !== "DBIT") return { ok: false, error: "only DBIT transactions can be sweep transfers" };
+
+  // Already linked?
+  const [alreadyLinked] = await db
+    .select({ id: savingsContributions.id })
+    .from(savingsContributions)
+    .where(eq(savingsContributions.transactionId, txId))
+    .limit(1);
+  if (alreadyLinked) return { ok: false, error: "transaction already classified as a sweep" };
+
+  const [primary] = await db
+    .select()
+    .from(savingsGoals)
+    .where(and(eq(savingsGoals.isPrimary, true), eq(savingsGoals.paused, false)))
+    .limit(1);
+  if (!primary) return { ok: false, error: "no active primary goal" };
+
+  // Most recent pending sweep for the primary goal.
+  const [pendingRow] = await db
+    .select()
+    .from(savingsContributions)
+    .where(
+      and(
+        eq(savingsContributions.goalId, primary.id),
+        eq(savingsContributions.source, "sweep"),
+        eq(savingsContributions.pending, true)
+      )
+    )
+    .orderBy(desc(savingsContributions.createdAt))
+    .limit(1);
+
+  if (pendingRow) {
+    // Confirm the suggestion with the real tx amount.
+    const [updated] = await db
+      .update(savingsContributions)
+      .set({
+        pending: false,
+        transactionId: txId,
+        amount: tx.amount.toFixed(2),
+        note: `${pendingRow.note ?? "Sweep"} — confirmed tx#${txId}`,
+      })
+      .where(eq(savingsContributions.id, pendingRow.id))
+      .returning();
+
+    // Credit the goal (pending row never bumped it).
+    await db
+      .update(savingsGoals)
+      .set({ currentAmount: sql`${savingsGoals.currentAmount} + ${tx.amount.toFixed(2)}` })
+      .where(eq(savingsGoals.id, primary.id));
+
+    return { ok: true, contribution: updated };
+  }
+
+  // No pending suggestion — create a fresh sweep contribution directly.
+  const row = await addContribution({
+    goalId: primary.id,
+    amount: tx.amount,
+    source: "sweep",
+    month: tx.bookingDate ? tx.bookingDate.slice(0, 7) : monthOf(new Date()),
+    note: `Manual sweep tag tx#${txId}`,
+    transactionId: txId,
+    pending: false,
+  });
+
+  return { ok: true, contribution: row };
+}
+
 
 /** For dashboard sidebar. */
 export async function getPrimaryGoal(): Promise<GoalSummary | null> {

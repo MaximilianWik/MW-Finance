@@ -6,7 +6,7 @@ import { checkMissingRecurrings } from "./missing";
 import { flagSuspicious } from "./suspicious";
 import { evaluateAdaptiveForCategories } from "./adaptive";
 import { checkTrajectory } from "./trajectory";
-import { runMonthlySweep } from "@/lib/savings";
+import { runPeriodSweep } from "@/lib/savings";
 import { runGameEval } from "@/lib/game/eval";
 import type { NewTransaction } from "@/db/schema";
 
@@ -83,12 +83,12 @@ export async function runBehaviorPipeline(
     console.error("trajectory check failed:", e);
   }
 
-  // Monthly sweep: only fires on the first sync of a new month.
+  // Period sweep: fires when a new salary lands, recording a pending sweep suggestion.
   try {
-    const sweep = await runMonthlySweep();
-    if (sweep.executed) results.sweepMonth = sweep.month;
+    const sweep = await runPeriodSweep();
+    if (sweep.executed) results.sweepMonth = sweep.salaryDate ?? null;
   } catch (e) {
-    console.error("monthly sweep failed:", e);
+    console.error("period sweep failed:", e);
   }
 
   // Reactor Core eval: streak, weekly challenges, achievements, breach alerts.

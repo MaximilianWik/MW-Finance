@@ -92,8 +92,14 @@ export default async function GoalDetail({
                 {contribs.map((c) => (
                   <tr key={c.id}>
                     <td className="w-24 text-accent">+{kr(c.amount)}</td>
-                    <td className="w-20">
-                      <StatusTag tone={c.source === "sweep" ? "ok" : "muted"}>{c.source}</StatusTag>
+                    <td className="w-28">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <StatusTag tone={c.source === "sweep" ? "ok" : "muted"}>{c.source}</StatusTag>
+                        {c.pending && <StatusTag tone="warn">PENDING</StatusTag>}
+                        {c.transactionId != null && (
+                          <StatusTag tone="muted">tx#{c.transactionId}</StatusTag>
+                        )}
+                      </div>
                     </td>
                     <td className="text-muted">{c.note}</td>
                     <td className="w-20 text-right text-faint">

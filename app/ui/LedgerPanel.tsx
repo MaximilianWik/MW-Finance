@@ -21,6 +21,7 @@ interface TxRow {
   recurringVariable: boolean;
   categoryName: string | null;
   categoryColor: string | null;
+  sweepContributionId: number | null;
 }
 
 interface Totals {
@@ -39,6 +40,44 @@ interface Props {
   options: CatOption[];
   initialMonth?: string;
   cycles?: LedgerCycle[];
+}
+
+/**
+ * Tag a DBIT transaction as the Lysa sweep transfer. If there's a pending
+ * sweep suggestion for the primary goal, it gets confirmed; otherwise a fresh
+ * sweep contribution is created.
+ */
+function MarkSweep({ txId, onSuccess }: { txId: number; onSuccess?: () => void }) {
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function mark() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/transactions/${txId}/sweep`, { method: "POST" });
+      if (res.ok) {
+        setDone(true);
+        onSuccess?.();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return <span className="text-[0.65rem] text-accent2">[sweep ✓]</span>;
+  }
+
+  return (
+    <button
+      onClick={mark}
+      disabled={busy}
+      title="Tag this transfer as the Lysa sweep"
+      className="btn border-accent2/40 text-accent2 !px-1.5 !py-0.5 text-[0.65rem] opacity-0 transition-opacity group-hover/row:opacity-100 hover:border-accent2 hover:bg-accent2/10"
+    >
+      [→ sweep]
+    </button>
+  );
 }
 
 /**
@@ -359,11 +398,19 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
                               ) : (
                                 <MarkRecurring txId={t.id} merchant={displayName} variable />
                               )}
+                              {t.direction === "DBIT" && (
+                                t.sweepContributionId
+                                  ? <span className="text-[0.65rem] text-accent2">[sweep ✓]</span>
+                                  : <MarkSweep txId={t.id} />
+                              )}
                             </div>
                           ) : t.direction === "DBIT" ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <MarkRecurring txId={t.id} merchant={displayName} />
                               <MarkRecurring txId={t.id} merchant={displayName} variable />
+                              {t.sweepContributionId
+                                ? <span className="text-[0.65rem] text-accent2">[sweep ✓]</span>
+                                : <MarkSweep txId={t.id} />}
                             </div>
                           ) : null}
                         </td>

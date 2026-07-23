@@ -121,7 +121,7 @@ export const savingsGoals = pgTable("savings_goals", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ─── Savings contributions (manual + monthly sweep) ─────────────────────────
+// ─── Savings contributions (manual + sweep) ──────────────────────────────────
 export const savingsContributions = pgTable(
   "savings_contributions",
   {
@@ -133,11 +133,18 @@ export const savingsContributions = pgTable(
     source: text("source").notNull().default("manual"), // manual | sweep
     month: text("month"), // YYYY-MM when the contribution is attributed to a month
     note: text("note"),
+    // Salary-period sweep fields (added phase-sweep):
+    transactionId: integer("transaction_id").references(() => transactions.id, {
+      onDelete: "set null",
+    }), // the real bank tx that IS this sweep transfer
+    periodStart: date("period_start"), // salary date that opened the swept period (idempotency key)
+    pending: boolean("pending").notNull().default(false), // true = auto-calculated suggestion, not yet matched to a real tx
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     goalIdx: index("sc_goal_idx").on(t.goalId),
     monthIdx: index("sc_month_idx").on(t.month),
+    txIdx: index("sc_tx_idx").on(t.transactionId),
   })
 );
 
