@@ -157,6 +157,268 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 
 ---
 
+## Database Schema
+
+18 tables across 6 domains. All timestamps are `timestamptz`; monetary values are `numeric(14,2)` (SEK). Singletons (`settings`, `game_state`) use a fixed `key = 'singleton'` primary key.
+
+```mermaid
+erDiagram
+
+  %% ── Banking ─────────────────────────────────────────────────────────────
+
+  bank_sessions {
+    text      session_id         PK
+    text      aspsp_name
+    text      aspsp_country
+    text      psu_type
+    timestamp valid_until
+    timestamp created_at
+  }
+
+  accounts {
+    text      uid                PK
+    text      session_id         FK
+    text      name
+    text      iban
+    text      currency
+    text      product
+    text      aspsp_name
+    text      aspsp_country
+    decimal   balance
+    text      balance_type
+    timestamp balance_updated_at
+    timestamp created_at
+  }
+
+  transactions {
+    int       id                 PK
+    text      account_uid        FK
+    text      dedupe_key
+    text      bank_transaction_id
+    text      entry_reference
+    text      status
+    text      direction
+    decimal   amount
+    decimal   signed
+    text      currency
+    date      booking_date
+    date      value_date
+    text      remittance
+    text      counterparty_name
+    text      merchant
+    text      mcc
+    int       category_id        FK
+    text      category_source
+    text      flagged_reason
+    json      raw
+    timestamp created_at
+  }
+
+  sync_runs {
+    int       id                 PK
+    timestamp started_at
+    timestamp finished_at
+    int       new_transactions
+    int       ok
+    text      error
+  }
+
+  %% ── Classification ──────────────────────────────────────────────────────
+
+  categories {
+    int       id                 PK
+    text      name
+    text      color
+    decimal   budget_monthly
+    decimal   budget_weekly
+    text      budget_source
+    int       sort
+    timestamp created_at
+  }
+
+  merchant_categories {
+    text      merchant           PK
+    int       category_id        FK
+    text      source
+    timestamp updated_at
+  }
+
+  %% ── Budgeting ────────────────────────────────────────────────────────────
+
+  recurring_payments {
+    int       id                 PK
+    text      merchant
+    text      notes
+    decimal   amount
+    text      currency
+    text      cadence
+    int       cadence_days
+    date      last_date
+    date      next_date
+    int       occurrences
+    int       category_id        FK
+    bool      manual
+    bool      variable_amount
+    bool      active
+    timestamp last_alerted_at
+    timestamp created_at
+    timestamp updated_at
+  }
+
+  budget_adjustments {
+    int       id                 PK
+    int       category_id        FK
+    text      month
+    decimal   delta
+    text      reason
+    timestamp created_at
+  }
+
+  settings {
+    text      key                PK
+    decimal   sweep_percent
+    decimal   adaptive_cap_percent
+    decimal   adaptive_trigger_percent
+    timestamp updated_at
+  }
+
+  %% ── Savings ──────────────────────────────────────────────────────────────
+
+  savings_goals {
+    int       id                 PK
+    text      name
+    decimal   target_amount
+    decimal   current_amount
+    text      currency
+    date      target_date
+    text      image_url
+    bool      is_primary
+    bool      paused
+    timestamp created_at
+  }
+
+  savings_contributions {
+    int       id                 PK
+    int       goal_id            FK
+    decimal   amount
+    text      source
+    text      month
+    text      note
+    int       transaction_id     FK
+    date      period_start
+    bool      pending
+    timestamp created_at
+  }
+
+  savings_entries {
+    int       id                 PK
+    decimal   amount
+    text      note
+    date      occurred_on
+    timestamp created_at
+  }
+
+  %% ── Investments ──────────────────────────────────────────────────────────
+
+  investment_accounts {
+    int       id                 PK
+    text      name
+    text      color
+    text      merchant
+    decimal   seed_balance
+    date      seed_date
+    text      ticker
+    decimal   base_price
+    decimal   shares
+    text      currency
+    int       sort
+    timestamp created_at
+    timestamp updated_at
+  }
+
+  %% ── AI / Insights ────────────────────────────────────────────────────────
+
+  ai_insights {
+    int       id                 PK
+    text      kind
+    text      severity
+    text      title
+    text      body
+    json      data
+    int       category_id        FK
+    bool      dismissed
+    timestamp created_at
+  }
+
+  %% ── Gamification ─────────────────────────────────────────────────────────
+
+  game_state {
+    text      key                PK
+    int       best_streak
+    date      last_eval_date
+    int       shields
+    int       directive_streak
+    text      last_directive_week
+    int       budget_xp
+    text      last_budget_period
+    timestamp updated_at
+  }
+
+  achievements {
+    text      id                 PK
+    timestamp unlocked_at
+  }
+
+  challenges {
+    int       id                 PK
+    text      week
+    text      template_key
+    text      title
+    text      description
+    decimal   target
+    decimal   progress
+    int       reward_xp
+    bool      lower_is_better
+    text      status
+    timestamp created_at
+    timestamp completed_at
+  }
+
+  %% ── Lifestyle ────────────────────────────────────────────────────────────
+
+  event_suggestions {
+    int       id                 PK
+    text      title
+    text      url
+    text      description
+    text      tag
+    text      audience
+    text      when_text
+    date      event_date
+    bool      is_weekend
+    text      price
+    text      price_level
+    text      image_url
+    date      window_start
+    bool      dismissed
+    timestamp created_at
+  }
+
+  %% ── Relationships ────────────────────────────────────────────────────────
+
+  bank_sessions     ||--o{ accounts             : "session owns"
+  accounts          ||--o{ transactions          : "account has"
+  categories        ||--o{ transactions          : "categorizes"
+  categories        ||--o{ merchant_categories   : "cached via"
+  categories        ||--o{ recurring_payments    : "labels"
+  categories        ||--o{ budget_adjustments    : "adjusted for"
+  categories        ||--o{ ai_insights           : "insight about"
+  savings_goals     ||--o{ savings_contributions : "receives"
+  transactions      ||--o| savings_contributions : "sweep tag"
+```
+
+---
+
 ## Key Source Files
 
 ### Finance core
