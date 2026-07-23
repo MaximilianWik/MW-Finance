@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { kr, krSigned, shortDate } from "@/lib/format";
 import { CategoryCommand, type CatOption } from "./CategoryCommand";
 import { MarkRecurring, UnmarkRecurring } from "./RecurringActions";
@@ -102,10 +102,6 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
   const [totals,  setTotals]  = useState<Totals | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Track pending category changes
-  const refreshKey = useRef(0);
-  void refreshKey; // reserved for future optimistic updates
-
   function buildQueryLog(): string[] {
     const lines: string[] = [];
     const conditions: string[] = ["direction IN ('CRDT', 'DBIT')"];
@@ -176,7 +172,6 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
 
       setRows(data.transactions);
       setTotals(data.totals);
-      refreshKey.current++;
 
       const t = data.totals;
       const net = t.totalIn - t.totalOut;

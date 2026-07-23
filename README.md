@@ -19,7 +19,7 @@ Personal finance terminal for Länsförsäkringar Bank. Connects via the Enable 
 - **Investment tracking**: per-account balance tracker (Lysa, Avanza, LF Fonder). Balance = seed + DBIT outflows minus CRDT inflows matching the account merchant name.
 - **Recurring payments**: auto-detected (3+ consistent charges) + manually markable. Variable-price support.
 - **Anomaly detection**: suspicious payments flagged `[!] ANOMALY`.
-- **Savings goals** with Vercel Blob images, time-to-goal projections, monthly auto-sweep of budget surplus.
+- **Savings goals** with Vercel Blob images, time-to-goal projections, and a **salary-period sweep**: when a new salary lands, the app computes budget surplus over the just-closed period and records a *pending* sweep suggestion (sweep % of slack) toward the primary goal. You then make the real Lysa transfer and tag that transaction as the sweep from the ledger (`[→ sweep]`), which confirms the suggestion with the real amount and credits the goal.
 - **What-if simulator**: adjust category budgets and see projected month-end impact.
 - **Adaptive budgeting**: large purchases tighten other categories automatically (net-zero redistribution).
 
@@ -118,6 +118,7 @@ drizzle/migrations/phase3.sql
 drizzle/migrations/phase4.sql
 drizzle/migrations/phase4-ticker.sql
 drizzle/migrations/phase5.sql          -- Reactor Core game tables
+drizzle/migrations/phase-sweep.sql     -- salary-period sweep + Lysa tx tagging
 ```
 
 > `phase5.sql` creates `game_state`, `achievements`, `challenges` and drops
@@ -169,7 +170,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `src/lib/sync.ts` | Full sync orchestration |
 | `src/lib/budget.ts` | Salary-cycle budget status |
 | `src/lib/period.ts` | `getSalaryCycle`, `getAllSalaryCycles` |
-| `src/lib/savings.ts` | Goals, contributions, monthly sweep, savings total |
+| `src/lib/savings.ts` | Goals, contributions, salary-period sweep (`runPeriodSweep`, `classifyTransactionAsSweep`), savings total |
 | `src/lib/investments.ts` | Investment accounts (seed + txn delta), `getInvestmentAccountsTotal` (reactor invested source) |
 | `src/lib/behavior/` | Recurring detection, anomaly flagging, adaptive budgets |
 | `src/lib/gemini/` | Context builder, assistant, budget recalibration, analysis |
@@ -182,7 +183,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `streak.ts` | Containment uptime, `getStreakAsOf` for shield absorption |
 | `pot.ts` | Stored charge capacitor (weekly under-pace surplus) |
 | `history.ts` | 42/84-day containment log data (`getDayHistory`) |
-| `velocity.ts` | Next milestone, wealth velocity projection, fuel efficiency |
+| `velocity.ts` | Next-milestone tracker (closest not-yet-unlocked achievement by % remaining) |
 | `achievements.ts` | 39 badge definitions + predicates, unlock persistence |
 | `challenges.ts` | 5 weekly directive templates, generation, eval |
 | `snapshot.ts` | `getReactorSnapshot`: assembles full game state for pages |
@@ -213,6 +214,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `/api/sync/manual` | POST | Streaming manual sync |
 | `/api/categorize` | POST | Streaming backlog re-categorization |
 | `/api/transactions` | GET, PATCH | List with filters; PATCH = category override |
+| `/api/transactions/[id]/sweep` | POST | Tag a DBIT tx as the Lysa sweep transfer (confirms pending suggestion → credits primary goal) |
 | `/api/categories` | GET, POST, PATCH, DELETE | Category management |
 | `/api/recurring` | GET, POST, PATCH | Recurring payment management |
 | `/api/budget/recalibrate` | POST | Streaming AI budget proposal + apply |

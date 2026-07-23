@@ -35,10 +35,6 @@ async function loadSettings(): Promise<Settings> {
   };
 }
 
-function monthOf(iso: string): string {
-  return iso.slice(0, 7); // YYYY-MM
-}
-
 function monthRangeUTC(month: string): { from: string; to: string; daysInMonth: number; today: string } {
   const [y, m] = month.split("-").map((n) => parseInt(n, 10));
   const from = new Date(Date.UTC(y, m - 1, 1));
@@ -240,19 +236,3 @@ export async function evaluateAdaptiveForCategories(
   }
   return results;
 }
-
-/** Convenience — expose the map for use elsewhere (budget page, insights). */
-export async function getMonthlyAdjustments(month: string) {
-  const rows = await db
-    .select({
-      categoryId: budgetAdjustments.categoryId,
-      total: sql<number>`coalesce(sum(${budgetAdjustments.delta}::float), 0)::float`,
-    })
-    .from(budgetAdjustments)
-    .where(eq(budgetAdjustments.month, month))
-    .groupBy(budgetAdjustments.categoryId);
-  return new Map(rows.map((r) => [r.categoryId, r.total]));
-}
-
-// re-export for convenience
-export { monthOf };

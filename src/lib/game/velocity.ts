@@ -1,8 +1,5 @@
-import { db } from "@/db";
-import { transactions, categories } from "@/db/schema";
-import { and, eq, gte, sql } from "drizzle-orm";
 import { ACHIEVEMENTS, type AchievementContext } from "./achievements";
-import { TIERS, XP_PER_100_KR_INVEST } from "./level";
+import { TIERS } from "./level";
 
 // ─── Next milestone ─────────────────────────────────────────────────────────
 
@@ -55,8 +52,7 @@ const SPECS: MilestoneSpec[] = [
   { id: "oblivion",         target: TIERS[11].minXp, unit: "XP", getValue: c => c.xp },
 ];
 
-const SPEC_BY_ID = new Map(SPECS.map((s) => [s.id, s]));
-const ACH_BY_ID  = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
+const ACH_BY_ID = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
 
 export interface MilestoneInfo {
   achievementId: string;
@@ -105,125 +101,4 @@ export function getNextMilestone(
   }
 
   return best;
-}
-
-// ─── Wealth velocity ─────────────────────────────────────────────────────────
-
-export interface VelocityInfo {
-  krPerMonth: number;      // rolling 3-month avg new savings + investments
-  label: string;           // formatted "X kr/month"
-  projectedMonths: number | null; // months to next XP tier at this velocity
-  projectedTierName: string | null;
-}
-
-function fmtKr(n: number) {
-  return `${Math.round(n).toLocaleString("sv-SE")} kr`;
-}
-
-function isoMonth(offset: number): string {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
-    .toISOString()
-    .slice(0, 7);
-}
-
-export async function getWealthVelocity(
-  currentXp: number,
-  currentTierIndex: number
-): Promise<VelocityInfo> {
-  // Sum investment outflows for the last 3 complete months.
-  const months = [isoMonth(-1), isoMonth(-2), isoMonth(-3)];
-  const outflowExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
-
-  const rows = await db
-    .select({
-      month: sql<string>`to_char(${transactions.bookingDate}, 'YYYY-MM')`,
-      catName: categories.name,
-      total: outflowExpr,
-    })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(
-      and(
-        sql`to_char(${transactions.bookingDate}, 'YYYY-MM') IN (${months[0]}, ${months[1]}, ${months[2]})`,
-        eq(categories.name, "Investments")
-      )
-    )
-    .groupBy(
-      sql`to_char(${transactions.bookingDate}, 'YYYY-MM')`,
-      categories.name
-    );
-
-  // Total per month.
-  const byMonth = new Map<string, number>();
-  for (const r of rows) {
-    byMonth.set(r.month, (byMonth.get(r.month) ?? 0) + r.total);
-  }
-  const totals = months.map((m) => byMonth.get(m) ?? 0);
-  const avgMonthly = totals.reduce((s, n) => s + n, 0) / 3;
-
-  // How many months to next tier? All new capital fuels the reactor as investment.
-  const next = currentTierIndex < TIERS.length - 1 ? TIERS[currentTierIndex + 1] : null;
-  let projectedMonths: number | null = null;
-  let projectedTierName: string | null = null;
-  if (next && avgMonthly > 0) {
-    const xpPerMonth = (avgMonthly / 100) * XP_PER_100_KR_INVEST;
-    const xpNeeded = next.minXp - currentXp;
-    projectedMonths = xpNeeded > 0 && xpPerMonth > 0 ? Math.ceil(xpNeeded / xpPerMonth) : null;
-    projectedTierName = next.name;
-  }
-
-  return {
-    krPerMonth: avgMonthly,
-    label: avgMonthly > 0 ? `${fmtKr(avgMonthly)}/month` : "no data",
-    projectedMonths,
-    projectedTierName,
-  };
-}
-
-// ─── Fuel efficiency ─────────────────────────────────────────────────────────
-
-export interface EfficiencyInfo {
-  pct: number | null;     // 0..1 of salary going to savings+investments (null = no salary)
-  monthlySavingsInvest: number;
-  salary: number | null;
-}
-
-const SALARY_MIN = 18_000;
-const SALARY_MAX = 30_000;
-
-export async function getFuelEfficiency(): Promise<EfficiencyInfo> {
-  const month = isoMonth(0);
-  const [salaryRow] = await db
-    .select({ amount: sql<number>`coalesce(avg(${transactions.amount}::float), 0)::float` })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(
-      and(
-        eq(transactions.direction, "CRDT"),
-        eq(categories.name, "Income"),
-        sql`${transactions.amount}::float between ${SALARY_MIN} and ${SALARY_MAX}`,
-        gte(transactions.bookingDate, isoMonth(-3) + "-01")
-      )
-    );
-  const salary = salaryRow?.amount > 0 ? salaryRow.amount : null;
-
-  const outflowExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
-  const [siRow] = await db
-    .select({ total: outflowExpr })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(
-      and(
-        sql`to_char(${transactions.bookingDate}, 'YYYY-MM') = ${month}`,
-        sql`${categories.name} IN ('Savings','Investments')`
-      )
-    );
-  const monthly = siRow?.total ?? 0;
-
-  return {
-    pct: salary && salary > 0 ? Math.min(1, monthly / salary) : null,
-    monthlySavingsInvest: monthly,
-    salary,
-  };
 }

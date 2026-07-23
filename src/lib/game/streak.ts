@@ -1,6 +1,5 @@
 import { db } from "@/db";
 import { gameState } from "@/db/schema";
-import { sql } from "drizzle-orm";
 import { getDailyPace, getDailySpendMap, todayIso, shiftIso } from "./pace";
 
 export interface StreakInfo {
@@ -70,27 +69,4 @@ export async function getStreakAsOf(refDate: string): Promise<number> {
     else break;
   }
   return count;
-}
-
-/**
- * Persist the streak high-water mark + eval date. Called by the nightly eval.
- * Returns whether a new best was set (for milestone notifications).
- */
-export async function persistStreak(current: number): Promise<{ newBest: boolean; best: number }> {
-  const [gs] = await db
-    .select({ best: gameState.bestStreak })
-    .from(gameState)
-    .limit(1);
-  const storedBest = gs?.best ?? 0;
-  const best = Math.max(storedBest, current);
-
-  await db
-    .insert(gameState)
-    .values({ key: "singleton", bestStreak: best, lastEvalDate: sql`current_date`, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: gameState.key,
-      set: { bestStreak: best, lastEvalDate: sql`current_date`, updatedAt: new Date() },
-    });
-
-  return { newBest: best > storedBest, best };
 }

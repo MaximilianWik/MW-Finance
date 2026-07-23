@@ -45,10 +45,3 @@ export async function* streamAssistant(
     if (text) yield text;
   }
 }
-
-/** Non-streaming answer — full plain-text string. */
-export async function askAssistant(question: string, history: ChatTurn[] = []): Promise<string> {
-  let out = "";
-  for await (const chunk of streamAssistant(question, history)) out += chunk;
-  return out.trim();
-}
