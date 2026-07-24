@@ -1,9 +1,12 @@
 import { db } from "@/db";
-import { transactions, categories } from "@/db/schema";
+import { transactions, categories, recurringPayments } from "@/db/schema";
 import { and, gte, lte, sql, notInArray, isNull, or, eq } from "drizzle-orm";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 
-// Spend that does NOT count against the reactor: moving money to yourself.
+// Spend that does NOT count against uptime or the capacitor: internal transfers,
+// savings moves, and any transaction whose merchant is a recognized recurring
+// payment (bills, subscriptions). Bills are budgeted commitments, not daily
+// discipline failures — they should never break a streak.
 export const EXCLUDED_CATEGORIES = ["Transfers", "Savings"];
 
 /** Today as YYYY-MM-DD (UTC). */
@@ -69,8 +72,9 @@ export async function getDailyPace(): Promise<PaceInfo> {
 }
 
 /**
- * Map of YYYY-MM-DD → counted spend (positive kr) between two dates,
- * excluding transfers/savings. Missing days = zero spend.
+ * Map of YYYY-MM-DD → counted spend (positive kr) between two dates.
+ * Excluded: transfers, savings, and any transaction whose merchant is a
+ * recognized active recurring payment (bills, subscriptions). Missing days = 0.
  */
 export async function getDailySpendMap(
   fromIso: string,
@@ -83,11 +87,19 @@ export async function getDailySpendMap(
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .leftJoin(
+      recurringPayments,
+      and(
+        eq(transactions.merchant, recurringPayments.merchant),
+        eq(recurringPayments.active, true)
+      )
+    )
     .where(
       and(
         gte(transactions.bookingDate, fromIso),
         lte(transactions.bookingDate, toIso),
-        or(isNull(categories.name), notInArray(categories.name, EXCLUDED_CATEGORIES))
+        or(isNull(categories.name), notInArray(categories.name, EXCLUDED_CATEGORIES)),
+        isNull(recurringPayments.id)  // exclude recognized recurring payments
       )
     )
     .groupBy(transactions.bookingDate);

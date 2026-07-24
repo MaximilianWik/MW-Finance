@@ -118,9 +118,11 @@ export default async function RankPage({
                 <div className="inline-flex items-center justify-center text-[0.6rem] uppercase tracking-term text-muted">
                   uptime
                   <Tip title="Containment uptime" side="below">
-                    Consecutive days where counted spend (excl. Transfers + Savings) stayed at or
-                    below your daily pace. Zero-spend days count clean. Breaks on a breach unless a
-                    shield absorbs it.
+                    Consecutive days where counted spend stayed at or below your daily pace.
+                    Excluded from the count: Transfers, Savings, and any transaction whose
+                    merchant is a recognized recurring payment (bills, subscriptions). Recurring
+                    payments are budgeted commitments, not daily discipline failures.
+                    Zero-spend days count clean. Breaks on a breach unless a shield absorbs it.
                   </Tip>
                 </div>
                 <div className={`text-lg tabular-nums ${level.danger ? "text-danger" : "text-accent"}`}>

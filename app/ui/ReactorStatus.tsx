@@ -95,9 +95,10 @@ export function ReactorStatus({ snap }: { snap: ReactorSnapshot | null }) {
             <span className="flex items-center text-muted">
               uptime
               <Tip title="Containment uptime">
-                Consecutive days where counted spend (excl. Transfers and Savings) stayed at or
-                below daily pace. Zero-spend days count clean. Breaks the moment a day exceeds
-                pace, unless a shield absorbs it.
+                Consecutive days where counted spend stayed at or below daily pace.
+                Excluded: Transfers, Savings, and recognized recurring payments (bills,
+                subscriptions). Zero-spend days count clean. Breaks the moment a day
+                exceeds pace, unless a shield absorbs it.
               </Tip>
             </span>
             <div className="flex items-center gap-3">
@@ -131,8 +132,9 @@ export function ReactorStatus({ snap }: { snap: ReactorSnapshot | null }) {
                 <br /><br />
                 Currently: {kr(pot.pace)}/day.
                 <br /><br />
-                A day is "clean" when counted spend (excl. Transfers and Savings) is at or below
-                this number. Adjust budgets on /budgets to change the pace.
+                A day is "clean" when counted spend is at or below this number.
+                Excluded: Transfers, Savings, and recognized recurring payments (bills,
+                subscriptions). Adjust budgets on /budgets to change the pace.
               </Tip>
             </span>
             <span className="text-ink2">{kr(pot.pace)}<span className="ml-1 text-faint">/day</span></span>
