@@ -158,7 +158,7 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
   if (spike) log(`[SURGE] Investment spike detected this month.`);
 
   // Budget discipline: award XP when a salary cycle closes under total budget.
-  const budgetResult = await evaluateBudgetDiscipline(lastBudgetPeriod);
+  const budgetResult = await evaluateBudgetDiscipline(lastBudgetPeriod, log);
   if (budgetResult) {
     budgetXp += budgetResult.bonusXp;
     lastBudgetPeriod = budgetResult.period;
