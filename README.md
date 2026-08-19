@@ -523,5 +523,5 @@ npm run db:studio     Drizzle Studio (DB browser)
 - `.env.local` and `*.pem` are gitignored. Never commit secrets.
 - RSA key lives only in env. Rotate via the Enable Banking panel.
 - `/api/sync` and `/api/game/eval` GET are protected by `CRON_SECRET` bearer check.
-- `SITE_PASSWORD` enables session-cookie auth on all mutating routes.
+- `SITE_PASSWORD` enables session-cookie auth on every page and API route (see `middleware.ts`); visitors are redirected to `/unlock` until they authenticate. Exempt: `/api/auth/*`, `/api/callback`, and Bearer-authenticated cron requests.
 - Use an unguessable `NTFY_TOPIC`; anyone who knows it can read your push notifications.

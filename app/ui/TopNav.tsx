@@ -18,6 +18,7 @@ const TABS = [
 
 export function TopNav() {
   const path = usePathname();
+  if (path === "/unlock") return null;
   return (
     <header className="relative overflow-hidden border border-edge bg-panel/80">
       {/* Sigil backdrop — figure01 peeking from the right, clipped by overflow-hidden */}
