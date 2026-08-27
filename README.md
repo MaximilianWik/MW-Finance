@@ -275,7 +275,7 @@ erDiagram
 
 - **Auto-sync** from Länsförsäkringar via cron (daily + weekly) or manual trigger. Full streaming log with per-transaction categorization detail.
 - **Categorization pipeline**: self-transfer detection, MCC codes, keyword rules, merchant cache, Gemini fallback. Manual overrides propagate to all past and future transactions from the same merchant.
-- **Salary-cycle budgeting**: budget periods run from your last salary deposit to the next one (detected as Income 18k-30k kr), not calendar months.
+- **Salary-cycle budgeting**: budget periods run from your last salary deposit to the next one (detected as Income 18k-60k kr), not calendar months.
 - **AI budget recalibration**: Gemini analyzes spending + recurring bills, proposes a full budget. Manual edits are never overwritten.
 - **Conversational AI assistant**: terminal-style console on `/assistant`.
 - **Behavioral analysis**: nightly Gemini batch produces AI insights on the overview.
