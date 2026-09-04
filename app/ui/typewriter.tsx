@@ -127,7 +127,7 @@ export function TerminalLog({
   const lines = shown.length ? shown.split("\n") : [];
 
   return (
-    <div className="relative">
+    <div className="relative overflow-hidden">
       <pre
         ref={ref}
         className={`max-h-72 overflow-auto whitespace-pre-wrap border border-edge bg-ink px-3 py-2 text-[0.7rem] leading-relaxed ${className}`}
