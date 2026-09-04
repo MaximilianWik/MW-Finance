@@ -306,7 +306,7 @@ export default async function RankPage({
                 : failed ? "FAILED"
                 : c.lowerIsBetter ? `${kr(progress)} / ${kr(target)}`
                 : `${Math.floor(progress)} / ${Math.floor(target)}`;
-              const statusClass = complete ? "text-accent" : failed ? "text-danger" : "text-faint";
+              const statusClass = complete ? "text-accent" : failed ? "text-danger" : "text-muted";
               return (
                 <li
                   key={c.id}
@@ -316,7 +316,7 @@ export default async function RankPage({
                   {/* flood fill */}
                   <div
                     className="anim-bar absolute inset-y-0 left-0"
-                    style={{ width: `${Math.round(pct * 100)}%`, background: fillColor, opacity: 0.14 }}
+                    style={{ width: `${Math.round(pct * 100)}%`, background: fillColor, opacity: 0.1 }}
                   />
                   {/* content */}
                   <div className="relative flex items-center justify-between gap-3 px-3 py-2.5">
@@ -324,7 +324,7 @@ export default async function RankPage({
                       <span className="block text-[0.72rem] uppercase tracking-term text-ink2 leading-snug">
                         {c.title}
                       </span>
-                      <span className="block text-[0.6rem] lowercase text-faint mt-0.5">
+                      <span className="block text-[0.6rem] lowercase text-muted mt-0.5">
                         {c.description} · +{c.rewardXp} XP
                       </span>
                     </div>
