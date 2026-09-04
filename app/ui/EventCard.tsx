@@ -7,7 +7,7 @@ import { dismissEvent } from "../actions";
 export interface EventCardData {
   id: number;
   title: string;
-  url: string;
+  url: string | null;
   description: string | null;
   tag: string | null;
   audience: string | null;
@@ -49,27 +49,33 @@ export function EventCard({ event }: { event: EventCardData }) {
       </div>
 
       {/* Image / fallback */}
-      <a
-        href={event.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="relative block h-32 overflow-hidden border-b border-edge bg-ink"
-      >
-        {!imgFailed && event.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={event.imageUrl}
-            alt=""
-            className="h-full w-full object-cover opacity-90"
-            onError={() => setImgFailed(true)}
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <AsciiSigil name="runeEye" tone="accent" opacity={0.18} className="text-[0.5rem]" />
-          </div>
-        )}
-      </a>
+      {event.url ? (
+        <a
+          href={event.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="relative block h-32 overflow-hidden border-b border-edge bg-ink"
+        >
+          {!imgFailed && event.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={event.imageUrl}
+              alt=""
+              className="h-full w-full object-cover opacity-90"
+              onError={() => setImgFailed(true)}
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <AsciiSigil name="runeEye" tone="accent" opacity={0.18} className="text-[0.5rem]" />
+            </div>
+          )}
+        </a>
+      ) : (
+        <div className="relative flex h-32 w-full items-center justify-center overflow-hidden border-b border-edge bg-ink">
+          <AsciiSigil name="runeEye" tone="accent" opacity={0.18} className="text-[0.5rem]" />
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
@@ -91,14 +97,18 @@ export function EventCard({ event }: { event: EventCardData }) {
         )}
 
         <div className="mt-auto flex items-center justify-between pt-1.5">
-          <a
-            href={event.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[0.65rem] uppercase tracking-term text-accent hover:text-accent2"
-          >
-            » open event
-          </a>
+          {event.url ? (
+            <a
+              href={event.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[0.65rem] uppercase tracking-term text-accent hover:text-accent2"
+            >
+              » open event
+            </a>
+          ) : (
+            <span className="text-[0.65rem] uppercase tracking-term text-faint">no link — search title</span>
+          )}
           <form action={dismissEvent}>
             <input type="hidden" name="id" value={event.id} />
             <button

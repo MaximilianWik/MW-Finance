@@ -4,7 +4,6 @@ import { aiInsights } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { getAccounts, getCategories } from "@/lib/queries";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
-import { getPrimaryGoal } from "@/lib/savings";
 import { getReactorSnapshot, type ReactorSnapshot } from "@/lib/game/snapshot";
 import { kr } from "@/lib/format";
 import { SyncButton } from "./ui/SyncButton";
@@ -13,7 +12,7 @@ import { RecentLedger } from "./ui/RecentLedger";
 import { ReactorStatus } from "./ui/ReactorStatus";
 import { Panel } from "./ui/Panel";
 import { StatusTag } from "./ui/StatusTag";
-import { PrimaryGoalCard, FlaggedCard } from "./ui/BehaviorCards";
+import { FlaggedCard } from "./ui/BehaviorCards";
 import { AiInsights, type AiInsightRow } from "./ui/AiInsights";
 import { InvestmentsPanel } from "./ui/InvestmentsPanel";
 import { QueryLog } from "./ui/QueryLog";
@@ -56,7 +55,6 @@ export default async function Home({
     label: "", ym: "", from: "", to: null, rows: [], totalSpent: 0, totalBudget: 0,
   };
   let cats: Awaited<ReturnType<typeof getCategories>> = [];
-  let primaryGoal: Awaited<ReturnType<typeof getPrimaryGoal>> = null;
   let snap: ReactorSnapshot | null = null;
   let dbError: string | null = null;
   let topInsights: AiInsightRow[] = [];
@@ -64,11 +62,10 @@ export default async function Home({
 
   const [, _ql] = await withQueryLog(async () => {
     try {
-      [accs, budget, cats, primaryGoal] = await Promise.all([
+      [accs, budget, cats] = await Promise.all([
         getAccounts(),
         getMonthlyBudgetStatus(),
         getCategories(),
-        getPrimaryGoal(),
       ]);
     } catch (e) {
       dbError = e instanceof Error ? e.message : String(e);
@@ -149,60 +146,44 @@ export default async function Home({
           </a>
         </Panel>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Panel title="ACCOUNT SYNC" right={kr(totalBalance)}>
-            <table className="term-table">
-              <tbody>
-                {accs.map((a) => (
-                  <tr key={a.uid}>
-                    <td>
-                      <div className="truncate text-ink2">
-                        {a.name ?? a.product ?? a.aspspName}
-                      </div>
-                      <div className="truncate text-[0.7rem] text-faint">
-                        {a.iban ?? a.aspspName}
-                      </div>
-                    </td>
-                    <td className="w-20 text-center">
-                      {a.balanceUpdatedAt === null ? (
-                        <StatusTag tone="muted">[ NEW ]</StatusTag>
-                      ) : syncFresh(a.balanceUpdatedAt) ? (
-                        <StatusTag tone="ok">[ OK ]</StatusTag>
-                      ) : (
-                        <StatusTag tone="warn">[ STALE ]</StatusTag>
-                      )}
-                    </td>
-                    <td className="w-28 text-right text-ink2">{kr(a.balance)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <SyncButton />
-              <a
-                href="/api/auth/start"
-                className="btn text-[0.65rem]"
-                title="Re-authorise with Länsförsäkringar (required every 90 days)"
-              >
-                $ re-link bank
-              </a>
-            </div>
-          </Panel>
-
-          {primaryGoal ? (
-            <PrimaryGoalCard goal={primaryGoal} />
-          ) : (
-            <Panel title="GOALS">
-              <div className="mb-2 flex justify-center overflow-hidden">
-                <AsciiSigil name="figure00" tone="accent" opacity={0.8} className="text-[0.65rem]" />
-              </div>
-              <p className="text-sm text-muted">No primary goal set.</p>
-              <Link href="/goals" className="btn mt-3">
-                » goals
-              </Link>
-            </Panel>
-          )}
-        </div>
+        <Panel title="ACCOUNT SYNC" right={kr(totalBalance)}>
+          <table className="term-table">
+            <tbody>
+              {accs.map((a) => (
+                <tr key={a.uid}>
+                  <td>
+                    <div className="truncate text-ink2">
+                      {a.name ?? a.product ?? a.aspspName}
+                    </div>
+                    <div className="truncate text-[0.7rem] text-faint">
+                      {a.iban ?? a.aspspName}
+                    </div>
+                  </td>
+                  <td className="w-20 text-center">
+                    {a.balanceUpdatedAt === null ? (
+                      <StatusTag tone="muted">[ NEW ]</StatusTag>
+                    ) : syncFresh(a.balanceUpdatedAt) ? (
+                      <StatusTag tone="ok">[ OK ]</StatusTag>
+                    ) : (
+                      <StatusTag tone="warn">[ STALE ]</StatusTag>
+                    )}
+                  </td>
+                  <td className="w-28 text-right text-ink2">{kr(a.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <SyncButton />
+            <a
+              href="/api/auth/start"
+              className="btn text-[0.65rem]"
+              title="Re-authorise with Länsförsäkringar (required every 90 days)"
+            >
+              $ re-link bank
+            </a>
+          </div>
+        </Panel>
       )}
 
       <FlaggedCard />

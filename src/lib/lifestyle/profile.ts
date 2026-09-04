@@ -121,15 +121,15 @@ export function buildThemePrompt(
  */
 export const STRUCTURE_PROMPT = [
   "You convert raw event notes into structured JSON. Return JSON only, no prose:",
-  '{ "events": [ { "title": string, "url": string, "description": string, "tag": string, "audience": "me"|"date"|"both", "whenText": string, "eventDate": string|null, "price": string|null, "priceLevel": "free"|"cheap"|"moderate" } ] }',
+  '{ "events": [ { "title": string, "url": string|null, "description": string, "tag": string, "audience": "me"|"date"|"both", "whenText": string, "eventDate": string|null, "price": string|null, "priceLevel": "free"|"cheap"|"moderate" } ] }',
   "",
   "RULES:",
   `- tag ∈ ${EVENT_TAGS.join("|")}. Pick the closest single tag.`,
   "- audience: 'date' = suits a partner who loves rocks/minerals and noise/alternative music; 'me' = solo interests (techno, metal, markets, gaming, gym); 'both' = works either way.",
   "- whenText = short human string like 'Sat 26 Jul · 20:00'. eventDate = ISO YYYY-MM-DD of the event (null only if genuinely unknown).",
   "- DROP any weekday (Mon–Fri) event that starts before 18:00. KEEP all weekend events.",
-  "- url MUST be the direct, permanent event or venue page URL. NEVER use Google search redirect URLs, grounding redirect URLs, or any URL containing 'vertexaisearch' or 'google.com/search'. If you only have a redirect URL, use the venue's main website instead.",
-  "- DROP events with no usable direct URL.",
+  "- url: use one of the 'Reference source URLs' below if it clearly matches this event. NEVER invent a URL, and NEVER use a Google search redirect or grounding redirect (any URL containing 'vertexaisearch' or 'google.com/search'). If you have no confident match, set url to null — a missing URL is fine, the event is still worth keeping if the title, date and venue are clear enough to find it manually.",
+  "- Only drop an event if you can't tell what it is or roughly when it happens (no usable title or date/time info). A missing url alone is never a reason to drop an event.",
   "- price = short string ('Free', '150 kr', '~200 kr'). priceLevel: free = 0 kr, cheap = ≤150 kr, moderate = >150 kr.",
   "- description = 2 tight sentences max. No markdown, no emoji, no bullet glyphs.",
   "- Deduplicate. Return every valid distinct event you find (up to 40).",

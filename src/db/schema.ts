@@ -333,7 +333,7 @@ export const eventSuggestions = pgTable(
   {
     id: serial("id").primaryKey(),
     title: text("title").notNull(),
-    url: text("url").notNull(),
+    url: text("url"), // nullable — not every scouted event has a confident direct link
     description: text("description"),
     tag: text("tag"),        // techno | rave | metal | market | minerals | noise | gaming | gym | misc
     audience: text("audience"), // me | date | both

@@ -33,11 +33,14 @@ import {
 
 const WINDOW_DAYS = 30;
 const MAX_EVENTS = 40;
+const SEARCH_TIMEOUT_MS = 25_000;
+const STRUCTURE_TIMEOUT_MS = 20_000;
+const REDIRECT_RESOLVE_TIMEOUT_MS = 4_000;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface StructuredEvent {
   title: string;
-  url: string;
+  url: string | null;
   description: string | null;
   tag: EventTag;
   audience: Audience;
@@ -47,13 +50,47 @@ interface StructuredEvent {
   priceLevel: PriceLevel;
 }
 
+interface Source {
+  url: string;
+  title?: string;
+}
+
+/**
+ * Gemini's google_search grounding tool only ever hands back temporary
+ * `vertexaisearch.cloud.google.com` redirect links in groundingChunks — never
+ * the real destination. Those redirects are useless as event URLs (they
+ * expire) and get filtered out downstream anyway. Resolve each one server-side
+ * by following the redirect chain, so the structuring step gets a real,
+ * usable venue/ticket URL to work with instead of nothing.
+ */
+async function resolveGroundingUrl(uri: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REDIRECT_RESOLVE_TIMEOUT_MS);
+    const res = await fetch(uri, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    clearTimeout(timer);
+    const finalUrl = res.url;
+    if (!finalUrl) return null;
+    if (finalUrl.includes("vertexaisearch.cloud.google.com")) return null;
+    if (finalUrl.includes("google.com/search")) return null;
+    return finalUrl;
+  } catch {
+    return null; // timed out, network error, or blocked — just skip this source
+  }
+}
+
 // ─── Step 1: grounded free-text search (raw REST) ──────────────────────────
 async function searchTheme(
   theme: Theme,
   from: string,
   to: string,
   budgetHint: string
-): Promise<{ text: string; urls: string[] }> {
+): Promise<{ text: string; sources: Source[] }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.gemini.model}:generateContent?key=${env.gemini.apiKey}`;
   const res = await fetch(url, {
     method: "POST",
@@ -72,15 +109,28 @@ async function searchTheme(
   const data = (await res.json()) as {
     candidates?: Array<{
       content?: { parts?: Array<{ text?: string }> };
-      groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string } }> };
+      groundingMetadata?: {
+        groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+      };
     }>;
   };
   const cand = data.candidates?.[0];
   const text = (cand?.content?.parts ?? []).map((p) => p.text ?? "").join("");
-  const urls = (cand?.groundingMetadata?.groundingChunks ?? [])
-    .map((c) => c.web?.uri)
-    .filter((u): u is string => typeof u === "string");
-  return { text, urls };
+  const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
+
+  // Resolve all redirect URLs in parallel — each is individually time-boxed,
+  // so a handful of slow/unresponsive hosts never stall the whole batch.
+  const resolved = await Promise.all(
+    chunks.map(async (c) => {
+      const uri = c.web?.uri;
+      if (!uri) return null;
+      const real = await resolveGroundingUrl(uri);
+      if (!real) return null;
+      return { url: real, title: c.web?.title } as Source;
+    })
+  );
+  const sources = resolved.filter((s): s is Source => s !== null);
+  return { text, sources };
 }
 
 // ─── Step 2: JSON structuring — per-theme (SDK JSON mode, no tools) ─────────
@@ -105,7 +155,7 @@ function normalizeUrl(raw: unknown): string | null {
 
 async function structureTheme(
   text: string,
-  urls: string[],
+  sources: Source[],
   theme: Theme,
   from: string,
   to: string,
@@ -114,11 +164,12 @@ async function structureTheme(
   const push = (l: string) => pushLog?.(l);
   if (!text.trim()) return [];
   const model = geminiModel({ system: STRUCTURE_PROMPT, json: true, temperature: 0.3 });
+  const refLines = sources.map((s) => (s.title ? `- ${s.title} — ${s.url}` : `- ${s.url}`));
   const prompt = [
     `Date window: ${from} to ${to}. Today is ${from}.`,
     `Theme: ${theme.label}. Default audience hint: "${theme.audience}" (override per event if clearer).`,
-    "Structure the following raw event notes into JSON. Extract the direct URL for each event.",
-    urls.length ? `Reference source URLs:\n${urls.join("\n")}` : "",
+    "Structure the following raw event notes into JSON. Match each event to a direct URL below if one clearly corresponds — otherwise leave url null.",
+    refLines.length ? `Reference source URLs (real, resolved links):\n${refLines.join("\n")}` : "",
     "",
     text.slice(0, 6_000), // cap per-theme: smaller input = faster structuring
     "",
@@ -152,10 +203,11 @@ async function structureTheme(
 
   const out: StructuredEvent[] = [];
   let dropped = 0;
+  let noUrl = 0;
   for (const item of list as Array<Record<string, unknown>>) {
     if (!item || typeof item.title !== "string" || !item.title.trim()) { dropped++; continue; }
-    const url = normalizeUrl(item.url);
-    if (!url) { dropped++; continue; }
+    const url = normalizeUrl(item.url); // null is fine — a link-less event is still kept
+    if (!url) noUrl++;
     const eventDate =
       typeof item.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.eventDate)
         ? item.eventDate
@@ -172,7 +224,13 @@ async function structureTheme(
       priceLevel: lvlSet.has(item.priceLevel as string) ? (item.priceLevel as PriceLevel) : "cheap",
     });
   }
-  if (dropped > 0) push(`[~]    ${theme.label}: dropped ${dropped} event(s) (no title or url)`);
+  // Always surface why a theme's yield is what it is — makes future
+  // debugging visible in the run log instead of a silent "0 structured".
+  push(
+    `[~]    ${theme.label}: kept ${out.length}${dropped ? `, dropped ${dropped} (no title)` : ""}${
+      noUrl ? `, ${noUrl} without a URL` : ""
+    }`
+  );
   return out;
 }
 
@@ -181,11 +239,11 @@ function dedupe(events: StructuredEvent[], dismissedUrls: Set<string>): Structur
   const seen = new Set<string>();
   const out: StructuredEvent[] = [];
   for (const e of events) {
-    const uKey = e.url.toLowerCase();
-    if (dismissedUrls.has(uKey)) continue; // don't resurface dismissed events
+    const uKey = e.url ? e.url.toLowerCase() : null;
+    if (uKey && dismissedUrls.has(uKey)) continue; // don't resurface dismissed events
     const tKey = `${e.title.toLowerCase()}|${e.eventDate ?? ""}`;
-    if (seen.has(uKey) || seen.has(tKey)) continue;
-    seen.add(uKey);
+    if ((uKey && seen.has(uKey)) || seen.has(tKey)) continue;
+    if (uKey) seen.add(uKey);
     seen.add(tKey);
     out.push(e);
     if (out.length >= MAX_EVENTS) break;
@@ -193,15 +251,20 @@ function dedupe(events: StructuredEvent[], dismissedUrls: Set<string>): Structur
   return out;
 }
 
-// ─── Per-theme timeout guard ───────────────────────────────────────────────
-// Prevents a single slow Gemini call from holding up the whole run and
-// causing a Vercel 60s timeout. Each theme gets 45s; if it misses the
-// deadline the theme is skipped with a [~] log line.
-function themeTimeout(ms: number): Promise<never> {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`timed out after ${ms / 1000}s`)), ms)
-  );
+// ─── Per-step timeout guard ─────────────────────────────────────────────────
+// Search and structuring each get their own deadline (instead of one shared
+// clock for the whole chain) so a slow search can't silently eat the budget
+// the structuring call needed. Total worst case (45s) still comfortably fits
+// Vercel's 60s function limit.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
 }
+
 
 // ─── Budget headroom hint ──────────────────────────────────────────────────
 async function budgetHint(): Promise<string> {
@@ -246,25 +309,30 @@ export async function runEventSuggestions(
 
   // Fan out: search + structure pipelined per theme. Each theme starts
   // structuring as soon as its search completes — no waiting for all themes.
-  // Each theme is raced against a 45s deadline so a slow Gemini call can't
-  // blow the Vercel 60s limit.
+  // Search and structuring each get their own timeout deadline, so a slow
+  // search can't silently consume the budget structuring needed.
   push(`[..]   searching & structuring ${THEMES.length} themes in parallel…`);
   const themeResults = await Promise.all(
-    THEMES.map((t) =>
-      Promise.race([
-        searchTheme(t, from, to, hint)
-          .then(async (r) => {
-            push(`[OK]   ${t.label}: ${r.urls.length} source(s)`);
-            const events = await structureTheme(r.text, r.urls, t, from, to, push);
-            push(`[..]   ${t.label}: ${events.length} event(s) structured`);
-            return events;
-          }),
-        themeTimeout(45_000),
-      ]).catch((e) => {
+    THEMES.map(async (t) => {
+      let search: { text: string; sources: Source[] };
+      try {
+        search = await withTimeout(searchTheme(t, from, to, hint), SEARCH_TIMEOUT_MS, `${t.label} search`);
+      } catch (e) {
         push(`[~]    ${t.label}: ${e instanceof Error ? e.message : String(e)}`);
         return [] as StructuredEvent[];
-      })
-    )
+      }
+      push(`[OK]   ${t.label}: ${search.sources.length} source(s)`);
+      try {
+        return await withTimeout(
+          structureTheme(search.text, search.sources, t, from, to, push),
+          STRUCTURE_TIMEOUT_MS,
+          `${t.label} structuring`
+        );
+      } catch (e) {
+        push(`[~]    ${t.label}: ${e instanceof Error ? e.message : String(e)}`);
+        return [] as StructuredEvent[];
+      }
+    })
   );
 
   const structured = themeResults.flat();
@@ -279,7 +347,9 @@ export async function runEventSuggestions(
     .select({ url: eventSuggestions.url })
     .from(eventSuggestions)
     .where(eq(eventSuggestions.dismissed, true));
-  const dismissedUrls = new Set(dismissedRows.map((r) => r.url.toLowerCase()));
+  const dismissedUrls = new Set(
+    dismissedRows.map((r) => r.url?.toLowerCase()).filter((u): u is string => !!u)
+  );
 
   const picked = dedupe(structured, dismissedUrls);
   push(`[..]   ${picked.length} after dedupe/cap`);
