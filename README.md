@@ -265,7 +265,8 @@ erDiagram
   savings_goals     ||--o{ savings_contributions : "receives"
   transactions      ||--o| savings_contributions : "sweep tag"
 ```
-<img width="297" height="486" alt="MWF" src="https://github.com/user-attachments/assets/3c427323-cadb-44c3-8301-693ff9ecb401" />
+<img width="784" height="961" alt="MWF" src="https://github.com/user-attachments/assets/9f697887-085e-4014-80e6-1ec0d649a425" />
+
 
 
 ---
