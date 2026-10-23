@@ -33,8 +33,8 @@ import {
 
 const WINDOW_DAYS = 30;
 const MAX_EVENTS = 40;
-const SEARCH_TIMEOUT_MS = 25_000;
-const STRUCTURE_TIMEOUT_MS = 20_000;
+const SEARCH_TIMEOUT_MS = 90_000;
+const STRUCTURE_TIMEOUT_MS = 40_000;
 const REDIRECT_RESOLVE_TIMEOUT_MS = 4_000;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -254,8 +254,8 @@ function dedupe(events: StructuredEvent[], dismissedUrls: Set<string>): Structur
 // ─── Per-step timeout guard ─────────────────────────────────────────────────
 // Search and structuring each get their own deadline (instead of one shared
 // clock for the whole chain) so a slow search can't silently eat the budget
-// the structuring call needed. Total worst case (45s) still comfortably fits
-// Vercel's 60s function limit.
+// the structuring call needed. Total worst case (130s) fits the route's
+// maxDuration of 300s (Vercel Fluid compute limit on Hobby).
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
