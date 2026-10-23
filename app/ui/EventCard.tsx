@@ -104,7 +104,7 @@ export function EventCard({ event }: { event: EventCardData }) {
               rel="noopener noreferrer"
               className="text-[0.65rem] uppercase tracking-term text-accent hover:text-accent2"
             >
-              » open event
+              {event.url.startsWith("https://www.google.com/search") ? "» search event" : "» open event"}
             </a>
           ) : (
             <span className="text-[0.65rem] uppercase tracking-term text-faint">no link — search title</span>

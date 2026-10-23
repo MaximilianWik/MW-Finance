@@ -3,7 +3,6 @@ import { eventSuggestions } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { Panel } from "../ui/Panel";
 import { AiConsole } from "../ui/AiConsole";
-import { AsciiSigil } from "../ui/AsciiSigil";
 import { EventCard, type EventCardData } from "../ui/EventCard";
 import { QueryLog } from "../ui/QueryLog";
 import { withQueryLog } from "@/db/query-log";
@@ -72,7 +71,6 @@ export default async function WeekendPage() {
 
       {events.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-10">
-          <AsciiSigil name="wingedSpine" tone="accent" opacity={0.16} className="text-[0.55rem]" />
           <p className="text-center text-sm text-muted">
             No plans yet. Hit <span className="text-accent">$ find things to do</span> to scout the month.
           </p>
