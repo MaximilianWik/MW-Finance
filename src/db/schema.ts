@@ -336,6 +336,7 @@ export const eventSuggestions = pgTable(
     url: text("url"), // nullable — not every scouted event has a confident direct link
     description: text("description"),
     tag: text("tag"),        // techno | rave | metal | market | minerals | noise | gaming | pokemon | gym | general | seasonal | misc
+    tags: text("tags").array(), // all fitting tags, main tag first (e.g. ["rave","seasonal"]); null on old rows
     audience: text("audience"), // me | date | both
     whenText: text("when_text"), // human string, e.g. "Sat 26 Jul · 20:00"
     eventDate: date("event_date"), // nullable — used for sorting + expiry

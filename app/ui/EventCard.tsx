@@ -10,6 +10,7 @@ export interface EventCardData {
   url: string | null;
   description: string | null;
   tag: string | null;
+  tags: string[] | null; // null on rows saved before multi-tag support
   audience: string | null;
   whenText: string | null;
   isWeekend: boolean;
@@ -36,6 +37,11 @@ function audienceLabel(a: string | null): string | null {
   return null; // 'both' or unknown → no badge, keeps it clean
 }
 
+/** All tags of an event, main tag first. Old rows only have `tag`. */
+export function eventTags(e: Pick<EventCardData, "tag" | "tags">): string[] {
+  return e.tags?.length ? e.tags : [e.tag ?? "misc"];
+}
+
 /** Missing-thumbnail art: 404 cybersigil + label. */
 function ImageNotFound() {
   return (
@@ -53,14 +59,14 @@ function ImageNotFound() {
  */
 export function EventCard({ event }: { event: EventCardData }) {
   const [imgFailed, setImgFailed] = useState(!event.imageUrl);
-  const tag = (event.tag ?? "misc").toUpperCase();
+  const tags = eventTags(event).map((t) => t.toUpperCase());
   const aud = audienceLabel(event.audience);
 
   return (
     <div className="relative flex flex-col border border-edge bg-panel2">
       {/* Tag bar — box-drawing legend */}
       <div className="flex items-center justify-between border-b border-edge px-2 py-1 text-[0.6rem] uppercase tracking-term">
-        <span className="text-accent">┌─[ {tag} ]</span>
+        <span className="truncate text-accent">┌─{tags.map((t) => `[ ${t} ]`).join("─")}</span>
         {aud && <span className="text-faint">{aud}</span>}
       </div>
 

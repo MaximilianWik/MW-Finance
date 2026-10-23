@@ -46,13 +46,15 @@ const IMAGE_CONCURRENCY = 8;
 const IMAGE_TIMEOUT_MS = 5_000;
 const IMAGE_MAX_BYTES = 300_000; // og:image lives in <head>; never read the whole page
 const WEEKNIGHT_START_HOUR = 18;
+const MAX_TAGS = 3;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 export interface StructuredEvent {
   title: string;
   url: string | null;
   description: string | null;
-  tag: EventTag;
+  tag: EventTag; // main tag
+  tags: EventTag[]; // all fitting tags, main tag first
   audience: Audience;
   whenText: string | null;
   eventDate: string | null; // YYYY-MM-DD
@@ -216,11 +218,18 @@ function toStructured(item: Record<string, unknown>, theme: Theme): StructuredEv
   const lvlSet = new Set<string>(PRICE_LEVELS);
   const eventDate =
     typeof item.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.eventDate) ? item.eventDate : null;
+  const tag = tagSet.has(item.tag as string) ? (item.tag as EventTag) : theme.key;
+  const extra = Array.isArray(item.tags) ? item.tags.filter((t): t is EventTag => tagSet.has(t as string)) : [];
+  // The theme that found it is a real signal too (a rave found by the seasonal
+  // search is seasonal), except the catch-all themes.
+  const fromTheme = theme.key === "general" || theme.key === "misc" ? [] : [theme.key];
+  const tags = [...new Set<EventTag>([tag, ...extra, ...fromTheme])].slice(0, MAX_TAGS);
   return {
     title: item.title.trim().slice(0, 200),
     url: normalizeUrl(item.url),
     description: typeof item.description === "string" ? item.description.trim() : null,
-    tag: tagSet.has(item.tag as string) ? (item.tag as EventTag) : theme.key,
+    tag,
+    tags,
     audience: audSet.has(item.audience as string) ? (item.audience as Audience) : theme.audience,
     whenText: typeof item.whenText === "string" ? item.whenText.trim() : null,
     eventDate,
@@ -359,8 +368,14 @@ function pickBalanced(
     for (const e of list) {
       const key = dupKey(e.title, e.eventDate);
       const c = clusters.find((x) => isDuplicate(x.key, key));
-      if (!c) clusters.push({ key, rep: e });
-      else if (!c.rep.url && e.url) c.rep = e;
+      if (!c) {
+        clusters.push({ key, rep: e });
+        continue;
+      }
+      // Same event found by several themes: join their tags.
+      const merged = [...new Set<EventTag>([...c.rep.tags, ...e.tags])].slice(0, MAX_TAGS);
+      if (!c.rep.url && e.url) c.rep = e;
+      c.rep.tags = merged;
     }
   }
   const reps = new Set(clusters.map((c) => c.rep));
@@ -608,6 +623,7 @@ export async function runEventSuggestions(
     url: e.url ?? searchUrl(e),
     description: e.description,
     tag: e.tag,
+    tags: e.tags,
     audience: e.audience,
     whenText: e.whenText,
     eventDate: e.eventDate,

@@ -13,6 +13,7 @@ const FEED_URL = "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/ev
 const FEED_TIMEOUT_MS = 10_000;
 const TZ = "Europe/Stockholm";
 const WEEKNIGHT_START_HOUR = 18;
+const SEASONAL = /halloween|christmas|holiday|winter|new year|valentine|easter|lunar new year/i;
 
 // Long rotations and non-outing noise. A denylist (not an allowlist) so new
 // Leek Duck event types show up by default.
@@ -174,6 +175,7 @@ export async function fetchPogoEvents(
       url: e.link,
       description: describe(e),
       tag: "pokemon",
+      tags: SEASONAL.test(e.name) ? ["pokemon", "seasonal"] : ["pokemon"],
       audience: "me",
       whenText,
       eventDate: singleDay ? start.date : pickDate(visibleFrom, visibleTo),

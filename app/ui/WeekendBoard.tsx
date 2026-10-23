@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { EventCard, type EventCardData } from "./EventCard";
+import { EventCard, eventTags, type EventCardData } from "./EventCard";
 
 /**
  * Client-side filter bar + grouped grid for /weekend. All filtering is local
@@ -127,8 +127,7 @@ export function WeekendBoard({ events }: { events: EventCardData[] }) {
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of events) {
-      const t = e.tag ?? "misc";
-      m.set(t, (m.get(t) ?? 0) + 1);
+      for (const t of eventTags(e)) m.set(t, (m.get(t) ?? 0) + 1);
     }
     return [...m].sort((a, b) => b[1] - a[1]);
   }, [events]);
@@ -139,7 +138,7 @@ export function WeekendBoard({ events }: { events: EventCardData[] }) {
       matchesWhen(e, when, today) &&
       matchesPrice(e, price) &&
       matchesWith(e, withWho) &&
-      (tags.size === 0 || tags.has(e.tag ?? "misc")) &&
+      (tags.size === 0 || eventTags(e).some((t) => tags.has(t))) &&
       (!needle || `${e.title} ${e.description ?? ""}`.toLowerCase().includes(needle))
   );
 

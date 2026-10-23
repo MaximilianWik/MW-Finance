@@ -20,6 +20,7 @@ export default async function WeekendPage() {
         url: eventSuggestions.url,
         description: eventSuggestions.description,
         tag: eventSuggestions.tag,
+        tags: eventSuggestions.tags,
         audience: eventSuggestions.audience,
         whenText: eventSuggestions.whenText,
         isWeekend: eventSuggestions.isWeekend,

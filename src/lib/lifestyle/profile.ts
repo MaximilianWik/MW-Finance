@@ -136,10 +136,11 @@ export function buildThemePrompt(
  */
 export const STRUCTURE_PROMPT = [
   "You convert raw event notes into structured JSON. Return JSON only, no prose:",
-  '{ "events": [ { "title": string, "url": string|null, "description": string, "tag": string, "audience": "me"|"date"|"both", "whenText": string, "eventDate": string|null, "price": string|null, "priceLevel": "free"|"cheap"|"moderate" } ] }',
+  '{ "events": [ { "title": string, "url": string|null, "description": string, "tag": string, "tags": string[], "audience": "me"|"date"|"both", "whenText": string, "eventDate": string|null, "price": string|null, "priceLevel": "free"|"cheap"|"moderate" } ] }',
   "",
   "RULES:",
-  `- tag ∈ ${EVENT_TAGS.join("|")}. Pick the closest single tag.`,
+  `- tag ∈ ${EVENT_TAGS.join("|")}. The main (closest) tag.`,
+  "- tags = 1–3 tags from the same list that all fit, main tag first. Holiday-themed events (Halloween, Christmas, Lucia, New Year, Easter, Valborg, Midsummer) also get 'seasonal' next to their genre tag. Example: a Halloween rave → tag 'rave', tags ['rave','seasonal'].",
   "- audience: 'date' = suits a partner who loves rocks/minerals and noise/alternative music; 'me' = solo interests (techno, metal, markets, gaming, gym); 'both' = works either way.",
   "- whenText = short human string like 'Sat 26 Jul · 20:00'. eventDate = ISO YYYY-MM-DD of the event (null only if genuinely unknown).",
   "- DROP any weekday (Mon–Fri) event that starts before 18:00. KEEP all weekend events.",
