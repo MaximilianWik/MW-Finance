@@ -1,54 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, categories, merchantCategories, savingsContributions, accounts } from "@/db/schema";
+import { transactions, categories, merchantCategories, savingsContributions } from "@/db/schema";
 import { and, desc, eq, gte, lte, ilike, or, sql, type SQL } from "drizzle-orm";
-import { salaryWhere } from "@/lib/period";
 
-const BALANCE_MAX_AGE_MS = 2 * 86_400_000; // older balance → carried/left hidden
+// Money moved into savings/investments (or between own accounts) is kept, not
+// spent, so the cycle net leaves these categories out. Result = what you saved.
+const NOT_SPENT = ["Transfers", "Savings", "Investments"];
 
-/**
- * Opening ("carried") and closing ("left") balance of the salary account for a
- * salary cycle. The bank only gives the CURRENT booked balance, so we work
- * backwards: carried = balance now − Σ signed booked rows since cycle start.
- * Returns nulls when the salary account, a fresh balance, or `from` is missing.
- */
-async function cycleBalances(
-  from: string,
-  to: string | null
-): Promise<{ carried: number | null; left: number | null }> {
-  const none = { carried: null, left: null };
-
-  const [salary] = await db
-    .select({ accountUid: transactions.accountUid })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(and(salaryWhere(), eq(transactions.bookingDate, from)))
-    .limit(1);
-  if (!salary) return none;
-
-  const [acc] = await db
-    .select({ balance: sql<number | null>`${accounts.balance}::float`, updatedAt: accounts.balanceUpdatedAt })
-    .from(accounts)
-    .where(eq(accounts.uid, salary.accountUid))
-    .limit(1);
-  if (acc?.balance == null || !acc.updatedAt) return none;
-  if (Date.now() - acc.updatedAt.getTime() > BALANCE_MAX_AGE_MS) return none;
-
-  // Booked rows only: the stored balance is the booked (CLBD) balance.
-  const booked = sql`${transactions.status} is distinct from 'PDNG'`;
-  const [sums] = await db
+/** Net (all income − all spending) of a whole LÖN cycle, ignoring the ledger filters. */
+async function cycleNet(from: string, to: string | null): Promise<number> {
+  const [r] = await db
     .select({
-      sinceFrom: sql<number>`coalesce(sum(${transactions.signed}::float), 0)::float`,
-      inCycle: to
-        ? sql<number>`coalesce(sum(case when ${transactions.bookingDate} <= ${to} then ${transactions.signed}::float else 0 end), 0)::float`
-        : sql<number>`0::float`,
+      net: sql<number>`coalesce(sum(${transactions.signed}::float), 0)::float`,
     })
     .from(transactions)
-    .where(and(eq(transactions.accountUid, salary.accountUid), gte(transactions.bookingDate, from), booked));
-
-  const carried = acc.balance - sums.sinceFrom;
-  const left = to ? carried + sums.inCycle : acc.balance;
-  return { carried, left };
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(
+      and(
+        gte(transactions.bookingDate, from),
+        to ? lte(transactions.bookingDate, to) : undefined,
+        sql`coalesce(${categories.name}, '') not in (${sql.join(NOT_SPENT.map((n) => sql`${n}`), sql`, `)})`
+      )
+    );
+  return r?.net ?? 0;
 }
 
 export const runtime = "nodejs";
@@ -155,9 +129,8 @@ export async function GET(req: NextRequest) {
     sweepContributionId: r.sweepContributionId ?? null,
   }));
   const tookMs = Math.round(performance.now() - t0);
-  const balances =
-    sp.get("cycle") === "1" && from ? await cycleBalances(from, to) : { carried: null, left: null };
-  return NextResponse.json({ transactions: transactionsOut, totals: { ...totals, ...balances }, tookMs });
+  const net = sp.get("cycle") === "1" && from ? await cycleNet(from, to) : null;
+  return NextResponse.json({ transactions: transactionsOut, totals: { ...totals, cycleNet: net }, tookMs });
 }
 
 // Manual category override + merchant-cache update.
