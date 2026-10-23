@@ -30,8 +30,9 @@ import {
  *   2. a SEPARATE JSON-mode structuring call, retried once, with a salvage
  *      parser for truncated / slightly broken JSON.
  * Then: validate (date window, weeknight 18:00 rule), dedupe across themes,
- * pick a balanced set (round-robin per theme), and give link-less events a
- * search link so every card is clickable and the row never has a null url.
+ * pick a balanced set (round-robin per theme), read each direct link's
+ * og:image as the card thumbnail, and give link-less events a search link
+ * so every card is clickable and the row never has a null url.
  */
 
 const WINDOW_DAYS = 30;
@@ -40,6 +41,9 @@ const SEARCH_TIMEOUT_MS = 90_000;
 const STRUCTURE_TIMEOUT_MS = 60_000;
 const STRUCTURE_ATTEMPTS = 2;
 const REDIRECT_RESOLVE_TIMEOUT_MS = 4_000;
+const IMAGE_CONCURRENCY = 8;
+const IMAGE_TIMEOUT_MS = 5_000;
+const IMAGE_MAX_BYTES = 300_000; // og:image lives in <head>; never read the whole page
 const WEEKNIGHT_START_HOUR = 18;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -385,6 +389,96 @@ function pickBalanced(
   return out;
 }
 
+// ─── Thumbnails (og:image) ─────────────────────────────────────────────────
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+/** Pick the preview image from a page's <head>: og:image, then twitter:image, then image_src. */
+function extractImage(html: string, pageUrl: string): string | null {
+  const found = new Map<string, string>();
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    const key = tag.match(/\b(?:property|name|itemprop)\s*=\s*["']([^"']+)["']/i)?.[1]?.toLowerCase();
+    const content = tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (key && content && !found.has(key)) found.set(key, content);
+  }
+  const link = html.match(/<link\b[^>]*rel\s*=\s*["']image_src["'][^>]*>/i)?.[0];
+  const linkHref = link?.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
+
+  const raw =
+    found.get("og:image:secure_url") ??
+    found.get("og:image") ??
+    found.get("og:image:url") ??
+    found.get("twitter:image") ??
+    found.get("twitter:image:src") ??
+    found.get("image") ??
+    linkHref;
+  if (!raw) return null;
+  try {
+    const abs = new URL(decodeEntities(raw.trim()), pageUrl);
+    return abs.protocol === "https:" || abs.protocol === "http:" ? abs.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch only the start of the page (until </head> or IMAGE_MAX_BYTES) and read its preview image. */
+async function fetchOgImage(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      cache: "no-store",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MWFinance/1.0; event thumbnail fetch)",
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "sv-SE,sv;q=0.9,en;q=0.8",
+      },
+    });
+    if (!res.ok || !res.body) return null;
+    if (!(res.headers.get("content-type") ?? "").includes("html")) return null;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let html = "";
+    while (html.length < IMAGE_MAX_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      if (/<\/head>/i.test(html)) break;
+    }
+    reader.cancel().catch(() => {});
+    return extractImage(html, res.url || url);
+  } catch {
+    return null; // timeout, blocked, TLS error: card keeps the sigil
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** og:image for every event with a direct link, IMAGE_CONCURRENCY at a time. */
+async function fetchImages(events: StructuredEvent[]): Promise<(string | null)[]> {
+  const out = new Array<string | null>(events.length).fill(null);
+  let cursor = 0;
+  async function worker() {
+    for (;;) {
+      const i = cursor++;
+      if (i >= events.length) return;
+      const u = events[i].url;
+      if (u) out[i] = await fetchOgImage(u);
+    }
+  }
+  await Promise.all(Array.from({ length: IMAGE_CONCURRENCY }, worker));
+  return out;
+}
+
 /** Search link for events without a direct URL, so every card opens something. */
 function searchUrl(e: StructuredEvent): string {
   const q = [e.title, e.eventDate ?? e.whenText ?? "", "Stockholm"].filter(Boolean).join(" ");
@@ -490,7 +584,17 @@ export async function runEventSuggestions(
     return { inserted: 0 };
   }
 
-  const rows: NewEventSuggestion[] = picked.map((e) => ({
+  const linked = picked.filter((e) => e.url).length;
+  push(`[..]   fetching thumbnails for ${linked} event(s) with a direct link…`);
+  const t0 = Date.now();
+  const images = await fetchImages(picked);
+  const gotImages = images.filter(Boolean).length;
+  push(
+    `[OK]   thumbnails: ${gotImages} / ${linked} found in ${((Date.now() - t0) / 1000).toFixed(0)}s` +
+      (picked.length > linked ? ` (${picked.length - linked} search-link event(s) have no page to read)` : "")
+  );
+
+  const rows: NewEventSuggestion[] = picked.map((e, i) => ({
     title: e.title,
     url: e.url ?? searchUrl(e),
     description: e.description,
@@ -501,7 +605,7 @@ export async function runEventSuggestions(
     isWeekend: computeIsWeekend(e.eventDate),
     price: e.price,
     priceLevel: e.priceLevel,
-    imageUrl: null, // ASCII fallback in the UI
+    imageUrl: images[i], // null → ASCII sigil fallback in the UI
     windowStart: from,
   }));
 

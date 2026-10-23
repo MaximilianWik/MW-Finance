@@ -65,6 +65,7 @@ export function EventCard({ event }: { event: EventCardData }) {
               className="h-full w-full object-cover opacity-90"
               onError={() => setImgFailed(true)}
               loading="lazy"
+              referrerPolicy="no-referrer"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
