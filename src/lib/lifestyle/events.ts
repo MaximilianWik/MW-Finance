@@ -19,6 +19,7 @@ import {
   type Audience,
   type PriceLevel,
 } from "./profile";
+import { fetchPogoEvents } from "./pogo";
 
 /**
  * Phase 6 event engine.
@@ -47,7 +48,7 @@ const IMAGE_MAX_BYTES = 300_000; // og:image lives in <head>; never read the who
 const WEEKNIGHT_START_HOUR = 18;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
-interface StructuredEvent {
+export interface StructuredEvent {
   title: string;
   url: string | null;
   description: string | null;
@@ -57,6 +58,7 @@ interface StructuredEvent {
   eventDate: string | null; // YYYY-MM-DD
   price: string | null;
   priceLevel: PriceLevel;
+  imageUrl?: string | null; // set by feeds that ship their own thumbnail (Leek Duck)
 }
 
 interface Source {
@@ -463,7 +465,7 @@ async function fetchOgImage(url: string): Promise<string | null> {
   }
 }
 
-/** og:image for every event with a direct link, IMAGE_CONCURRENCY at a time. */
+/** Feed image if present, else og:image for every event with a direct link, IMAGE_CONCURRENCY at a time. */
 async function fetchImages(events: StructuredEvent[]): Promise<(string | null)[]> {
   const out = new Array<string | null>(events.length).fill(null);
   let cursor = 0;
@@ -471,8 +473,9 @@ async function fetchImages(events: StructuredEvent[]): Promise<(string | null)[]
     for (;;) {
       const i = cursor++;
       if (i >= events.length) return;
-      const u = events[i].url;
-      if (u) out[i] = await fetchOgImage(u);
+      const e = events[i];
+      if (e.imageUrl) out[i] = e.imageUrl;
+      else if (e.url) out[i] = await fetchOgImage(e.url);
     }
   }
   await Promise.all(Array.from({ length: IMAGE_CONCURRENCY }, worker));
@@ -530,9 +533,12 @@ export async function runEventSuggestions(
   push(`[..]   ${hint}`);
   push(`[..]   searching & structuring ${THEMES.length} themes in parallel…`);
 
+  // Leek Duck feed runs alongside the AI themes (no AI, ~1s).
+  const pogoPromise = fetchPogoEvents(from, to, push);
+
   // Search and structuring have separate deadlines (worst case 90s + 2×60s),
   // inside the route's maxDuration of 300s.
-  const byTheme = await Promise.all(
+  const aiThemes = await Promise.all(
     THEMES.map(async (t) => {
       const t0 = Date.now();
       let search: { text: string; sources: Source[] };
@@ -559,6 +565,9 @@ export async function runEventSuggestions(
       return kept;
     })
   );
+  // Feed first: in the dedupe, the first copy of an event is kept (unless it
+  // lacks a URL), so exact Leek Duck data wins over an AI duplicate.
+  const byTheme = [await pogoPromise, ...aiThemes];
 
   const total = byTheme.reduce((s, l) => s + l.length, 0);
   if (total === 0) {

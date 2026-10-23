@@ -59,7 +59,26 @@ export default async function WeekendPage() {
           </p>
         </div>
       ) : (
-        <WeekendBoard events={events} />
+        <>
+          <WeekendBoard events={events} />
+          {events.some((e) => e.url?.includes("leekduck.com")) && (
+            <p className="text-center text-[0.6rem] uppercase tracking-term text-faint">
+              Pokémon GO events:{" "}
+              <a href="https://leekduck.com" target="_blank" rel="noopener noreferrer" className="hover:text-accent">
+                LeekDuck.com
+              </a>{" "}
+              via{" "}
+              <a
+                href="https://github.com/bigfoott/ScrapedDuck"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-accent"
+              >
+                ScrapedDuck
+              </a>
+            </p>
+          )}
+        </>
       )}
     </main>
   );

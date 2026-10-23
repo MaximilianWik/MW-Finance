@@ -80,7 +80,7 @@ export const THEMES: Theme[] = [
     key: "gaming",
     label: "Gaming, Pokémon Go & geek",
     audience: "me",
-    hint: "gaming meetups, Pokémon Go community days, board-game cafés, retro/arcade nights, cosplay, anime/game conventions",
+    hint: "gaming meetups, local Pokémon GO community meetups and raid groups in Stockholm (official in-game events are added separately from Leek Duck), board-game cafés, retro/arcade nights, cosplay, anime/game conventions",
   },
   {
     key: "general",
