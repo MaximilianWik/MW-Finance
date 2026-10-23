@@ -28,6 +28,8 @@ interface Totals {
   totalIn: number;
   totalOut: number;
   count: number;
+  carried: number | null; // salary-account balance at cycle start (LÖN filter only)
+  left: number | null;    // salary-account balance at cycle end / now
 }
 
 interface LedgerCycle {
@@ -154,6 +156,8 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
       const c = cycles[Number(period)];
       params.set("from", c.from);
       if (c.to) params.set("to", c.to);
+      // Carried/left balances only make sense for an unfiltered salary cycle.
+      if (!categoryId && !q && !minAmount && !maxAmount) params.set("cycle", "1");
     } else if (month) {
       params.set("month", month);
     }
@@ -327,6 +331,12 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
               {rows.length} rows shown
               {totals && (
                 <>
+                  {totals.carried != null && (
+                    <>
+                      {" "}· carried{" "}
+                      <span className="text-muted">{krSigned(totals.carried)}</span>
+                    </>
+                  )}
                   {" "}· in{" "}
                   <span className="text-ok">+{kr(totals.totalIn)}</span>
                   {" "}· out{" "}
@@ -335,6 +345,12 @@ export function LedgerPanel({ options, initialMonth = "", cycles = [] }: Props) 
                   <span className={totals.totalIn - totals.totalOut >= 0 ? "text-ok" : "text-danger"}>
                     {krSigned(totals.totalIn - totals.totalOut)}
                   </span>
+                  {totals.left != null && (
+                    <>
+                      {" "}· left{" "}
+                      <span className={totals.left >= 0 ? "text-ok" : "text-danger"}>{krSigned(totals.left)}</span>
+                    </>
+                  )}
                 </>
               )}
             </div>

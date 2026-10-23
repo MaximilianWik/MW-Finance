@@ -61,7 +61,7 @@ function calendarMonth(ref: Date): Cycle {
  * Condition fragment that matches salary transactions:
  * CRDT, Income category, amount in the salary range.
  */
-function salaryWhere() {
+export function salaryWhere() {
   return and(
     eq(transactions.direction, "CRDT"),
     eq(categories.name, "Income"),
