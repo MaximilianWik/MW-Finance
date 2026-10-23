@@ -25,6 +25,11 @@ function priceClass(level: string | null): string {
   return "text-accent"; // cheap / unknown
 }
 
+/** Main amount only: "250 SEK (150 SEK for members…)" → "250 SEK". Full text stays in the tooltip. */
+function shortPrice(price: string): string {
+  return price.replace(/\s*[(\[].*$/, "").trim() || price;
+}
+
 function audienceLabel(a: string | null): string | null {
   if (a === "date") return "DATE";
   if (a === "me") return "SOLO";
@@ -90,12 +95,19 @@ export function EventCard({ event }: { event: EventCardData }) {
       {/* Body */}
       <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
         <div className="flex items-start justify-between gap-2">
-          <span className={`text-[0.68rem] uppercase tracking-term ${event.isWeekend ? "text-ok" : "text-muted"}`}>
+          <span
+            className={`shrink-0 whitespace-nowrap text-[0.68rem] uppercase tracking-term ${
+              event.isWeekend ? "text-ok" : "text-muted"
+            }`}
+          >
             {event.whenText ?? "date tbc"}
           </span>
           {event.price && (
-            <span className={`shrink-0 text-[0.62rem] uppercase tracking-term ${priceClass(event.priceLevel)}`}>
-              {event.price}
+            <span
+              title={event.price}
+              className={`min-w-0 truncate text-right text-[0.62rem] uppercase tracking-term ${priceClass(event.priceLevel)}`}
+            >
+              {shortPrice(event.price)}
             </span>
           )}
         </div>
