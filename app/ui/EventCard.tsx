@@ -31,6 +31,16 @@ function audienceLabel(a: string | null): string | null {
   return null; // 'both' or unknown → no badge, keeps it clean
 }
 
+/** Missing-thumbnail art: 404 cybersigil + label. */
+function ImageNotFound() {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+      <AsciiSigil name="notFound404" tone="accent" opacity={0.6} className="text-[0.45rem]" />
+      <span className="text-[0.55rem] uppercase tracking-term text-faint">image not found</span>
+    </div>
+  );
+}
+
 /**
  * ASCII-framed event card. Box-drawing tag bar + real event image (with an
  * AsciiSigil fallback when the og:image is missing or fails to load), title,
@@ -68,14 +78,12 @@ export function EventCard({ event }: { event: EventCardData }) {
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <AsciiSigil name="runeEye" tone="accent" opacity={0.18} className="text-[0.5rem]" />
-            </div>
+            <ImageNotFound />
           )}
         </a>
       ) : (
         <div className="relative flex h-32 w-full items-center justify-center overflow-hidden border-b border-edge bg-ink">
-          <AsciiSigil name="runeEye" tone="accent" opacity={0.18} className="text-[0.5rem]" />
+          <ImageNotFound />
         </div>
       )}
 
