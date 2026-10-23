@@ -302,34 +302,66 @@ function validate(e: StructuredEvent, from: string, to: string): string | null {
 }
 
 // ─── Dedupe + balanced pick ────────────────────────────────────────────────
-function titleKey(title: string, eventDate: string | null): string {
-  const t = title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
-  return `${t}|${eventDate ?? ""}`;
+// Words that carry no identity ("Halloween Techno Stockholm" = "Techno Halloween").
+const STOP_WORDS = new Set([
+  "the", "and", "och", "med", "at", "in", "i", "pa", "of", "for", "a", "en", "ett", "to", "with",
+  "stockholm", "sthlm", "sweden", "sverige",
+]);
+
+interface DupKey {
+  tokens: Set<string>;
+  date: string | null;
+}
+
+function dupKey(title: string, eventDate: string | null): DupKey {
+  const words = title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // å/ä/ö → a/a/o
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+  return { tokens: new Set(words), date: eventDate };
+}
+
+/**
+ * Same event if the dates agree (or one is unknown) AND the titles mostly
+ * share words: Jaccard ≥ 0.6, or every word of the shorter title (min 2)
+ * appears in the longer one. A weekly club night on two dates stays two rows.
+ */
+function isDuplicate(a: DupKey, b: DupKey): boolean {
+  if (a.date && b.date && a.date !== b.date) return false;
+  if (a.tokens.size === 0 || b.tokens.size === 0) return false;
+  let inter = 0;
+  for (const w of a.tokens) if (b.tokens.has(w)) inter++;
+  const union = a.tokens.size + b.tokens.size - inter;
+  const smaller = Math.min(a.tokens.size, b.tokens.size);
+  return inter / union >= 0.6 || (smaller >= 2 && inter === smaller);
 }
 
 /**
  * Round-robin across themes (each theme sorted weekend-first, then by date)
- * so one chatty theme can't fill the cap. Cross-theme duplicates are dropped
- * by URL or normalized title+date; the copy with a direct URL wins.
+ * so one chatty theme can't fill the cap. Cross-theme duplicates (fuzzy title
+ * + date, or same URL) are merged; the copy with a direct URL wins.
  */
 function pickBalanced(
   byTheme: StructuredEvent[][],
-  dismissed: { urls: Set<string>; titles: Set<string> }
+  dismissed: { urls: Set<string>; keys: DupKey[] }
 ): StructuredEvent[] {
-  const best = new Map<string, StructuredEvent>();
+  // Cluster duplicates; each cluster keeps one representative.
+  const clusters: Array<{ key: DupKey; rep: StructuredEvent }> = [];
   for (const list of byTheme) {
     for (const e of list) {
-      const k = titleKey(e.title, e.eventDate);
-      const prev = best.get(k);
-      if (!prev || (!prev.url && e.url)) best.set(k, e);
+      const key = dupKey(e.title, e.eventDate);
+      const c = clusters.find((x) => isDuplicate(x.key, key));
+      if (!c) clusters.push({ key, rep: e });
+      else if (!c.rep.url && e.url) c.rep = e;
     }
   }
+  const reps = new Set(clusters.map((c) => c.rep));
 
   const sortKey = (e: StructuredEvent) => `${computeIsWeekend(e.eventDate) ? 0 : 1}|${e.eventDate ?? "9999"}`;
   const queues = byTheme.map((list) =>
-    list
-      .filter((e) => best.get(titleKey(e.title, e.eventDate)) === e)
-      .sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
+    list.filter((e) => reps.has(e)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
   );
 
   const seenUrls = new Set<string>();
@@ -343,7 +375,8 @@ function pickBalanced(
       progressed = true;
       const u = e.url?.toLowerCase();
       if (u && (dismissed.urls.has(u) || seenUrls.has(u))) continue;
-      if (dismissed.titles.has(titleKey(e.title, e.eventDate))) continue;
+      const key = dupKey(e.title, e.eventDate);
+      if (dismissed.keys.some((d) => isDuplicate(d, key))) continue;
       if (u) seenUrls.add(u);
       out.push(e);
       if (out.length >= MAX_EVENTS) break;
@@ -447,7 +480,7 @@ export async function runEventSuggestions(
     .where(eq(eventSuggestions.dismissed, true));
   const dismissed = {
     urls: new Set(dismissedRows.map((r) => r.url?.toLowerCase()).filter((u): u is string => !!u)),
-    titles: new Set(dismissedRows.map((r) => titleKey(r.title, r.eventDate))),
+    keys: dismissedRows.map((r) => dupKey(r.title, r.eventDate)),
   };
 
   const picked = pickBalanced(byTheme, dismissed);

@@ -16,6 +16,7 @@ export interface EventCardData {
   price: string | null;
   priceLevel: string | null;
   imageUrl: string | null;
+  eventDate: string | null; // YYYY-MM-DD, used by the /weekend filters
 }
 
 function priceClass(level: string | null): string {

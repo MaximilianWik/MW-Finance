@@ -3,27 +3,12 @@ import { eventSuggestions } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { Panel } from "../ui/Panel";
 import { AiConsole } from "../ui/AiConsole";
-import { EventCard, type EventCardData } from "../ui/EventCard";
+import { type EventCardData } from "../ui/EventCard";
+import { WeekendBoard } from "../ui/WeekendBoard";
 import { QueryLog } from "../ui/QueryLog";
 import { withQueryLog } from "@/db/query-log";
 
 export const dynamic = "force-dynamic";
-
-function SectionGrid({ title, events }: { title: string; events: EventCardData[] }) {
-  if (events.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-[0.7rem] uppercase tracking-term text-faint">
-        ▸ {title} <span className="text-muted">· {events.length}</span>
-      </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {events.map((e) => (
-          <EventCard key={e.id} event={e} />
-        ))}
-      </div>
-    </section>
-  );
-}
 
 export default async function WeekendPage() {
   const t0 = Date.now();
@@ -50,8 +35,6 @@ export default async function WeekendPage() {
   const tookMs = Date.now() - t0;
 
   const events: EventCardData[] = rows;
-  const weekend = events.filter((e) => e.isWeekend);
-  const weeknight = events.filter((e) => !e.isWeekend);
 
   return (
     <main className="flex flex-col gap-4">
@@ -76,10 +59,7 @@ export default async function WeekendPage() {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
-          <SectionGrid title="WEEKEND PICKS" events={weekend} />
-          <SectionGrid title="AFTER-WORK / WEEKNIGHTS" events={weeknight} />
-        </div>
+        <WeekendBoard events={events} />
       )}
     </main>
   );
