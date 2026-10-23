@@ -15,6 +15,7 @@ export const EVENT_TAGS = [
   "minerals",
   "noise",
   "gaming",
+  "pokemon",
   "gym",
   "general",
   "seasonal",

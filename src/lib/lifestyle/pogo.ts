@@ -122,7 +122,7 @@ function describe(e: LeekEvent): string {
   return parts.join(" ");
 }
 
-/** In-window, Stockholm-relevant Pokémon GO events as scout events (tag gaming, free, with image). */
+/** In-window, Stockholm-relevant Pokémon GO events as scout events (tag pokemon, free, with image). */
 export async function fetchPogoEvents(
   from: string,
   to: string,
@@ -173,7 +173,7 @@ export async function fetchPogoEvents(
       title: e.name.slice(0, 200),
       url: e.link,
       description: describe(e),
-      tag: "gaming",
+      tag: "pokemon",
       audience: "me",
       whenText,
       eventDate: singleDay ? start.date : pickDate(visibleFrom, visibleTo),
