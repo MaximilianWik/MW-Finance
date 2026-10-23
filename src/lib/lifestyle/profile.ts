@@ -16,6 +16,8 @@ export const EVENT_TAGS = [
   "noise",
   "gaming",
   "gym",
+  "general",
+  "seasonal",
   "misc",
 ] as const;
 export type EventTag = (typeof EVENT_TAGS)[number];
@@ -81,6 +83,18 @@ export const THEMES: Theme[] = [
     hint: "gaming meetups, Pokémon Go community days, board-game cafés, retro/arcade nights, cosplay, anime/game conventions",
   },
   {
+    key: "general",
+    label: "What's on in Stockholm",
+    audience: "both",
+    hint: "general events and happenings in Stockholm of any kind: festivals, concerts of any genre, club nights, exhibitions and museum nights, comedy, theatre, film screenings, food and drink events, city celebrations and popular weekend happenings",
+  },
+  {
+    key: "seasonal",
+    label: "Holidays & seasonal",
+    audience: "both",
+    hint: "holiday and seasonal happenings that fall inside the date window (for example Halloween parties, haunted houses and horror nights, Alla helgons dag, Christmas markets, Lucia, New Year's Eve, Easter, Valborg, Midsummer), whichever apply to these dates",
+  },
+  {
     key: "misc",
     label: "Cheap things to do",
     audience: "both",
@@ -108,7 +122,7 @@ export function buildThemePrompt(
     "- PRIORITISE Saturday and Sunday events.",
     "- Weekday (Mon–Fri) events are ONLY acceptable if they START at 18:00 or later — the user works 08:00–17:00.",
     `- Budget context: ${budgetHint}. Favour free and cheap events; only a few moderate ones.`,
-    "- Only include events you can back with a real, working source URL. Never invent events or links.",
+    "- Only include real events found in your search. Never invent events or links. Give the direct URL when you have one; an event without a URL is still worth listing if the name, date and venue are clear.",
     "",
     "For EACH event write a short block containing: the event name, the exact date and start time, the venue, the price (or \"free\"), a one-line description, and the DIRECT event or ticket URL on its own line.",
     "List as many distinct, real events as you can find in this window (aim for 8–12).",

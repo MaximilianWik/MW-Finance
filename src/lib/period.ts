@@ -17,7 +17,7 @@ import { and, asc, desc, eq, gt, isNotNull, lte, sql } from "drizzle-orm";
  * Falls back to the calendar month when no salary transaction exists.
  */
 const SALARY_MIN = 18_000;
-const SALARY_MAX = 30_000;
+const SALARY_MAX = 80_000;
 
 export interface Cycle {
   from: string;       // YYYY-MM-DD, salary date (inclusive)

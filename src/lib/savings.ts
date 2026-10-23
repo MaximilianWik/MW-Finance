@@ -167,7 +167,7 @@ export async function addContribution(params: {
 }
 
 const SALARY_MIN = 18_000;
-const SALARY_MAX = 30_000;
+const SALARY_MAX = 80_000;
 
 function addDays(isoStr: string, days: number): string {
   const d = new Date(isoStr + "T00:00:00Z");
