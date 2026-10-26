@@ -122,12 +122,63 @@ function buildPrompt(ctx: FinancialContext, guidance?: string): string {
   ].join("\n");
 }
 
+/**
+ * JSON mode still lets Gemini emit trailing commas or a code fence now and
+ * then. Strip fences, cut to the outermost {...}, drop trailing commas that
+ * sit outside strings, then parse. Throws if it is still not valid JSON.
+ */
+export function parseLenientJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    /* repair below */
+  }
+  let s = text.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start >= 0 && end > start) s = s.slice(start, end + 1);
+
+  let out = "";
+  let inStr = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      out += ch;
+      if (ch === "\\") {
+        out += s[++i] ?? "";
+      } else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      out += ch;
+      continue;
+    }
+    if (ch === ",") {
+      let j = i + 1;
+      while (j < s.length && /\s/.test(s[j])) j++;
+      if (s[j] === "}" || s[j] === "]") continue; // trailing comma
+    }
+    out += ch;
+  }
+  return JSON.parse(out);
+}
+
 /** Ask Gemini for a budget proposal. Pure — writes nothing. */
 export async function proposeBudget(guidance?: string): Promise<BudgetProposal> {
   const ctx = await getFinancialContext();
-  const model = geminiModel({ system: SYSTEM, json: true, temperature: 0.3 });
-  const res = await model.generateContent(buildPrompt(ctx, guidance));
-  const parsed = JSON.parse(res.response.text()) as Partial<BudgetProposal>;
+  const prompt = buildPrompt(ctx, guidance);
+  let parsed: Partial<BudgetProposal>;
+  try {
+    const res = await geminiModel({ system: SYSTEM, json: true, temperature: 0.3 }).generateContent(prompt);
+    parsed = parseLenientJson(res.response.text()) as Partial<BudgetProposal>;
+  } catch {
+    // One retry, colder, with an explicit reminder.
+    const res = await geminiModel({ system: SYSTEM, json: true, temperature: 0.1 }).generateContent(
+      prompt + "\n\nReturn strictly valid JSON: double-quoted keys, no trailing commas, no comments."
+    );
+    parsed = parseLenientJson(res.response.text()) as Partial<BudgetProposal>;
+  }
 
   const rawSets: BudgetSet[] = Array.isArray(parsed.sets)
       ? parsed.sets
