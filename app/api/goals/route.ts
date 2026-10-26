@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { savingsGoals } from "@/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { savingsGoals, goalAccounts } from "@/db/schema";
+import { eq, and, ne, inArray, sql } from "drizzle-orm";
 import { getGoals } from "@/lib/savings";
 
 export const runtime = "nodejs";
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     targetAmount?: number | string;
     targetDate?: string | null;
     isPrimary?: boolean;
+    accounts?: Array<{ accountId: number; sharePct?: number }>; // investment accounts that fund it
   };
   if (!body.name || body.targetAmount == null) {
     return NextResponse.json({ error: "name and targetAmount required" }, { status: 400 });
@@ -39,6 +40,30 @@ export async function POST(req: NextRequest) {
       .update(savingsGoals)
       .set({ isPrimary: false })
       .where(and(eq(savingsGoals.isPrimary, true), ne(savingsGoals.id, created.id)));
+  }
+
+  // Link funding accounts: asked share (default 100%), capped at what other
+  // goals leave free on that account. Fully used accounts are skipped.
+  const wanted = (body.accounts ?? []).filter((a) => Number.isFinite(Number(a.accountId)));
+  if (created && wanted.length) {
+    const used = await db
+      .select({
+        accountId: goalAccounts.accountId,
+        used: sql<number>`sum(${goalAccounts.sharePct}::float)::float`,
+      })
+      .from(goalAccounts)
+      .where(inArray(goalAccounts.accountId, wanted.map((a) => Number(a.accountId))))
+      .groupBy(goalAccounts.accountId);
+    const usedBy = new Map(used.map((u) => [u.accountId, u.used]));
+    const rows = wanted
+      .map((a) => {
+        const free = 100 - (usedBy.get(Number(a.accountId)) ?? 0);
+        const share = Math.min(free, Math.max(0, Number(a.sharePct ?? 100)));
+        return { goalId: created.id, accountId: Number(a.accountId), sharePct: share.toFixed(2), share };
+      })
+      .filter((r) => r.share > 0)
+      .map(({ share: _share, ...r }) => r);
+    if (rows.length) await db.insert(goalAccounts).values(rows);
   }
 
   return NextResponse.json({ goal: created }, { status: 201 });

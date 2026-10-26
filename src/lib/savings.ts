@@ -2,44 +2,73 @@ import { db } from "@/db";
 import {
   savingsGoals,
   savingsContributions,
-  settings,
+  goalAccounts,
   categories,
   transactions,
-  budgetAdjustments,
   savingsEntries,
 } from "@/db/schema";
-import { and, desc, eq, inArray, isNotNull, sql, gte, lte } from "drizzle-orm";
-import { sendNtfy } from "@/lib/notify";
-import { kr } from "@/lib/format";
-import { env } from "@/lib/env";
+import { and, desc, eq, ilike, sql, gte, lte } from "drizzle-orm";
+import { getInvestmentAccounts } from "@/lib/investments";
+import { getAllSalaryCycles } from "@/lib/period";
+import { median } from "@/lib/budget-baseline";
+import {
+  monthsToTarget,
+  addMonths,
+  milestones,
+  trackStatus,
+  type Milestone,
+} from "@/lib/goal-math";
 
 /** Formatted YYYY-MM for a given date. */
 function monthOf(d: Date): string {
   return d.toISOString().slice(0, 7);
 }
 
-function prevMonth(month: string): string {
-  const [y, m] = month.split("-").map((n) => parseInt(n, 10));
-  const d = new Date(Date.UTC(y, m - 2, 1));
-  return d.toISOString().slice(0, 7);
+export interface GoalAccountLink {
+  accountId: number;
+  name: string;
+  color: string;
+  sharePct: number;
+  balance: number; // account balance (seed + deposits − withdrawals)
+  value: number; // balance × share: what it adds to the goal
+}
+
+export interface GoalCycle {
+  label: string;
+  from: string;
+  to: string;
+  amount: number; // net deposits (× share) + manual contributions in that cycle
 }
 
 export interface GoalSummary {
   id: number;
   name: string;
   target: number;
-  current: number;
+  current: number; // manualValue + linkedValue
   currency: string;
   imageUrl: string | null;
   isPrimary: boolean;
   paused: boolean;
   targetDate: string | null;
-  velocity: number; // average kr/month, last 3 months
-  monthsToGoal: number | null; // null when velocity ≤ 0
+  velocity: number; // pace: median kr per finished salary cycle (last 6)
+  monthsToGoal: number | null; // at pace, 0% return; null = no pace
   progressPct: number;
+  manualValue: number; // savings_goals.current_amount (manual contributions)
+  linkedValue: number; // Σ linked account balance × share
+  accounts: GoalAccountLink[];
+  history: GoalCycle[]; // latest first
+  etaDate: string | null;
+  track: ReturnType<typeof trackStatus>;
+  milestones: Milestone[];
 }
 
-/** Load goals with computed velocity + months-to-goal. */
+const PACE_CYCLES = 6;
+
+/**
+ * Goals valued live from their linked investment accounts plus manual
+ * contributions. Pace = median per-cycle inflow over the last finished salary
+ * cycles, so one big or missed deposit doesn't swing the ETA.
+ */
 export async function getGoals(): Promise<GoalSummary[]> {
   const goals = await db
     .select({
@@ -58,40 +87,110 @@ export async function getGoals(): Promise<GoalSummary[]> {
 
   if (goals.length === 0) return [];
 
-  // Velocity = avg of last 3 months' contributions per goal.
-  const now = new Date();
-  const months = [monthOf(now), prevMonth(monthOf(now)), prevMonth(prevMonth(monthOf(now)))];
+  const [links, { accounts }, allCycles] = await Promise.all([
+    db
+      .select({
+        goalId: goalAccounts.goalId,
+        accountId: goalAccounts.accountId,
+        sharePct: sql<number>`${goalAccounts.sharePct}::float`,
+      })
+      .from(goalAccounts),
+    getInvestmentAccounts(),
+    getAllSalaryCycles(),
+  ]);
+  const accById = new Map(accounts.map((a) => [a.id, a]));
+  const cycles = allCycles
+    .filter((c): c is typeof c & { to: string } => c.to != null)
+    .slice(0, PACE_CYCLES);
+  const cycleIndex = (date: string) => cycles.findIndex((c) => date >= c.from && date <= c.to);
 
+  // Net deposits per linked account per cycle (same merchant match as investments.ts).
+  const netByAccount = new Map<number, number[]>();
+  if (cycles.length) {
+    const winFrom = cycles[cycles.length - 1].from;
+    const winTo = cycles[0].to;
+    const linkedIds = [...new Set(links.map((l) => l.accountId))];
+    await Promise.all(
+      linkedIds.map(async (id) => {
+        const acc = accById.get(id);
+        const net = new Array<number>(cycles.length).fill(0);
+        netByAccount.set(id, net);
+        if (!acc?.merchant) return;
+        const rows = await db
+          .select({
+            date: transactions.bookingDate,
+            direction: transactions.direction,
+            amount: sql<number>`${transactions.amount}::float`,
+          })
+          .from(transactions)
+          .where(
+            and(
+              ilike(transactions.merchant, `%${acc.merchant}%`),
+              gte(transactions.bookingDate, winFrom),
+              lte(transactions.bookingDate, winTo)
+            )
+          );
+        for (const r of rows) {
+          if (!r.date) continue;
+          const i = cycleIndex(r.date);
+          if (i >= 0) net[i] += r.direction === "DBIT" ? r.amount : -r.amount;
+        }
+      })
+    );
+  }
+
+  // Manual contributions per goal per cycle (by the day they were added).
   const contribs = await db
     .select({
       goalId: savingsContributions.goalId,
-      month: savingsContributions.month,
-      total: sql<number>`sum(${savingsContributions.amount}::float)::float`,
+      amount: sql<number>`${savingsContributions.amount}::float`,
+      createdAt: savingsContributions.createdAt,
     })
     .from(savingsContributions)
-    .where(inArray(savingsContributions.month, months))
-    .groupBy(savingsContributions.goalId, savingsContributions.month);
-
-  const byGoal = new Map<number, number[]>();
+    .where(eq(savingsContributions.pending, false));
+  const manualByGoal = new Map<number, number[]>();
   for (const c of contribs) {
-    if (c.month == null) continue;
-    const arr = byGoal.get(c.goalId) ?? [];
-    arr.push(c.total);
-    byGoal.set(c.goalId, arr);
+    const i = cycleIndex(new Date(c.createdAt).toISOString().slice(0, 10));
+    if (i < 0) continue;
+    const arr = manualByGoal.get(c.goalId) ?? new Array<number>(cycles.length).fill(0);
+    arr[i] += c.amount;
+    manualByGoal.set(c.goalId, arr);
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+
   return goals.map((g) => {
-    const totals = byGoal.get(g.id) ?? [];
-    const velocity =
-      totals.length > 0 ? totals.reduce((s, n) => s + n, 0) / 3 : 0;
-    const remaining = Math.max(0, g.target - g.current);
-    const monthsToGoal = velocity > 0 ? remaining / velocity : null;
-    const progressPct = g.target > 0 ? Math.min(1, g.current / g.target) : 0;
+    const goalLinks: GoalAccountLink[] = links
+      .filter((l) => l.goalId === g.id && accById.has(l.accountId))
+      .map((l) => {
+        const acc = accById.get(l.accountId)!;
+        return {
+          accountId: acc.id,
+          name: acc.name,
+          color: acc.color,
+          sharePct: l.sharePct,
+          balance: acc.currentBalance,
+          value: Math.round((acc.currentBalance * l.sharePct) / 100),
+        };
+      });
+    const linkedValue = goalLinks.reduce((s, l) => s + l.value, 0);
+    const current = g.current + linkedValue;
+
+    const history: GoalCycle[] = cycles.map((c, i) => {
+      const fromAccounts = goalLinks.reduce(
+        (s, l) => s + ((netByAccount.get(l.accountId)?.[i] ?? 0) * l.sharePct) / 100,
+        0
+      );
+      return { label: c.label, from: c.from, to: c.to, amount: Math.round(fromAccounts + (manualByGoal.get(g.id)?.[i] ?? 0)) };
+    });
+    const velocity = Math.max(0, Math.round(median(history.map((h) => h.amount))));
+    const monthsToGoal = monthsToTarget(current, g.target, velocity);
+
     return {
       id: g.id,
       name: g.name,
       target: g.target,
-      current: g.current,
+      current,
       currency: g.currency,
       imageUrl: g.imageUrl,
       isPrimary: g.isPrimary,
@@ -99,7 +198,14 @@ export async function getGoals(): Promise<GoalSummary[]> {
       targetDate: g.targetDate,
       velocity,
       monthsToGoal,
-      progressPct,
+      progressPct: g.target > 0 ? Math.min(1, current / g.target) : 0,
+      manualValue: g.current,
+      linkedValue,
+      accounts: goalLinks,
+      history,
+      etaDate: monthsToGoal == null ? null : addMonths(today, monthsToGoal),
+      track: trackStatus(current, g.target, velocity, today, g.targetDate),
+      milestones: milestones(current, g.target, velocity, today),
     };
   });
 }
@@ -165,261 +271,6 @@ export async function addContribution(params: {
   }
   return row;
 }
-
-const SALARY_MIN = 18_000;
-const SALARY_MAX = 80_000;
-
-function addDays(isoStr: string, days: number): string {
-  const d = new Date(isoStr + "T00:00:00Z");
-  return new Date(d.getTime() + days * 86_400_000).toISOString().slice(0, 10);
-}
-
-/**
- * Salary-period sweep. Fires when a new salary lands:
- *   1. Detects the two most recent salary txns to define the just-closed period
- *      [prevSalaryDate, salaryDate − 1].
- *   2. Computes slack over that period (same category/budget logic as before).
- *   3. Records a *pending* sweep contribution (amount = slack × sweepPercent%).
- *      The pending row does NOT credit the goal yet.
- *   4. The user then tags the real Lysa tx via classifyTransactionAsSweep(),
- *      which confirms the pending row and credits the goal with the actual amount.
- *
- * Idempotency key: source = "sweep" AND periodStart = salaryDate.
- */
-export async function runPeriodSweep(): Promise<{
-  executed: boolean;
-  salaryDate?: string;
-  sweptTotal?: number;
-  goalId?: number;
-}> {
-  // Two most recent salary txns.
-  const salaryRows = await db
-    .select({ bookingDate: transactions.bookingDate })
-    .from(transactions)
-    .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(
-      and(
-        eq(transactions.direction, "CRDT"),
-        eq(categories.name, "Income"),
-        sql`${transactions.amount}::float between ${SALARY_MIN} and ${SALARY_MAX}`,
-        isNotNull(transactions.bookingDate)
-      )
-    )
-    .orderBy(desc(transactions.bookingDate))
-    .limit(2);
-
-  if (salaryRows.length < 2) {
-    // Need at least two salaries to bound a closed period.
-    return { executed: false };
-  }
-
-  const salaryDate = salaryRows[0].bookingDate!;     // most recent salary
-  const prevSalaryDate = salaryRows[1].bookingDate!; // period start
-
-  // Idempotency: already swept for this salary's period?
-  const [existing] = await db
-    .select({ id: savingsContributions.id })
-    .from(savingsContributions)
-    .where(
-      and(
-        eq(savingsContributions.source, "sweep"),
-        eq(savingsContributions.periodStart, salaryDate)
-      )
-    )
-    .limit(1);
-  if (existing) return { executed: false, salaryDate };
-
-  // Guard: only fire if this salary is newer than the last sweep's periodStart.
-  const [lastSweep] = await db
-    .select({ periodStart: savingsContributions.periodStart })
-    .from(savingsContributions)
-    .where(eq(savingsContributions.source, "sweep"))
-    .orderBy(desc(savingsContributions.createdAt))
-    .limit(1);
-  if (lastSweep?.periodStart && lastSweep.periodStart >= salaryDate) {
-    return { executed: false, salaryDate };
-  }
-
-  // Closed period: [prevSalaryDate, salaryDate − 1].
-  const from = prevSalaryDate;
-  const to = addDays(salaryDate, -1);
-
-  // Sanity gate: period must have actual booked activity.
-  const [{ txCount }] = await db
-    .select({ txCount: sql<number>`count(*)::int` })
-    .from(transactions)
-    .where(and(gte(transactions.bookingDate, from), lte(transactions.bookingDate, to)));
-  if (txCount === 0) return { executed: false, salaryDate };
-
-  const spentExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
-
-  const spentRows = await db
-    .select({
-      categoryId: categories.id,
-      base: sql<number | null>`${categories.budgetMonthly}::float`,
-      spent: spentExpr,
-    })
-    .from(categories)
-    .leftJoin(
-      transactions,
-      and(
-        eq(transactions.categoryId, categories.id),
-        gte(transactions.bookingDate, from),
-        lte(transactions.bookingDate, to)
-      )
-    )
-    .groupBy(categories.id);
-
-  // Budget adjustments keyed to the period-start month.
-  const adjMonth = prevSalaryDate.slice(0, 7);
-  const adjRows = await db
-    .select({
-      categoryId: budgetAdjustments.categoryId,
-      total: sql<number>`coalesce(sum(${budgetAdjustments.delta}::float), 0)::float`,
-    })
-    .from(budgetAdjustments)
-    .where(eq(budgetAdjustments.month, adjMonth))
-    .groupBy(budgetAdjustments.categoryId);
-
-  const adjMap = new Map(adjRows.map((r) => [r.categoryId, r.total]));
-
-  let totalSlack = 0;
-  for (const r of spentRows) {
-    const base = r.base ?? 0;
-    if (base <= 0) continue;
-    const eff = base + (adjMap.get(r.categoryId) ?? 0);
-    const slack = eff - r.spent;
-    if (slack > 0) totalSlack += slack;
-  }
-  if (totalSlack <= 0) return { executed: false, salaryDate };
-
-  const [s] = await db.select().from(settings).limit(1);
-  const sweepPct = s ? Number(s.sweepPercent) : 80;
-  const toSweep = totalSlack * (sweepPct / 100);
-  if (toSweep <= 0) return { executed: false, salaryDate };
-
-  const [primary] = await db
-    .select()
-    .from(savingsGoals)
-    .where(and(eq(savingsGoals.isPrimary, true), eq(savingsGoals.paused, false)))
-    .limit(1);
-  if (!primary) return { executed: false, salaryDate };
-
-  await addContribution({
-    goalId: primary.id,
-    amount: toSweep,
-    source: "sweep",
-    month: prevSalaryDate.slice(0, 7),
-    note: `Suggested sweep for period ${from} – ${to} (${sweepPct}% of ${kr(totalSlack)} slack)`,
-    periodStart: salaryDate,
-    pending: true,
-  });
-
-  await sendNtfy(
-    `Salary landed — suggested sweep: ${kr(toSweep)} → ${primary.name}`,
-    {
-      title: "Savings sweep ready",
-      tags: ["moneybag"],
-      priority: 3,
-      click: env.appUrl + "/goals",
-    }
-  );
-
-  return { executed: true, salaryDate, sweptTotal: toSweep, goalId: primary.id };
-}
-
-/**
- * Classify an existing DBIT transaction as the real Lysa sweep transfer.
- *
- *   - Finds the most recent pending sweep contribution for the primary goal.
- *   - If found: confirms it — sets pending=false, links the tx, overrides amount
- *     with the real transfer amount, and credits the goal.
- *   - If not found: creates a new (non-pending) sweep contribution directly.
- */
-export async function classifyTransactionAsSweep(txId: number): Promise<{
-  ok: boolean;
-  contribution?: typeof savingsContributions.$inferSelect;
-  error?: string;
-}> {
-  const [tx] = await db
-    .select({
-      id: transactions.id,
-      direction: transactions.direction,
-      amount: sql<number>`${transactions.amount}::float`,
-      bookingDate: transactions.bookingDate,
-    })
-    .from(transactions)
-    .where(eq(transactions.id, txId))
-    .limit(1);
-
-  if (!tx) return { ok: false, error: "transaction not found" };
-  if (tx.direction !== "DBIT") return { ok: false, error: "only DBIT transactions can be sweep transfers" };
-
-  // Already linked?
-  const [alreadyLinked] = await db
-    .select({ id: savingsContributions.id })
-    .from(savingsContributions)
-    .where(eq(savingsContributions.transactionId, txId))
-    .limit(1);
-  if (alreadyLinked) return { ok: false, error: "transaction already classified as a sweep" };
-
-  const [primary] = await db
-    .select()
-    .from(savingsGoals)
-    .where(and(eq(savingsGoals.isPrimary, true), eq(savingsGoals.paused, false)))
-    .limit(1);
-  if (!primary) return { ok: false, error: "no active primary goal" };
-
-  // Most recent pending sweep for the primary goal.
-  const [pendingRow] = await db
-    .select()
-    .from(savingsContributions)
-    .where(
-      and(
-        eq(savingsContributions.goalId, primary.id),
-        eq(savingsContributions.source, "sweep"),
-        eq(savingsContributions.pending, true)
-      )
-    )
-    .orderBy(desc(savingsContributions.createdAt))
-    .limit(1);
-
-  if (pendingRow) {
-    // Confirm the suggestion with the real tx amount.
-    const [updated] = await db
-      .update(savingsContributions)
-      .set({
-        pending: false,
-        transactionId: txId,
-        amount: tx.amount.toFixed(2),
-        note: `${pendingRow.note ?? "Sweep"} — confirmed tx#${txId}`,
-      })
-      .where(eq(savingsContributions.id, pendingRow.id))
-      .returning();
-
-    // Credit the goal (pending row never bumped it).
-    await db
-      .update(savingsGoals)
-      .set({ currentAmount: sql`${savingsGoals.currentAmount} + ${tx.amount.toFixed(2)}` })
-      .where(eq(savingsGoals.id, primary.id));
-
-    return { ok: true, contribution: updated };
-  }
-
-  // No pending suggestion — create a fresh sweep contribution directly.
-  const row = await addContribution({
-    goalId: primary.id,
-    amount: tx.amount,
-    source: "sweep",
-    month: tx.bookingDate ? tx.bookingDate.slice(0, 7) : monthOf(new Date()),
-    note: `Manual sweep tag tx#${txId}`,
-    transactionId: txId,
-    pending: false,
-  });
-
-  return { ok: true, contribution: row };
-}
-
 
 /** For dashboard sidebar. */
 export async function getPrimaryGoal(): Promise<GoalSummary | null> {

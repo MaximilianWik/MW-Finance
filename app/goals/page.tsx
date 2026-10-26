@@ -17,7 +17,7 @@ export default async function GoalsPage() {
       {goals.length === 0 ? (
         <Panel title="SAVINGS GOALS">
           <p className="text-sm text-muted">
-            No goals yet. One primary goal receives the monthly auto-sweep.
+            No goals yet. Create one and pick the investment accounts that fund it.
           </p>
         </Panel>
       ) : (

@@ -97,7 +97,7 @@ Budget periods are salary-cycle-based, not calendar-month. A salary transaction 
 ### Phase 2 — Behavior Layer — ✅ DONE (ingestion deferred)
 - ✅ Recurring payment detection (amount + cadence consistency) + missing-payment alert — bills checklist panel with `[✓]`/`[ ]`/`[!]` glyphs on `/insights`.
 - ✅ Suspicious payment flagging — `[!] ANOMALY` tag, red accent, priority-5 push; persisted to `transactions.flagged_reason`.
-- ✅ Savings goals with attached images (Vercel Blob), auto-sweep of prior-month slack → primary goal — image in a titled ASCII frame with progress bar beneath.
+- ✅ Savings goals with attached images (Vercel Blob), auto-sweep of prior-month slack → primary goal — image in a titled ASCII frame with progress bar beneath. (Sweep later removed: goals are now funded by linked investment accounts, with ETA, milestones and a simulator.)
 - ✅ Time-to-goal projections (3-month rolling velocity).
 - ✅ Live/adaptive budgeting: a large purchase tightens other categories (`budget_adjustments`, net-zero redistribution).
 - ✅ "What-if" simulation — rendered as a terminal diff view (`- groceries: 500kr` / `+ groceries: 420kr`) on `/simulate`.

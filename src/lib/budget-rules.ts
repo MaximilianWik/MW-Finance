@@ -15,7 +15,7 @@ import { median, estimateVariableBill, lastYear, type VariableBillBasis } from "
  *
  * Zero-based: recalibration assigns 100% of the cycle's income across the
  * unlocked, non-manual categories (see fillToTarget). Ending a cycle under
- * budget is fine: the slack goes to the salary-period sweep.
+ * budget is fine: unspent money simply stays saved.
  */
 
 export const BILLS_CATEGORY = "Bills & Utilities";

@@ -10,6 +10,7 @@ import {
   boolean,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 // ─── Bank sessions (one per successful consent) ─────────────────────────────
@@ -276,6 +277,27 @@ export const investmentAccounts = pgTable("investment_accounts", {
 });
 
 export type InvestmentAccount = typeof investmentAccounts.$inferSelect;
+
+// ─── Goal ← investment account links ────────────────────────────────────────
+// A goal's value = Σ (linked account balance × share_pct/100) + manual
+// contributions. share_pct lets one account fund several goals; the API keeps
+// each account's total share ≤ 100.
+export const goalAccounts = pgTable(
+  "goal_accounts",
+  {
+    goalId: integer("goal_id")
+      .notNull()
+      .references(() => savingsGoals.id, { onDelete: "cascade" }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => investmentAccounts.id, { onDelete: "cascade" }),
+    sharePct: numeric("share_pct", { precision: 5, scale: 2 }).notNull().default("100"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.goalId, t.accountId] }),
+  })
+);
 
 // ─── Reactor Core game state (Phase 5, singleton) ──────────────────────────
 // Tracks the streak high-water mark and last evaluation so the nightly eval is

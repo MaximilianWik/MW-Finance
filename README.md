@@ -289,7 +289,7 @@ erDiagram
 - **Investment tracking**: per-account balance tracker (Lysa, Avanza, LF Fonder). Balance = seed + DBIT outflows minus CRDT inflows matching the account merchant name.
 - **Recurring payments**: auto-detected (3+ consistent charges) + manually markable. Variable-price support.
 - **Anomaly detection**: suspicious payments flagged `[!] ANOMALY`.
-- **Savings goals** with Vercel Blob images, time-to-goal projections, and a **salary-period sweep**: when a new salary lands, the app computes budget surplus over the just-closed period and records a *pending* sweep suggestion (sweep % of slack) toward the primary goal. You then make the real Lysa transfer and tag that transaction as the sweep from the ledger (`[→ sweep]`), which confirms the suggestion with the real amount and credits the goal.
+- **Savings goals funded by investments**: link Lysa, Avanza and/or LF Fonder to a goal (with a share %, so one account can fund several goals). Goal value = Σ linked balance × share + manual contributions, computed live. Pace = median net deposit per finished salary cycle (last 6); the goal shows ETA, on-track/behind vs a target date, milestones (25/50/75/100%) and a per-cycle pace history. A simulator (extra kr/month slider, yearly return slider, finish-by date) shows the new ETA, the amount needed per cycle and a projection chart, and can set the Savings budget to that amount. The old salary-period sweep is removed.
 - **What-if simulator**: adjust category budgets and see projected month-end impact.
 - **Adaptive budgeting**: large purchases tighten other categories automatically (net-zero redistribution), per salary cycle. Locked categories are never donors or recipients.
 - **Ledger cycle net**: the ledger shows the net of the selected salary cycle (Transfers, Savings and Investments excluded).
@@ -444,7 +444,8 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `src/lib/budget-rules.ts` | Locked categories, Bills limit from the bills checklist, cycle income and budget plan (`syncBudgetLocks`, `getCycleIncome`, `incomeIn`) |
 | `src/lib/budget-baseline.ts` | Pure helpers: median, one-off finder, per-cycle baselines, ±20% clamp, zero-based `fillToTarget` |
 | `src/lib/period.ts` | `getSalaryCycle`, `getAllSalaryCycles` |
-| `src/lib/savings.ts` | Goals, contributions, salary-period sweep (`runPeriodSweep`, `classifyTransactionAsSweep`), savings total |
+| `src/lib/savings.ts` | Goals valued from linked investment accounts (`getGoals`), contributions, savings total |
+| `src/lib/goal-math.ts` | Pure goal maths: months to target (monthly compounding), required per cycle, projection, milestones, on-track |
 | `src/lib/investments.ts` | Investment accounts (seed + txn delta), `getInvestmentAccountsTotal` (reactor invested source) |
 | `src/lib/behavior/` | Recurring detection, anomaly flagging, adaptive budgets |
 | `src/lib/gemini/` | Context builder, assistant, budget recalibration, analysis |
@@ -494,7 +495,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `/api/sync/manual` | POST | Streaming manual sync |
 | `/api/categorize` | POST | Streaming backlog re-categorization |
 | `/api/transactions` | GET, PATCH | List with filters; PATCH = category override |
-| `/api/transactions/[id]/sweep` | POST | Tag a DBIT tx as the Lysa sweep transfer (confirms pending suggestion → credits primary goal) |
+| `/api/goals/[id]/accounts` | GET, PUT | Investment accounts funding a goal (share % per account, max 100% across goals) |
 | `/api/categories` | GET, POST, PATCH, DELETE | Category management (PATCH refuses the locked Bills limit with 409) |
 | `/api/recurring` | GET, POST, PATCH | Recurring payment management |
 | `/api/budget/recalibrate` | POST | Streaming AI budget proposal + apply (`?preview=1` = propose only) |

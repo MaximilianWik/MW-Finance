@@ -9,6 +9,18 @@
 
 ## Pending DB Migration
 
+Run in Neon before deploying the goals revamp (investment-funded goals):
+
+```sql
+CREATE TABLE IF NOT EXISTS goal_accounts (
+  goal_id    integer NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE,
+  account_id integer NOT NULL REFERENCES investment_accounts(id) ON DELETE CASCADE,
+  share_pct  numeric(5,2) NOT NULL DEFAULT 100,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (goal_id, account_id)
+);
+```
+
 Run in Neon before deploying the multi-tag weekend events:
 
 ```sql
@@ -204,7 +216,8 @@ src/
     budget-rules.ts       -- LOCKED_CATEGORIES, isLocked(), syncBillsBudget()
     budget-baseline.ts    -- median(), findOneOffs(), cycleBaselines(), clampChange()
     comparison.ts         -- getSalaryComparison(), getMonthComparison()
-    savings.ts            -- getPrimaryGoal(), getGoals()
+    savings.ts            -- getPrimaryGoal(), getGoals() (value from linked accounts, pace, ETA)
+    goal-math.ts          -- monthsToTarget(), requiredMonthly(), projectSeries(), milestones(), trackStatus()
     transfers.ts          -- isSelfTransfer()
     format.ts             -- kr(), krSigned(), shortDate(), pct()
     gemini/

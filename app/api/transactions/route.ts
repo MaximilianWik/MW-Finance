@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { transactions, categories, merchantCategories, savingsContributions } from "@/db/schema";
+import { transactions, categories, merchantCategories } from "@/db/schema";
 import { and, desc, eq, gte, lte, ilike, or, sql, type SQL } from "drizzle-orm";
 
 // Money moved into savings/investments (or between own accounts) is kept, not
@@ -104,7 +104,6 @@ export async function GET(req: NextRequest) {
         categoryColor: categories.color,
         recurring: sql<number>`(exists (select 1 from recurring_payments where recurring_payments.active = true and recurring_payments.merchant = ${transactions.merchant}))::int`,
         recurringVariable: sql<number>`coalesce((select variable_amount::int from recurring_payments where active = true and merchant = ${transactions.merchant} limit 1), 0)`,
-        sweepContributionId: sql<number | null>`(select id from ${savingsContributions} where ${savingsContributions.transactionId} = ${transactions.id} limit 1)`,
       })
       .from(transactions)
       .leftJoin(categories, eq(transactions.categoryId, categories.id))
@@ -126,7 +125,6 @@ export async function GET(req: NextRequest) {
     ...r,
     recurring: Number(r.recurring) === 1,
     recurringVariable: Number(r.recurringVariable) === 1,
-    sweepContributionId: r.sweepContributionId ?? null,
   }));
   const tookMs = Math.round(performance.now() - t0);
   const net = sp.get("cycle") === "1" && from ? await cycleNet(from, to) : null;
