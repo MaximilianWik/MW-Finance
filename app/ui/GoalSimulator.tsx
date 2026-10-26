@@ -193,13 +193,15 @@ export function GoalSimulator({
       <GoalChart
         pace={r.paceSeries}
         sim={r.simSeries}
+        paceMonthly={pace}
+        simMonthly={r.simPace}
         target={target}
         today={today}
         targetMonth={r.dateMonths}
       />
       <p className="text-[0.6rem] uppercase tracking-term text-faint">
         <span className="text-muted">grey</span> = current pace · <span className="text-accent">green</span> = simulated ·{" "}
-        <span className="text-amber">dashed</span> = target
+        <span className="text-amber">dashed</span> = target · hover or drag for details
       </p>
 
       {savingsCategoryId != null && (
