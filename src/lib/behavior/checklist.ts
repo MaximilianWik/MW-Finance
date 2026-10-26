@@ -52,6 +52,7 @@ export interface BillItem {
   advancedNextDate: string | null; // what nextDate becomes after advancing
   state: BillState;
   manual: boolean;
+  categoryId: number | null;
 }
 
 export async function getBillsChecklist(
@@ -79,6 +80,7 @@ export async function getBillsChecklist(
       cadenceDays: recurringPayments.cadenceDays,
       nextDate: recurringPayments.nextDate,
       manual: recurringPayments.manual,
+      categoryId: recurringPayments.categoryId,
     })
     .from(recurringPayments)
     .where(eq(recurringPayments.active, true))
@@ -187,6 +189,7 @@ export async function getBillsChecklist(
       advancedNextDate,
       state,
       manual: r.manual,
+      categoryId: r.categoryId,
     });
   }
 

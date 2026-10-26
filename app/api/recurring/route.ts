@@ -46,9 +46,12 @@ export async function POST(req: NextRequest) {
     notes?: string;
     nextDate?: string;
     variable?: boolean;
+    categoryId?: number | null;
   };
 
   let merchant: string;
+  // Without a category a bill can't count toward the Bills budget.
+  let categoryId: number | null = body.categoryId ?? null;
   let amount: number;
   let lastDate: string | null = null;
   let computedNextDate: string | null = body.nextDate ?? null;
@@ -61,6 +64,7 @@ export async function POST(req: NextRequest) {
         counterpartyName: transactions.counterpartyName,
         amount: sql<number>`${transactions.amount}::float`,
         bookingDate: transactions.bookingDate,
+        categoryId: transactions.categoryId,
       })
       .from(transactions)
       .where(eq(transactions.id, body.txId))
@@ -71,6 +75,7 @@ export async function POST(req: NextRequest) {
     merchant = tx.merchant ?? tx.counterpartyName ?? `tx-${body.txId}`;
     amount = tx.amount;
     lastDate = tx.bookingDate ?? null;
+    categoryId = categoryId ?? tx.categoryId ?? null;
 
     // Default next_date = last + 30 days (monthly assumption for manual add)
     if (!computedNextDate && lastDate) {
@@ -97,6 +102,7 @@ export async function POST(req: NextRequest) {
       manual: true,
       active: true,
       variableAmount: body.variable === true,
+      categoryId,
     })
     .onConflictDoUpdate({
       target: recurringPayments.merchant,
@@ -105,6 +111,7 @@ export async function POST(req: NextRequest) {
         manual: true,
         active: true,
         variableAmount: body.variable === true,
+        ...(categoryId != null ? { categoryId } : {}),
         updatedAt: new Date(),
       },
     })

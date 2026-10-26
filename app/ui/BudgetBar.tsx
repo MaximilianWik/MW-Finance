@@ -21,6 +21,22 @@ interface DrillTx {
  */
 export type BudgetLock = "bills" | "fixed" | null;
 
+/** One bill in the Bills row overview (from the bills checklist). */
+export interface BillOverview {
+  id: number;
+  name: string;
+  amount: number;
+  monthly: number; // monthly cost (weekly/yearly converted), what the limit sums
+  cadence: string;
+  expectedOn: string | null;
+  paidOnDate: string | null;
+  state: "paid" | "due" | "overdue" | "upcoming" | "missed";
+}
+
+const BILL_TONE: Record<BillOverview["state"], string> = {
+  paid: "tag-ok", due: "tag-muted", overdue: "tag-danger", upcoming: "tag-muted", missed: "tag-danger",
+};
+
 // Mirror of UNDELETABLE in src/lib/budget-rules.ts (server-only module).
 const UNDELETABLE = new Set(["Uncategorized", "Income", "Transfers", "Savings", "Bills & Utilities"]);
 
@@ -40,11 +56,15 @@ export function BudgetBar({
   range,
   editable = false,
   lock = null,
+  bills,
+  uncategorizedBills = 0,
 }: {
   row: CategoryBudget;
   range?: { from: string; to: string };
   editable?: boolean;
   lock?: BudgetLock;
+  bills?: BillOverview[];
+  uncategorizedBills?: number; // checklist bills with no category: not counted
 }) {
   const router = useRouter();
   const [, start] = useTransition();
@@ -257,6 +277,56 @@ export function BudgetBar({
                     <button onClick={del} className="btn btn-danger !px-1.5 !py-0.5 text-[0.6rem]">
                       delete category
                     </button>
+                  )}
+                </div>
+              )}
+              {bills && (
+                <div className="mb-2 border-b border-grid pb-2">
+                  <p className="py-1 text-[0.6rem] uppercase tracking-term text-faint">
+                    bills this month · {bills.filter((b) => b.state === "paid").length}/{bills.length} paid
+                  </p>
+                  {bills.length === 0 ? (
+                    <p className="py-1 text-[0.7rem] uppercase tracking-term text-muted">
+                      no recurring payments in this category yet.
+                    </p>
+                  ) : (
+                    <table className="w-full text-sm tabular-nums">
+                      <tbody>
+                        {bills.map((b) => (
+                          <tr key={b.id}>
+                            <td className="w-16 whitespace-nowrap py-1 pr-2 text-faint">
+                              {shortDate(b.paidOnDate ?? b.expectedOn)}
+                            </td>
+                            <td className="max-w-0 py-1 pr-2">
+                              <span className="block truncate text-ink2">{b.name}</span>
+                            </td>
+                            <td className="hidden whitespace-nowrap py-1 pr-2 text-[0.65rem] uppercase text-faint sm:table-cell">
+                              {b.cadence}
+                              {b.cadence !== "monthly" && ` · ${kr(b.monthly)}/mo`}
+                            </td>
+                            <td className="w-24 whitespace-nowrap py-1 pr-2 text-right text-muted">{kr(b.amount)}</td>
+                            <td className="w-20 whitespace-nowrap py-1 text-right">
+                              <span className={`tag ${BILL_TONE[b.state]}`}>{b.state}</span>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-grid">
+                          <td colSpan={3} className="py-1 pr-2 text-[0.65rem] uppercase tracking-term text-faint">
+                            monthly total = limit
+                          </td>
+                          <td className="py-1 pr-2 text-right text-ink2">
+                            {kr(bills.reduce((s, b) => s + b.monthly, 0))}
+                          </td>
+                          <td />
+                        </tr>
+                      </tbody>
+                    </table>
+                  )}
+                  {uncategorizedBills > 0 && (
+                    <p className="pt-1 text-[0.65rem] text-amber">
+                      [!] {uncategorizedBills} recurring payment(s) have no category and aren&apos;t counted. set
+                      their category on /insights.
+                    </p>
                   )}
                 </div>
               )}

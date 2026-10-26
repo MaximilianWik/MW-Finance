@@ -1,12 +1,21 @@
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getAllSalaryCycles } from "@/lib/period";
-import { BudgetBar, type BudgetLock } from "../ui/BudgetBar";
+import { BudgetBar, type BudgetLock, type BillOverview } from "../ui/BudgetBar";
+import { getBillsChecklist } from "@/lib/behavior/checklist";
 import { NewCategoryForm } from "../ui/NewCategoryForm";
 import { BudgetCycleNav } from "../ui/BudgetCycleNav";
 import { Panel } from "../ui/Panel";
 import { RecalibratePanel } from "../ui/RecalibratePanel";
 import { QueryLog } from "../ui/QueryLog";
-import { BILLS_CATEGORY, INCOME_CATEGORY, NOT_BUDGETED, isLocked, syncBudgetLocks, incomeIn } from "@/lib/budget-rules";
+import {
+  BILLS_CATEGORY,
+  INCOME_CATEGORY,
+  NOT_BUDGETED,
+  isLocked,
+  syncBudgetLocks,
+  incomeIn,
+  monthlyEquivalent,
+} from "@/lib/budget-rules";
 import { IncomeRow } from "../ui/IncomeRow";
 import { kr } from "@/lib/format";
 import { withQueryLog } from "@/db/query-log";
@@ -27,10 +36,10 @@ export default async function BudgetsPage({
   const isCurrentCycle = !cycleFrom;
 
   const t0 = Date.now();
-  const [[status, cycles, plan], queryLog] = await withQueryLog(async () => {
+  const [[status, cycles, plan, checklist], queryLog] = await withQueryLog(async () => {
     // Bills = checklist total, before we read; plan = how much income is assigned.
     const { plan } = await syncBudgetLocks();
-    return Promise.all([getMonthlyBudgetStatus(ref), getAllSalaryCycles(), plan]);
+    return Promise.all([getMonthlyBudgetStatus(ref), getAllSalaryCycles(), plan, getBillsChecklist()]);
   });
   const tookMs = Date.now() - t0;
 
@@ -47,6 +56,22 @@ export default async function BudgetsPage({
     });
   const todayIso = new Date().toISOString().slice(0, 10);
   const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
+
+  // Bills overview for the Bills row: same list (and monthly maths) as the limit.
+  const billsCatId = status.rows.find((r) => r.name === BILLS_CATEGORY)?.categoryId;
+  const bills: BillOverview[] = checklist.items
+    .filter((b) => b.categoryId != null && b.categoryId === billsCatId)
+    .map((b) => ({
+      id: b.id,
+      name: b.displayName,
+      amount: Math.round(b.amount),
+      monthly: Math.round(monthlyEquivalent(b.amount, b.cadence, b.cadenceDays)),
+      cadence: b.cadence,
+      expectedOn: b.expectedOn,
+      paidOnDate: b.paidOnDate,
+      state: b.state,
+    }));
+  const uncategorizedBills = checklist.items.filter((b) => b.categoryId == null).length;
 
   // Income for the shown cycle (salary + anything tagged Income, like gifts).
   const incomeCat = status.rows.find((r) => r.name === INCOME_CATEGORY);
@@ -110,6 +135,7 @@ export default async function BudgetsPage({
                   range={{ from: mr.from, to: mr.to }}
                   editable={isCurrentCycle}
                   lock={lockOf(r.name)}
+                  {...(r.name === BILLS_CATEGORY ? { bills, uncategorizedBills } : {})}
                 />
               ))}
             </tbody>
