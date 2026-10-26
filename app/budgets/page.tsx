@@ -1,12 +1,12 @@
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getAllSalaryCycles } from "@/lib/period";
-import { BudgetEditor, type EditableCategory } from "../ui/BudgetEditor";
-import { BudgetBar } from "../ui/BudgetBar";
+import { BudgetBar, type BudgetLock } from "../ui/BudgetBar";
+import { NewCategoryForm } from "../ui/NewCategoryForm";
 import { BudgetCycleNav } from "../ui/BudgetCycleNav";
 import { Panel } from "../ui/Panel";
 import { RecalibratePanel } from "../ui/RecalibratePanel";
 import { QueryLog } from "../ui/QueryLog";
-import { getCategories } from "@/lib/queries";
+import { BILLS_CATEGORY, isLocked, syncBillsBudget } from "@/lib/budget-rules";
 import { kr } from "@/lib/format";
 import { withQueryLog } from "@/db/query-log";
 
@@ -26,24 +26,14 @@ export default async function BudgetsPage({
   const isCurrentCycle = !cycleFrom;
 
   const t0 = Date.now();
-  const [[cats, status, cycles], queryLog] = await withQueryLog(() =>
-    Promise.all([
-      getCategories(),
-      getMonthlyBudgetStatus(ref),
-      getAllSalaryCycles(),
-    ])
-  );
+  const [[status, cycles], queryLog] = await withQueryLog(async () => {
+    await syncBillsBudget(); // Bills limit = bills checklist total, before we read it
+    return Promise.all([getMonthlyBudgetStatus(ref), getAllSalaryCycles()]);
+  });
   const tookMs = Date.now() - t0;
 
-  const spentByCat = new Map(status.rows.map((r) => [r.categoryId, r.spent]));
-
-  const rows: EditableCategory[] = cats.map((c) => ({
-    id: c.id,
-    name: c.name,
-    color: c.color,
-    budgetMonthly: c.budgetMonthly,
-    spent: spentByCat.get(c.id) ?? 0,
-  }));
+  const lockOf = (name: string): BudgetLock =>
+    name === BILLS_CATEGORY ? "bills" : isLocked(name) ? "fixed" : null;
 
   // Budgeted categories first (has a monthly budget set), then by existing sort order.
   const monthlyRows = status.rows
@@ -67,9 +57,10 @@ export default async function BudgetsPage({
 
       <Panel title="AI BUDGET">
         <p className="mb-3 text-[0.7rem] leading-relaxed text-muted">
-          The engine reads your income, spending habits and recurring bills, then proposes
-          realistic monthly budgets. Manually-set limits are never overwritten. Add optional
-          guidance below to steer it.
+          The engine sets each budget from the median of your last finished salary cycles, so one
+          heavy month barely counts, and one-off big purchases are left out. A budget moves at
+          most ±20% per run. Manually-set limits are never overwritten, savings are never touched,
+          and bills follow the bills checklist. Written guidance lifts the ±20% limit.
         </p>
         <RecalibratePanel />
       </Panel>
@@ -91,15 +82,23 @@ export default async function BudgetsPage({
           <table className="w-full">
             <tbody>
               {monthlyRows.map((r) => (
-                <BudgetBar key={r.categoryId} row={r} range={{ from: mr.from, to: mr.to }} />
+                <BudgetBar
+                  key={r.categoryId}
+                  row={r}
+                  range={{ from: mr.from, to: mr.to }}
+                  editable={isCurrentCycle}
+                  lock={lockOf(r.name)}
+                />
               ))}
             </tbody>
           </table>
         </div>
-      </Panel>
-
-      <Panel title="EDIT LIMITS">
-        <BudgetEditor categories={rows} />
+        {isCurrentCycle && (
+          <p className="mt-2 text-[0.6rem] uppercase tracking-term text-faint">
+            click a limit to edit · enter saves · esc cancels · empty = no budget · open a row for colour / delete
+          </p>
+        )}
+        {isCurrentCycle && <NewCategoryForm />}
       </Panel>
     </main>
   );

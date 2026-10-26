@@ -1,6 +1,19 @@
 import { NextRequest } from "next/server";
-import { proposeBudget, applyBudgetProposal } from "@/lib/gemini/budget";
+import { proposeBudget, applyBudgetProposal, MAX_CHANGE_PCT, type BudgetSet } from "@/lib/gemini/budget";
+import { syncBillsBudget } from "@/lib/budget-rules";
 import { kr } from "@/lib/format";
+
+/** "Shopping 1 500 → 1 800 kr (+20%) · median 1 450 · AI asked 2 500, capped" */
+function changeLine(s: BudgetSet): string {
+  const from = s.current != null ? `${kr(s.current)} → ` : "";
+  const pct =
+    s.current != null && s.current > 0
+      ? ` (${s.monthly >= s.current ? "+" : ""}${Math.round(((s.monthly - s.current) / s.current) * 100)}%)`
+      : "";
+  const median = s.median != null ? ` · median ${kr(s.median)}` : "";
+  const cap = s.clamped && s.aiMonthly != null ? ` · AI asked ${kr(s.aiMonthly)}, capped` : "";
+  return `${s.name} ${from}${kr(s.monthly)}${pct}${median}${cap}`;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,17 +43,28 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       const send = (line: string) => controller.enqueue(encoder.encode(line + "\n"));
       try {
+        const bills = await syncBillsBudget();
+        if (bills.count > 0) {
+          send(`[..]   bills locked to checklist: ${kr(bills.total)} (${bills.count} bill(s))${bills.changed ? " · updated" : ""}`);
+        }
         send("[AI]   reading income, spending habits, recurring commitments…");
-        if (guidance) send(`[AI]   guidance: ${guidance}`);
+        if (guidance) send(`[AI]   guidance: ${guidance} (±${MAX_CHANGE_PCT * 100}% limit lifted)`);
         const proposal = await proposeBudget(guidance);
+        send(`[..]   baseline: median of last ${proposal.baselineCycles} finished cycle(s)`);
+        for (const o of proposal.oneOffs) {
+          send(
+            `       [ONE-OFF] ${o.bookingDate} ${o.merchant ?? "?"} ${kr(o.amount)} in ${o.categoryName} (normal ~${kr(o.typical)}), excluded`
+          );
+        }
         for (const line of proposal.reasoning) send(`[AI]   ${line}`);
+        for (const d of proposal.dropped) send(`       [LOCK] ${d.name}: ${d.reason}, ignored`);
         send(
-          `[OK]   proposal ready — ${proposal.sets.length} budget(s), ${proposal.newCategories.length} new categor${proposal.newCategories.length === 1 ? "y" : "ies"}`
+          `[OK]   proposal ready — ${proposal.sets.length} change(s), ${proposal.unchanged} unchanged, ${proposal.newCategories.length} new categor${proposal.newCategories.length === 1 ? "y" : "ies"}`
         );
 
         if (preview) {
           for (const s of proposal.sets) {
-            send(`       [SET] ${s.name} ${kr(s.monthly)}${s.rationale ? " — " + s.rationale : ""}`);
+            send(`       [SET] ${changeLine(s)}${s.rationale ? " — " + s.rationale : ""}`);
           }
           for (const n of proposal.newCategories) {
             send(`       [NEW] ${n.name} ${kr(n.monthly)}${n.rationale ? " — " + n.rationale : ""}`);
@@ -48,10 +72,12 @@ export async function POST(req: NextRequest) {
           send("[DONE] preview only — nothing written. run recalibrate to apply.");
         } else {
           send("[AI]   applying budget…");
+          const byName = new Map(proposal.sets.map((s) => [s.name, s]));
           await applyBudgetProposal(proposal, (a) => {
             const amt = a.monthly != null ? ` ${kr(a.monthly)}` : "";
             const reason = a.reason ? ` — ${a.reason}` : "";
-            if (a.kind === "set") send(`       [SET] ${a.name}${amt}${reason}`);
+            const s = byName.get(a.name);
+            if (a.kind === "set") send(`       [SET] ${s ? changeLine(s) : a.name + amt}${reason}`);
             else if (a.kind === "new") send(`       [NEW] ${a.name}${amt}${reason}`);
             else send(`       [SKIP] ${a.name}${reason}`);
           });

@@ -1,10 +1,14 @@
 import { db } from "@/db";
 import { categories, transactions, recurringPayments } from "@/db/schema";
-import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { getMonthlyBudgetStatus } from "@/lib/budget";
 import { getAllSalaryCycles } from "@/lib/period";
 import { getSavingsTotal, getPrimaryGoal } from "@/lib/savings";
 import { kr } from "@/lib/format";
+import { findOneOffs, cycleBaselines, type SpendTx, type OneOff } from "@/lib/budget-baseline";
+import { isLocked } from "@/lib/budget-rules";
+
+const BASELINE_CYCLES = 6; // finished salary cycles used for the median baseline
 
 /**
  * Financial context builder — the single source of truth every Gemini consumer
@@ -20,6 +24,8 @@ export interface CategoryContext {
   budgetMonthly: number | null;
   budgetSource: string | null; // ai | manual | null
   avgMonthlySpend: number;     // averaged over the last N salary cycles
+  medianMonthlySpend: number;  // median of the last finished cycles, one-offs excluded
+  cycleSpend: number[];        // spend per finished cycle (latest first), one-offs excluded
   currentSpent: number;        // spend in the current cycle
 }
 
@@ -49,6 +55,8 @@ export interface FinancialContext {
   categories: CategoryContext[];
   recurring: RecurringContext[];
   flagged: FlaggedContext[];
+  baselineCycles: number;           // finished cycles behind medianMonthlySpend
+  oneOffs: Array<OneOff & { categoryName: string }>; // excluded from the baseline
 }
 
 function isoDaysAgo(days: number): string {
@@ -57,7 +65,12 @@ function isoDaysAgo(days: number): string {
 
 /** Structured snapshot — used directly by budget recalibration. */
 export async function getFinancialContext(): Promise<FinancialContext> {
-  const cycles = (await getAllSalaryCycles()).slice(0, 3);
+  const allCycles = await getAllSalaryCycles();
+  const cycles = allCycles.slice(0, 3);
+  // Finished cycles only (the open one has to=null): latest first.
+  const finished = allCycles
+    .filter((c): c is typeof c & { to: string } => c.to != null)
+    .slice(0, BASELINE_CYCLES);
   const nCycles = cycles.length || 1;
   const earliestFrom = cycles.length ? cycles[cycles.length - 1].from : isoDaysAgo(90);
 
@@ -109,6 +122,33 @@ export async function getFinancialContext(): Promise<FinancialContext> {
         .limit(8),
     ]);
 
+  // ── Baseline: every purchase in the finished cycles ──
+  const baseTxs: SpendTx[] = finished.length
+    ? (
+        await db
+          .select({
+            id: transactions.id,
+            categoryId: transactions.categoryId,
+            amount: sql<number>`(-${transactions.signed})::float`,
+            bookingDate: transactions.bookingDate,
+            merchant: transactions.counterpartyName,
+          })
+          .from(transactions)
+          .where(
+            and(
+              sql`${transactions.signed} < 0`,
+              isNotNull(transactions.categoryId),
+              gte(transactions.bookingDate, finished[finished.length - 1].from),
+              lte(transactions.bookingDate, finished[0].to)
+            )
+          )
+      ).filter((t): t is SpendTx => t.categoryId != null && t.bookingDate != null)
+    : [];
+  const catName = new Map(cats.map((c) => [c.id, c.name]));
+  const lockedIds = new Set(cats.filter((c) => isLocked(c.name)).map((c) => c.id));
+  const oneOffs = findOneOffs(baseTxs, lockedIds);
+  const baselines = cycleBaselines(baseTxs, finished, new Set(oneOffs.map((o) => o.id)));
+
   const spentByCat = new Map(spendRows.map((r) => [r.categoryId, r.spent]));
   const currentByCat = new Map(status.rows.map((r) => [r.categoryId, r.spent]));
 
@@ -119,6 +159,8 @@ export async function getFinancialContext(): Promise<FinancialContext> {
     budgetMonthly: c.budgetMonthly == null ? null : Number(c.budgetMonthly),
     budgetSource: c.budgetSource ?? null,
     avgMonthlySpend: Math.round((spentByCat.get(c.id) ?? 0) / nCycles),
+    medianMonthlySpend: baselines.get(c.id)?.median ?? 0,
+    cycleSpend: baselines.get(c.id)?.perCycle ?? new Array<number>(finished.length).fill(0),
     currentSpent: Math.round(currentByCat.get(c.id) ?? 0),
   }));
 
@@ -153,6 +195,10 @@ export async function getFinancialContext(): Promise<FinancialContext> {
       amount: Math.round(r.amount),
       reason: r.reason,
     })),
+    baselineCycles: finished.length,
+    oneOffs: oneOffs
+      .sort((a, b) => b.amount - a.amount)
+      .map((o) => ({ ...o, categoryName: catName.get(o.categoryId) ?? "?" })),
   };
 }
 

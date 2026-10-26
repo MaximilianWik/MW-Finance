@@ -8,6 +8,7 @@ import { evaluateAdaptiveForCategories } from "./adaptive";
 import { checkTrajectory } from "./trajectory";
 import { runPeriodSweep } from "@/lib/savings";
 import { runGameEval } from "@/lib/game/eval";
+import { syncBillsBudget } from "@/lib/budget-rules";
 import type { NewTransaction } from "@/db/schema";
 
 /**
@@ -36,6 +37,14 @@ export async function runBehaviorPipeline(
     results.recurringsDetected = detected.length;
   } catch (e) {
     console.error("recurring detection failed:", e);
+  }
+
+  // Bills budget follows the bills checklist (new/changed recurrings above).
+  try {
+    const bills = await syncBillsBudget();
+    if (bills.changed) onLog?.(`[SYNC] bills budget locked to checklist: ${Math.round(bills.total)} kr`);
+  } catch (e) {
+    console.error("bills budget sync failed:", e);
   }
 
   // Missing-payment alerts.

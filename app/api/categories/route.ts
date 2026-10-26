@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
+import { BILLS_CATEGORY } from "@/lib/budget-rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,17 @@ export async function PATCH(req: NextRequest) {
     color?: string;
   };
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // The Bills budget is locked to the bills checklist (recurring payments).
+  if (body.budgetMonthly !== undefined || body.budgetWeekly !== undefined) {
+    const [cat] = await db.select({ name: categories.name }).from(categories).where(eq(categories.id, body.id)).limit(1);
+    if (cat?.name === BILLS_CATEGORY) {
+      return NextResponse.json(
+        { error: "Bills budget is locked to the bills checklist. Edit the recurring payments instead." },
+        { status: 409 }
+      );
+    }
+  }
 
   const set: Record<string, unknown> = {};
   if (body.budgetMonthly !== undefined) {

@@ -4,6 +4,7 @@ import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { sendNtfy } from "@/lib/notify";
 import { kr } from "@/lib/format";
 import { env } from "@/lib/env";
+import { isLocked } from "@/lib/budget-rules";
 
 /**
  * Adaptive/live budgeting.
@@ -141,6 +142,7 @@ export async function runAdaptiveRedistribution(
   const state = await loadCategoryState(month);
   const target = state.find((s) => s.categoryId === categoryId);
   if (!target || target.effective <= 0) return { triggered: false };
+  if (isLocked(target.name)) return { triggered: false }; // bills/savings never get topped up
 
   const spendRatio = target.spent / target.effective;
   if (spendRatio < triggerPercent / 100) return { triggered: false };
@@ -155,7 +157,8 @@ export async function runAdaptiveRedistribution(
 
   // Donors: positive-slack categories other than the recipient.
   const donors = state
-    .filter((s) => s.categoryId !== categoryId && s.base > 0 && s.remaining > 0)
+    // Locked categories (Savings, Bills, …) are never donors.
+    .filter((s) => s.categoryId !== categoryId && !isLocked(s.name) && s.base > 0 && s.remaining > 0)
     .map((s) => ({
       ...s,
       cap: (capPercent / 100) * s.base,
