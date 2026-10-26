@@ -83,8 +83,16 @@ export async function PATCH(req: NextRequest) {
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const set: Record<string, unknown> = {};
-  if (body.name !== undefined) set.name = body.name;
-  if (body.targetAmount !== undefined) set.targetAmount = String(body.targetAmount);
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
+    set.name = name;
+  }
+  if (body.targetAmount !== undefined) {
+    const n = Number(body.targetAmount);
+    if (!Number.isFinite(n) || n <= 0) return NextResponse.json({ error: "target must be > 0" }, { status: 400 });
+    set.targetAmount = String(n);
+  }
   if (body.targetDate !== undefined) set.targetDate = body.targetDate;
   if (body.isPrimary !== undefined) set.isPrimary = body.isPrimary;
   if (body.paused !== undefined) set.paused = body.paused;

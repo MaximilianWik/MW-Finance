@@ -151,7 +151,14 @@ export default async function GoalDetail({
       </Panel>
 
       <Panel title="ACTIONS">
-        <GoalActions goalId={row.id} isPrimary={row.isPrimary} paused={row.paused} />
+        <GoalActions
+          goalId={row.id}
+          isPrimary={row.isPrimary}
+          paused={row.paused}
+          name={g.name}
+          target={g.target}
+          targetDate={g.targetDate}
+        />
       </Panel>
 
       <Panel title="CONTRIBUTIONS" right={`${contribs.length}`}>

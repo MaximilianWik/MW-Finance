@@ -29,11 +29,22 @@ export function GoalActions({
   goalId,
   isPrimary,
   paused,
+  name,
+  target,
+  targetDate,
 }: {
   goalId: number;
   isPrimary: boolean;
   paused: boolean;
+  name: string;
+  target: number;
+  targetDate: string | null;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [eName, setEName] = useState(name);
+  const [eTarget, setETarget] = useState(String(target));
+  const [eDate, setEDate] = useState(targetDate ?? "");
+  const [editError, setEditError] = useState<string | null>(null);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState("");
@@ -97,6 +108,23 @@ export function GoalActions({
     if (res.ok) start(() => router.refresh());
   }
 
+  async function onEdit(e: React.FormEvent) {
+    e.preventDefault();
+    setEditError(null);
+    const res = await fetch("/api/goals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: goalId, name: eName.trim(), targetAmount: Number(eTarget), targetDate: eDate || null }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      setEditError(error);
+      return;
+    }
+    setEditing(false);
+    start(() => router.refresh());
+  }
+
   async function onDelete() {
     if (!confirm("Delete this goal? Contributions are removed too.")) return;
     const res = await fetch(`/api/goals?id=${goalId}`, { method: "DELETE" });
@@ -141,7 +169,58 @@ export function GoalActions({
         {uploading && <span className="text-xs text-muted">uploading…</span>}
       </div>
 
+      {editing && (
+        <form onSubmit={onEdit} className="flex flex-col gap-2 border-t border-edge pt-3">
+          <div className="flex flex-wrap gap-2">
+            <input
+              required
+              value={eName}
+              onChange={(e) => setEName(e.target.value)}
+              placeholder="name"
+              className="input flex-1"
+              aria-label="Goal name"
+            />
+            <input
+              type="number"
+              min="1"
+              required
+              value={eTarget}
+              onChange={(e) => setETarget(e.target.value)}
+              placeholder="target kr"
+              className="input w-32 tabular-nums"
+              aria-label="Target amount"
+            />
+            <input
+              type="date"
+              value={eDate}
+              onChange={(e) => setEDate(e.target.value)}
+              className="input"
+              aria-label="Target date"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="submit" disabled={busy} className="btn btn-accent">
+              save
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className="btn">
+              cancel
+            </button>
+            {eDate && (
+              <button type="button" onClick={() => setEDate("")} className="text-xs uppercase tracking-term text-faint hover:text-accent">
+                clear date
+              </button>
+            )}
+            {editError && <span className="text-sm text-danger">[ FAIL ] {editError}</span>}
+          </div>
+        </form>
+      )}
+
       <div className="flex flex-wrap gap-2 border-t border-edge pt-3">
+        {!editing && (
+          <button onClick={() => setEditing(true)} className="btn">
+            edit
+          </button>
+        )}
         <button onClick={() => toggle("isPrimary")} className="btn">
           {isPrimary ? "unset primary" : "set primary"}
         </button>
