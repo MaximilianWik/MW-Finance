@@ -14,7 +14,7 @@ import {
   isLocked,
   syncBudgetLocks,
   incomeIn,
-  monthlyEquivalent,
+  getBillAmounts,
 } from "@/lib/budget-rules";
 import { IncomeRow } from "../ui/IncomeRow";
 import { kr } from "@/lib/format";
@@ -59,13 +59,15 @@ export default async function BudgetsPage({
 
   // Bills overview for the Bills row: same list (and monthly maths) as the limit.
   const billsCatId = status.rows.find((r) => r.name === BILLS_CATEGORY)?.categoryId;
+  const billAmounts = new Map((billsCatId != null ? await getBillAmounts(billsCatId) : []).map((b) => [b.id, b]));
   const bills: BillOverview[] = checklist.items
     .filter((b) => b.categoryId != null && b.categoryId === billsCatId)
     .map((b) => ({
       id: b.id,
       name: b.displayName,
       amount: Math.round(b.amount),
-      monthly: Math.round(monthlyEquivalent(b.amount, b.cadence, b.cadenceDays)),
+      monthly: billAmounts.get(b.id)?.monthly ?? Math.round(b.amount),
+      basis: billAmounts.get(b.id)?.basis ?? "fixed",
       cadence: b.cadence,
       expectedOn: b.expectedOn,
       paidOnDate: b.paidOnDate,

@@ -1,8 +1,8 @@
 import { db } from "@/db";
 import { categories, recurringPayments, transactions } from "@/db/schema";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, or, sql } from "drizzle-orm";
 import { getSalaryCycle, getAllSalaryCycles } from "@/lib/period";
-import { median } from "@/lib/budget-baseline";
+import { median, estimateVariableBill, lastYear, type VariableBillBasis } from "@/lib/budget-baseline";
 
 /**
  * Budget rules shared by AI recalibration, adaptive redistribution and the
@@ -50,6 +50,71 @@ export function monthlyEquivalent(amount: number, cadence: string, cadenceDays: 
 }
 
 /** Σ monthly cost of the active recurring payments in Bills & Utilities (the bills checklist). */
+export type BillBasis = "fixed" | VariableBillBasis;
+
+export interface BillAmount {
+  id: number;
+  monthly: number; // what this bill adds to the Bills limit this cycle
+  basis: BillBasis; // fixed = stored amount; else how the variable estimate was made
+}
+
+/**
+ * Per-bill amount for the current salary cycle. Fixed bills: monthly cost of
+ * the stored amount. Variable monthly bills (electricity…): paid this cycle →
+ * actual; else the same window last year; else the stored median.
+ */
+export async function getBillAmounts(categoryId: number): Promise<BillAmount[]> {
+  const recs = await db
+    .select({
+      id: recurringPayments.id,
+      merchant: recurringPayments.merchant,
+      amount: sql<number>`${recurringPayments.amount}::float`,
+      cadence: recurringPayments.cadence,
+      cadenceDays: recurringPayments.cadenceDays,
+      variable: recurringPayments.variableAmount,
+    })
+    .from(recurringPayments)
+    .where(and(eq(recurringPayments.active, true), eq(recurringPayments.categoryId, categoryId)));
+  if (recs.length === 0) return [];
+
+  const cycle = await getSalaryCycle();
+  const to = cycle.to ?? addDaysIso(cycle.from, 29);
+  const today = new Date().toISOString().slice(0, 10);
+
+  return Promise.all(
+    recs.map(async (r): Promise<BillAmount> => {
+      if (!r.variable || r.cadence !== "monthly") {
+        return { id: r.id, monthly: Math.round(monthlyEquivalent(r.amount, r.cadence, r.cadenceDays)), basis: "fixed" };
+      }
+      // Same matching as the bills checklist: merchant key or raw counterparty.
+      const payments = await db
+        .select({ date: transactions.bookingDate, amount: sql<number>`(-${transactions.signed})::float` })
+        .from(transactions)
+        .where(
+          and(
+            or(eq(transactions.merchant, r.merchant), eq(transactions.counterpartyName, r.merchant))!,
+            sql`${transactions.signed} < 0`,
+            gte(transactions.bookingDate, lastYear(cycle.from)),
+            lte(transactions.bookingDate, today)
+          )
+        );
+      const est = estimateVariableBill(
+        payments.filter((p): p is { date: string; amount: number } => p.date != null),
+        { from: cycle.from, to },
+        r.amount
+      );
+      return { id: r.id, monthly: est.amount, basis: est.basis };
+    })
+  );
+}
+
+function addDaysIso(isoDate: string, n: number): string {
+  const d = new Date(isoDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Σ of getBillAmounts for Bills & Utilities (the bills checklist). */
 export async function getBillsTotal(): Promise<{ categoryId: number | null; total: number; count: number }> {
   const [cat] = await db
     .select({ id: categories.id })
@@ -58,17 +123,9 @@ export async function getBillsTotal(): Promise<{ categoryId: number | null; tota
     .limit(1);
   if (!cat) return { categoryId: null, total: 0, count: 0 };
 
-  const recs = await db
-    .select({
-      amount: sql<number>`${recurringPayments.amount}::float`,
-      cadence: recurringPayments.cadence,
-      cadenceDays: recurringPayments.cadenceDays,
-    })
-    .from(recurringPayments)
-    .where(and(eq(recurringPayments.active, true), eq(recurringPayments.categoryId, cat.id)));
-
-  const total = recs.reduce((s, r) => s + monthlyEquivalent(r.amount, r.cadence, r.cadenceDays), 0);
-  return { categoryId: cat.id, total: Math.round(total), count: recs.length };
+  const bills = await getBillAmounts(cat.id);
+  const total = bills.reduce((s, b) => s + b.monthly, 0);
+  return { categoryId: cat.id, total: Math.round(total), count: bills.length };
 }
 
 /**

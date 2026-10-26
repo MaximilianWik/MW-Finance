@@ -26,12 +26,19 @@ export interface BillOverview {
   id: number;
   name: string;
   amount: number;
-  monthly: number; // monthly cost (weekly/yearly converted), what the limit sums
+  monthly: number; // what the limit counts this cycle (variable bills: estimate or actual)
+  basis: "fixed" | "paid" | "last-year" | "median";
   cadence: string;
   expectedOn: string | null;
   paidOnDate: string | null;
   state: "paid" | "due" | "overdue" | "upcoming" | "missed";
 }
+
+const BASIS_LABEL: Record<Exclude<BillOverview["basis"], "fixed">, { text: string; title: string }> = {
+  paid: { text: "actual", title: "Variable bill: the limit uses what you paid this cycle" },
+  "last-year": { text: "est. last yr", title: "Variable bill: estimated from the same period last year" },
+  median: { text: "est. median", title: "Variable bill: estimated from the median of past payments" },
+};
 
 const BILL_TONE: Record<BillOverview["state"], string> = {
   paid: "tag-ok", due: "tag-muted", overdue: "tag-danger", upcoming: "tag-muted", missed: "tag-danger",
@@ -303,8 +310,15 @@ export function BudgetBar({
                             <td className="hidden whitespace-nowrap py-1 pr-2 text-[0.65rem] uppercase text-faint sm:table-cell">
                               {b.cadence}
                               {b.cadence !== "monthly" && ` · ${kr(b.monthly)}/mo`}
+                              {b.basis !== "fixed" && (
+                                <span className="ml-1 text-amber" title={BASIS_LABEL[b.basis].title}>
+                                  · {BASIS_LABEL[b.basis].text}
+                                </span>
+                              )}
                             </td>
-                            <td className="w-24 whitespace-nowrap py-1 pr-2 text-right text-muted">{kr(b.amount)}</td>
+                            <td className="w-24 whitespace-nowrap py-1 pr-2 text-right text-muted">
+                              {kr(b.basis === "fixed" ? b.amount : b.monthly)}
+                            </td>
                             <td className="w-20 whitespace-nowrap py-1 text-right">
                               <span className={`tag ${BILL_TONE[b.state]}`}>{b.state}</span>
                             </td>

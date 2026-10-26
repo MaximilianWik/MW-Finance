@@ -128,3 +128,34 @@ export function fillToTarget(
   }
   return out;
 }
+
+/** Same calendar date one year earlier (29 Feb → 28 Feb). */
+export function lastYear(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const last = new Date(Date.UTC(y - 1, m, 0)).getUTCDate(); // days in that month last year
+  return `${y - 1}-${String(m).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+
+export type VariableBillBasis = "paid" | "last-year" | "median";
+
+/**
+ * Amount to budget for a variable bill (e.g. electricity) in a salary cycle:
+ *   1. paid this cycle → what was actually paid;
+ *   2. else the same window one year earlier (catches the season);
+ *   3. else the stored median.
+ * `payments` = this merchant's past debits (positive kr).
+ */
+export function estimateVariableBill(
+  payments: Array<{ date: string; amount: number }>,
+  cycle: { from: string; to: string },
+  median: number
+): { amount: number; basis: VariableBillBasis } {
+  const sumIn = (from: string, to: string) =>
+    payments.filter((p) => p.date >= from && p.date <= to).reduce((s, p) => s + p.amount, 0);
+
+  const paid = sumIn(cycle.from, cycle.to);
+  if (paid > 0) return { amount: Math.round(paid), basis: "paid" };
+  const ly = sumIn(lastYear(cycle.from), lastYear(cycle.to));
+  if (ly > 0) return { amount: Math.round(ly), basis: "last-year" };
+  return { amount: Math.round(median), basis: "median" };
+}
