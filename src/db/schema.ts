@@ -119,6 +119,9 @@ export const savingsGoals = pgTable("savings_goals", {
   imageUrl: text("image_url"),
   isPrimary: boolean("is_primary").notNull().default(false),
   paused: boolean("paused").notNull().default(false),
+  // Manual pace (kr per salary cycle). When set, it replaces the pace computed
+  // from account history for ETA, track status and the simulator.
+  monthlyPace: numeric("monthly_pace", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

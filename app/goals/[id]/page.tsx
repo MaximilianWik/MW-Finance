@@ -7,6 +7,7 @@ import { kr, shortDate } from "@/lib/format";
 import { GoalActions } from "../../ui/GoalActions";
 import { GoalAccounts } from "../../ui/GoalAccounts";
 import { GoalSimulator } from "../../ui/GoalSimulator";
+import { PaceEditor } from "../../ui/PaceEditor";
 import { TrackTag } from "../../ui/Goals";
 import { fmtMonthYear } from "@/lib/goal-math";
 import { Panel } from "../../ui/Panel";
@@ -75,7 +76,7 @@ export default async function GoalDetail({
               ) : (
                 <>
                   <span className="tabular-nums">
-                    pace {kr(g.netPace)}/cycle · ETA <span className="text-ink2">{fmtMonthYear(g.etaDate)}</span>
+                    pace {kr(g.netPace)}/cycle{g.paceSource === "manual" ? " (manual)" : ""} · ETA <span className="text-ink2">{fmtMonthYear(g.etaDate)}</span>
                   </span>
                   <TrackTag track={g.track} pace={g.netPace} />
                 </>
@@ -85,6 +86,11 @@ export default async function GoalDetail({
                 <span>needs {kr(Math.ceil(g.track.needed))}/cycle</span>
               )}
             </div>
+            <PaceEditor
+              goalId={g.id}
+              manual={g.paceSource === "manual" ? g.netPace : null}
+              autoPace={g.autoPace}
+            />
             <div className="flex flex-wrap gap-2 pt-1 text-[0.65rem] uppercase tracking-term">
               {g.milestones.map((m) => (
                 <span
@@ -104,7 +110,7 @@ export default async function GoalDetail({
         <GoalAccounts goalId={g.id} />
       </Panel>
 
-      <Panel title="PACE HISTORY" right={`median ${kr(g.netPace)}`}>
+      <Panel title="PACE HISTORY" right={`median ${kr(g.autoPace)}`}>
         {g.history.length === 0 ? (
           <p className="text-sm text-muted">No finished salary cycles yet.</p>
         ) : (

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS goal_accounts (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (goal_id, account_id)
 );
+ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS monthly_pace numeric(12,2);
 ```
 
 Run in Neon before deploying the multi-tag weekend events:

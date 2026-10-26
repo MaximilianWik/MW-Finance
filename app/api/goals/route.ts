@@ -78,6 +78,7 @@ export async function PATCH(req: NextRequest) {
     isPrimary?: boolean;
     paused?: boolean;
     imageUrl?: string | null;
+    monthlyPace?: number | string | null;
   };
   if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -88,6 +89,14 @@ export async function PATCH(req: NextRequest) {
   if (body.isPrimary !== undefined) set.isPrimary = body.isPrimary;
   if (body.paused !== undefined) set.paused = body.paused;
   if (body.imageUrl !== undefined) set.imageUrl = body.imageUrl;
+  if (body.monthlyPace !== undefined) {
+    if (body.monthlyPace === null || body.monthlyPace === "") set.monthlyPace = null;
+    else {
+      const n = Number(body.monthlyPace);
+      if (!Number.isFinite(n) || n < 0) return NextResponse.json({ error: "pace must be ≥ 0" }, { status: 400 });
+      set.monthlyPace = String(Math.round(n));
+    }
+  }
 
   if (Object.keys(set).length === 0) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });
