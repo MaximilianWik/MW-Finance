@@ -60,9 +60,16 @@ export function GoalSimulator({
     const dateMonths = date ? monthsBetween(today, date) : null;
     const needed = dateMonths != null ? requiredMonthly(current, target, dateMonths, ret) : null;
 
+    // Frame the chart on the line you are looking at (simulated if extra > 0,
+    // else current pace) plus the finish date; a far-off line just runs off the edge.
+    const focus = extra > 0 ? sim : base;
     const horizon = Math.min(
       CHART_MAX_MONTHS,
-      Math.max(12, ...[base, sim, dateMonths].filter((v): v is number => v != null && v <= MAX_MONTHS).map((v) => v + 6))
+      Math.max(
+        12,
+        ...[focus, dateMonths].filter((v): v is number => v != null && v <= MAX_MONTHS).map((v) => v + 6),
+        focus == null && dateMonths == null ? 120 : 0
+      )
     );
     return {
       simPace,

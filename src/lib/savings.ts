@@ -50,7 +50,8 @@ export interface GoalSummary {
   isPrimary: boolean;
   paused: boolean;
   targetDate: string | null;
-  velocity: number; // pace: median kr per finished salary cycle (last 6)
+  velocity: number; // pace: median kr per finished salary cycle (last 6), floored at 0
+  netPace: number; // same median, not floored (negative = more taken out than put in)
   monthsToGoal: number | null; // at pace, 0% return; null = no pace
   progressPct: number;
   manualValue: number; // savings_goals.current_amount (manual contributions)
@@ -183,7 +184,8 @@ export async function getGoals(): Promise<GoalSummary[]> {
       );
       return { label: c.label, from: c.from, to: c.to, amount: Math.round(fromAccounts + (manualByGoal.get(g.id)?.[i] ?? 0)) };
     });
-    const velocity = Math.max(0, Math.round(median(history.map((h) => h.amount))));
+    const netPace = Math.round(median(history.map((h) => h.amount)));
+    const velocity = Math.max(0, netPace);
     const monthsToGoal = monthsToTarget(current, g.target, velocity);
 
     return {
@@ -197,6 +199,7 @@ export async function getGoals(): Promise<GoalSummary[]> {
       paused: g.paused,
       targetDate: g.targetDate,
       velocity,
+      netPace,
       monthsToGoal,
       progressPct: g.target > 0 ? Math.min(1, current / g.target) : 0,
       manualValue: g.current,

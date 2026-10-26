@@ -152,6 +152,7 @@ export function NewGoalForm() {
 /** Short tag for a goal's on-track state. */
 export function TrackTag({ track, pace }: { track: GoalSummary["track"]; pace: number }) {
   const cls = "tag text-[0.6rem]";
+  if (pace < 0 && track.state !== "done") return <span className={`${cls} tag-danger`}>[ NET OUTFLOW ]</span>;
   switch (track.state) {
     case "done":
       return <span className={`${cls} tag-ok`}>[ DONE ]</span>;
@@ -167,7 +168,7 @@ export function TrackTag({ track, pace }: { track: GoalSummary["track"]; pace: n
 }
 
 export function GoalRow(props: GoalSummary) {
-  const { id, name, imageUrl, current, target, progressPct, velocity, etaDate, isPrimary, paused, track, accounts } = props;
+  const { id, name, imageUrl, current, target, progressPct, velocity, netPace, etaDate, isPrimary, paused, track, accounts } = props;
   return (
     <a href={`/goals/${id}`} className="panel block transition-colors hover:border-edge2">
       <span className="panel-title">[ GOAL: {name.toUpperCase()} ]</span>
@@ -192,11 +193,11 @@ export function GoalRow(props: GoalSummary) {
               {kr(current)} / {kr(target)}
             </span>
             <span className="tabular-nums">
-              {paused ? "[ PAUSED ]" : velocity > 0 ? `${kr(velocity)}/mo · ETA ${fmtMonthYear(etaDate)}` : "no pace yet"}
+              {paused ? "[ PAUSED ]" : velocity > 0 ? `${kr(velocity)}/mo · ETA ${fmtMonthYear(etaDate)}` : netPace < 0 ? `${kr(netPace)}/mo net` : "no pace yet"}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[0.6rem] uppercase tracking-term">
-            {!paused && <TrackTag track={track} pace={velocity} />}
+            {!paused && <TrackTag track={track} pace={netPace} />}
             {accounts.map((a) => (
               <span key={a.accountId} className="border border-edge px-1.5 py-0.5 text-faint">
                 <span style={{ color: a.color }}>{"\u25a0"}</span> {a.name}

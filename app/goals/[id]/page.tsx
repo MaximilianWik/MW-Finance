@@ -75,9 +75,9 @@ export default async function GoalDetail({
               ) : (
                 <>
                   <span className="tabular-nums">
-                    pace {kr(g.velocity)}/cycle · ETA <span className="text-ink2">{fmtMonthYear(g.etaDate)}</span>
+                    pace {kr(g.netPace)}/cycle · ETA <span className="text-ink2">{fmtMonthYear(g.etaDate)}</span>
                   </span>
-                  <TrackTag track={g.track} pace={g.velocity} />
+                  <TrackTag track={g.track} pace={g.netPace} />
                 </>
               )}
               {g.targetDate && <span>target {shortDate(g.targetDate)}</span>}
@@ -104,7 +104,7 @@ export default async function GoalDetail({
         <GoalAccounts goalId={g.id} />
       </Panel>
 
-      <Panel title="PACE HISTORY" right={`median ${kr(g.velocity)}`}>
+      <Panel title="PACE HISTORY" right={`median ${kr(g.netPace)}`}>
         {g.history.length === 0 ? (
           <p className="text-sm text-muted">No finished salary cycles yet.</p>
         ) : (

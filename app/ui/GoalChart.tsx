@@ -26,9 +26,12 @@ export function GoalChart({
   const months = Math.max(pace.length, sim?.length ?? 0) - 1;
   if (months < 1) return null;
 
-  const maxY = Math.max(target * 1.05, ...pace, ...(sim ?? []));
+  // Cap the axis just above the target: lines that pass it are clipped at the
+  // top, so the start value and the target stay readable.
+  const maxY = target * 1.15;
   const x = (m: number) => PAD.l + (m / months) * (W - PAD.l - PAD.r);
-  const y = (v: number) => PAD.t + (1 - v / maxY) * (H - PAD.t - PAD.b);
+  const y = (v: number) => PAD.t + (1 - Math.min(v, maxY) / maxY) * (H - PAD.t - PAD.b);
+  const start = pace[0] ?? 0;
   const line = (vals: number[]) => vals.map((v, m) => `${x(m).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const year = (m: number) => addMonths(today, m).slice(0, 4);
 
@@ -54,6 +57,10 @@ export function GoalChart({
       )}
 
       <polyline points={line(pace)} fill="none" stroke="#72728a" strokeWidth="1.5" />
+      <circle cx={x(0)} cy={y(start)} r="2.5" fill="#5ac8e8" />
+      <text x={x(0) + 6} y={y(start) - 5} fontSize="10" fill="#5ac8e8">
+        now {kr(start)}
+      </text>
       {sim && <polyline points={line(sim)} fill="none" stroke="#4ec96a" strokeWidth="2" />}
 
       {/* x axis */}
