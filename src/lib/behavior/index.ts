@@ -40,7 +40,7 @@ export async function runBehaviorPipeline(
   }
 
   // Bills budget follows the bills checklist (new/changed recurrings above),
-  // then Buffer takes the unassigned income (a new salary may have landed).
+  // then check the limits still fit the income (a new salary may have landed).
   try {
     const { bills, plan } = await syncBudgetLocks();
     if (bills.changed) onLog?.(`[SYNC] bills budget locked to checklist: ${Math.round(bills.total)} kr`);

@@ -3,8 +3,8 @@ import { proposeBudget, applyBudgetProposal, MAX_CHANGE_PCT, type BudgetSet } fr
 import { syncBudgetLocks, type BudgetPlan } from "@/lib/budget-rules";
 
 function planLine(p: BudgetPlan): string {
-  if (p.overBy > 0) return `[WARN] limits exceed income (${kr(p.income)}) by ${kr(p.overBy)}: Buffer = 0 kr`;
-  return `[..]   zero-based: income ${kr(p.income)} · assigned ${kr(p.assigned)} · buffer ${kr(p.buffer)}`;
+  if (p.overBy > 0) return `[WARN] limits exceed income (${kr(p.income)}) by ${kr(p.overBy)}`;
+  return `[..]   zero-based: income ${kr(p.income)} · assigned ${kr(p.assigned)} · unassigned ${kr(p.unassigned)}`;
 }
 import { kr } from "@/lib/format";
 
@@ -17,7 +17,8 @@ function changeLine(s: BudgetSet): string {
       : "";
   const median = s.median != null ? ` · median ${kr(s.median)}` : "";
   const cap = s.clamped && s.aiMonthly != null ? ` · AI asked ${kr(s.aiMonthly)}, capped` : "";
-  return `${s.name} ${from}${kr(s.monthly)}${pct}${median}${cap}`;
+  const fill = s.fill ? ` · ${s.fill > 0 ? "+" : "−"}${kr(Math.abs(s.fill))} fill` : "";
+  return `${s.name} ${from}${kr(s.monthly)}${pct}${median}${cap}${fill}`;
 }
 
 export const runtime = "nodejs";
@@ -64,6 +65,12 @@ export async function POST(req: NextRequest) {
         }
         for (const line of proposal.reasoning) send(`[AI]   ${line}`);
         for (const d of proposal.dropped) send(`       [LOCK] ${d.name}: ${d.reason}, ignored`);
+        const z = proposal.zeroBased;
+        send(
+          z.filled
+            ? `[..]   zero-based fill: ${kr(z.income)} income − ${kr(z.fixed)} fixed = ${kr(z.target)} spread over the unlocked categories`
+            : `[..]   zero-based: nothing to fill (already at ${kr(z.target)}, or every category is locked/manual)`
+        );
         send(
           `[OK]   proposal ready — ${proposal.sets.length} change(s), ${proposal.unchanged} unchanged, ${proposal.newCategories.length} new categor${proposal.newCategories.length === 1 ? "y" : "ies"}`
         );

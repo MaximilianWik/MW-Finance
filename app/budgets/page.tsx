@@ -6,7 +6,8 @@ import { BudgetCycleNav } from "../ui/BudgetCycleNav";
 import { Panel } from "../ui/Panel";
 import { RecalibratePanel } from "../ui/RecalibratePanel";
 import { QueryLog } from "../ui/QueryLog";
-import { BILLS_CATEGORY, BUFFER_CATEGORY, NOT_BUDGETED, isLocked, syncBudgetLocks } from "@/lib/budget-rules";
+import { BILLS_CATEGORY, INCOME_CATEGORY, NOT_BUDGETED, isLocked, syncBudgetLocks, incomeIn } from "@/lib/budget-rules";
+import { IncomeRow } from "../ui/IncomeRow";
 import { kr } from "@/lib/format";
 import { withQueryLog } from "@/db/query-log";
 
@@ -27,14 +28,14 @@ export default async function BudgetsPage({
 
   const t0 = Date.now();
   const [[status, cycles, plan], queryLog] = await withQueryLog(async () => {
-    // Bills = checklist total, Buffer = unassigned income; both before we read.
+    // Bills = checklist total, before we read; plan = how much income is assigned.
     const { plan } = await syncBudgetLocks();
     return Promise.all([getMonthlyBudgetStatus(ref), getAllSalaryCycles(), plan]);
   });
   const tookMs = Date.now() - t0;
 
   const lockOf = (name: string): BudgetLock =>
-    name === BILLS_CATEGORY ? "bills" : name === BUFFER_CATEGORY ? "buffer" : isLocked(name) ? "fixed" : null;
+    name === BILLS_CATEGORY ? "bills" : isLocked(name) ? "fixed" : null;
 
   // Budgeted categories first (has a monthly budget set), then by existing sort order.
   const monthlyRows = status.rows
@@ -46,6 +47,10 @@ export default async function BudgetsPage({
     });
   const todayIso = new Date().toISOString().slice(0, 10);
   const mr = { from: status.from || todayIso, to: status.to ?? todayIso };
+
+  // Income for the shown cycle (salary + anything tagged Income, like gifts).
+  const incomeCat = status.rows.find((r) => r.name === INCOME_CATEGORY);
+  const incomeTotal = incomeCat ? Math.round(await incomeIn(mr.from, mr.to)) : 0;
 
   // The "current" from for the nav: if a past cycle is selected use its from;
   // otherwise use the first (latest) detected cycle's from so the selector
@@ -62,8 +67,8 @@ export default async function BudgetsPage({
           heavy month barely counts, and one-off big purchases are left out. A budget moves at
           most ±20% per run. Manually-set limits are never overwritten, savings are never touched,
           and bills follow the bills checklist. Written guidance lifts the ±20% limit. Budgeting is
-          zero-based: whatever income no category is assigned sits in Buffer, which absorbs
-          overspending first and is swept to savings at cycle end.
+          zero-based: a run assigns 100% of the cycle&apos;s income across your unlocked, non-manual
+          categories. Ending under budget is fine: the slack is swept to savings.
         </p>
         <RecalibratePanel />
       </Panel>
@@ -76,6 +81,9 @@ export default async function BudgetsPage({
           <p className="text-[0.7rem] uppercase tracking-term text-faint">{status.label}</p>
           <BudgetCycleNav cycles={cycles} currentFrom={displayFrom} />
         </div>
+        {incomeCat && (
+          <IncomeRow categoryId={incomeCat.categoryId} total={incomeTotal} range={{ from: mr.from, to: mr.to }} />
+        )}
         {isCurrentCycle && plan.incomeSource !== "none" && (
           <p className={`mb-3 text-[0.65rem] uppercase tracking-term ${plan.overBy > 0 ? "text-danger" : "text-faint"}`}>
             income {kr(plan.income)}
@@ -83,7 +91,7 @@ export default async function BudgetsPage({
             {plan.overBy > 0 ? (
               <>over-assigned by {kr(plan.overBy)}: lower a limit</>
             ) : (
-              <>buffer {kr(plan.buffer)}</>
+              <>unassigned {kr(plan.unassigned)}</>
             )}
           </p>
         )}

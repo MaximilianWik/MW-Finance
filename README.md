@@ -281,7 +281,8 @@ erDiagram
 - **Salary-cycle budgeting**: budget periods run from your last salary deposit to the next one (detected as Income 18k-80k kr), not calendar months.
 - **AI budget recalibration**: Gemini proposes a full budget from a robust baseline: the **median** of the last 6 finished salary cycles, with **one-off purchases** (>= 1 000 kr and >= 3x the category's normal purchase) left out and listed separately. Each run moves a budget at most **±20%** (enforced in code; written guidance lifts the limit). Manual edits are never overwritten. The preview log shows `Shopping 1 500 kr → 1 800 kr (+20%) · median 1 450 kr`.
 - **Locked categories**: Savings, Investments, Bills & Utilities, Income, Transfers, Swish and Uncategorized are never changed by recalibration or adaptive budgeting. The **Bills & Utilities** limit is locked to the bills checklist: the monthly cost of its active recurring payments, synced on every sync.
-- **Zero-based budgeting**: every krona of the cycle's income is assigned. **Buffer** holds whatever no other category is assigned (income minus every other limit); it updates on every limit change, absorbs overspending first, and its unspent part flows into the salary-period sweep. Income is not shown in the budget table.
+- **Zero-based budgeting**: a recalibration assigns 100% of the cycle's income. After the AI's capped proposal, the remainder is spread over the unlocked, non-manual categories in proportion to their size (logged as `fill`). Ending under budget is fine: the slack goes to the salary-period sweep. The header shows income · assigned · unassigned (red when over-assigned).
+- **Income row**: a separate, dashed-frame row above the budget table shows money in for the cycle; expand it to see the transactions. Gifts count once you set their category to Income in the ledger.
 - **Inline budget editing**: edit each limit directly in the MONTHLY BUDGET table (Enter saves, Esc cancels, empty = no budget). Open a row for colour and delete; add categories under the table.
 - **Conversational AI assistant**: terminal-style console on `/assistant`.
 - **Behavioral analysis**: nightly Gemini batch produces AI insights on the overview.
@@ -290,7 +291,7 @@ erDiagram
 - **Anomaly detection**: suspicious payments flagged `[!] ANOMALY`.
 - **Savings goals** with Vercel Blob images, time-to-goal projections, and a **salary-period sweep**: when a new salary lands, the app computes budget surplus over the just-closed period and records a *pending* sweep suggestion (sweep % of slack) toward the primary goal. You then make the real Lysa transfer and tag that transaction as the sweep from the ledger (`[→ sweep]`), which confirms the suggestion with the real amount and credits the goal.
 - **What-if simulator**: adjust category budgets and see projected month-end impact.
-- **Adaptive budgeting**: large purchases tighten other categories automatically (net-zero redistribution), per salary cycle. Buffer pays first; other locked categories are never donors or recipients.
+- **Adaptive budgeting**: large purchases tighten other categories automatically (net-zero redistribution), per salary cycle. Locked categories are never donors or recipients.
 - **Ledger cycle net**: the ledger shows the net of the selected salary cycle (Transfers, Savings and Investments excluded).
 - **Weekend scout** (`/weekend`): Gemini web search for Stockholm events, filtered by your profile, with tag filters (an event can have several tags), og:image thumbnails and a 404 sigil when no image exists. Pokémon GO events come from the Leek Duck feed (via ScrapedDuck).
 
@@ -440,8 +441,8 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `src/lib/categorize.ts` | MCC + keyword rules + Gemini classifier |
 | `src/lib/sync.ts` | Full sync orchestration |
 | `src/lib/budget.ts` | Salary-cycle budget status |
-| `src/lib/budget-rules.ts` | Locked categories, Bills limit from the bills checklist, zero-based Buffer (`syncBudgetLocks`, `getCycleIncome`) |
-| `src/lib/budget-baseline.ts` | Pure helpers: median, one-off finder, per-cycle baselines, ±20% clamp |
+| `src/lib/budget-rules.ts` | Locked categories, Bills limit from the bills checklist, cycle income and budget plan (`syncBudgetLocks`, `getCycleIncome`, `incomeIn`) |
+| `src/lib/budget-baseline.ts` | Pure helpers: median, one-off finder, per-cycle baselines, ±20% clamp, zero-based `fillToTarget` |
 | `src/lib/period.ts` | `getSalaryCycle`, `getAllSalaryCycles` |
 | `src/lib/savings.ts` | Goals, contributions, salary-period sweep (`runPeriodSweep`, `classifyTransactionAsSweep`), savings total |
 | `src/lib/investments.ts` | Investment accounts (seed + txn delta), `getInvestmentAccountsTotal` (reactor invested source) |
@@ -475,6 +476,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `app/ui/Tip.tsx` | Click-to-toggle info tooltip |
 | `app/rank/page.tsx` | `/rank`: full reactor view, all panels |
 | `app/ui/BudgetBar.tsx` | Budget table row: inline limit edit, lock tags, drill-down, colour/delete |
+| `app/ui/IncomeRow.tsx` | Expandable income row, framed apart from the budget table |
 | `app/ui/NewCategoryForm.tsx` | Add-category form under the MONTHLY BUDGET table |
 | `app/ui/WeekendBoard.tsx` | Weekend event board with tag filters |
 | `app/ui/EventCard.tsx` | Event card with thumbnail or 404 sigil |

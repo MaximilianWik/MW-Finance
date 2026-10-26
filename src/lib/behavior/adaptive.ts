@@ -4,7 +4,7 @@ import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { sendNtfy } from "@/lib/notify";
 import { kr } from "@/lib/format";
 import { env } from "@/lib/env";
-import { isLocked, BUFFER_CATEGORY } from "@/lib/budget-rules";
+import { isLocked } from "@/lib/budget-rules";
 import { getSalaryCycle } from "@/lib/period";
 
 /** Assumed cycle length while the next salary hasn't landed yet. */
@@ -173,12 +173,7 @@ export async function runAdaptiveRedistribution(
   const donation = overshoot > 0 ? overshoot : target.spent - target.effective * (triggerPercent / 100);
   if (donation <= 0) return { triggered: false };
 
-  // Buffer (unassigned income) pays first, without a cap: that is its job.
-  const buffer = state.find((s) => s.name === BUFFER_CATEGORY && s.categoryId !== categoryId);
-  const fromBuffer = buffer ? Math.max(0, Math.min(donation, buffer.remaining)) : 0;
-  const rest = donation - fromBuffer;
-
-  // Then: positive-slack categories other than the recipient, each capped.
+  // Donors: positive-slack categories other than the recipient.
   const donors = state
     // Locked categories (Savings, Bills, …) are never donors.
     .filter((s) => s.categoryId !== categoryId && !isLocked(s.name) && s.base > 0 && s.remaining > 0)
@@ -190,15 +185,12 @@ export async function runAdaptiveRedistribution(
     .filter((s) => s.slack > 0)
     .sort((a, b) => b.slack - a.slack);
 
-  if (donors.length === 0 && fromBuffer <= 0) return { triggered: false };
+  if (donors.length === 0) return { triggered: false };
 
   const totalSlack = donors.reduce((s, d) => s + d.slack, 0);
-  const moveable = Math.min(rest, totalSlack);
+  const moveable = Math.min(donation, totalSlack);
 
   const moves: Array<{ fromCategoryId: number; fromName: string; amount: number }> = [];
-  if (buffer && fromBuffer > 0) {
-    moves.push({ fromCategoryId: buffer.categoryId, fromName: buffer.name, amount: fromBuffer });
-  }
   let remaining = moveable;
   for (const d of donors) {
     if (remaining <= 0) break;

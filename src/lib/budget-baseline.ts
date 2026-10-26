@@ -98,3 +98,33 @@ export function clampChange(
   if (value < lo) value += 50;
   return { value, clamped: bounded !== proposed };
 }
+
+/**
+ * Zero-based fill: move `items` so they sum to exactly `target`, each in
+ * proportion to its size, rounded to 50 kr. The rounding remainder goes to
+ * the largest item. Shrinking (target below the sum) floors each at 0.
+ * Items with value <= 0 are left alone; none left → returned unchanged.
+ */
+export function fillToTarget(
+  items: Array<{ id: number; value: number }>,
+  target: number
+): Map<number, number> {
+  const out = new Map(items.map((i) => [i.id, i.value]));
+  const pool = items.filter((i) => i.value > 0);
+  const sum = pool.reduce((s, i) => s + i.value, 0);
+  if (pool.length === 0 || sum <= 0) return out;
+  // Within one rounding step of the target already: leave it.
+  if (Math.abs(target - sum) < 50) return out;
+  const want = Math.max(0, Math.round(target / 50) * 50);
+  const residual = want - sum;
+
+  for (const i of pool) {
+    out.set(i.id, Math.max(0, Math.round((i.value + (residual * i.value) / sum) / 50) * 50));
+  }
+  const drift = want - pool.reduce((s, i) => s + out.get(i.id)!, 0);
+  if (drift !== 0) {
+    const largest = pool.reduce((a, b) => (out.get(b.id)! > out.get(a.id)! ? b : a));
+    out.set(largest.id, Math.max(0, out.get(largest.id)! + drift));
+  }
+  return out;
+}

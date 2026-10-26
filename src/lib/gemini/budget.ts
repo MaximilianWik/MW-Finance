@@ -3,8 +3,8 @@ import { categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { geminiModel } from "./client";
 import { getFinancialContext, type FinancialContext } from "./context";
-import { isLocked, getCycleIncome, BUFFER_CATEGORY, NOT_BUDGETED } from "@/lib/budget-rules";
-import { clampChange } from "@/lib/budget-baseline";
+import { isLocked, getCycleIncome, NOT_BUDGETED } from "@/lib/budget-rules";
+import { clampChange, fillToTarget } from "@/lib/budget-baseline";
 
 /** Max change per category per recalibration (C). Written guidance lifts it. */
 export const MAX_CHANGE_PCT = 0.2;
@@ -32,6 +32,7 @@ export interface BudgetSet {
   median?: number; // baseline the AI saw
   aiMonthly?: number; // what the AI asked for, before the clamp
   clamped?: boolean;
+  fill?: number; // kr added (or removed) by the zero-based fill, after the clamp
 }
 
 export interface NewCategoryProposal {
@@ -50,6 +51,7 @@ export interface BudgetProposal {
   oneOffs: FinancialContext["oneOffs"];
   dropped: Array<{ name: string; reason: string }>; // removed by the guard rails
   unchanged: number;
+  zeroBased: { income: number; fixed: number; target: number; filled: boolean };
 }
 
 export interface ApplyAction {
@@ -69,7 +71,7 @@ const SYSTEM = [
   "- One-off purchases are listed separately. They are not normal spending: do not budget for them.",
   "- Round to clean figures (nearest 50 or 100 kr). The engine limits every change to ±20% of the current budget per run, so propose the level you think is right.",
   "- Locked categories are fixed (bills follow the bills checklist; savings are set by the user). NEVER include them in 'sets'.",
-  "- Total of all budgets must leave room for savings — do NOT let budgets exceed monthly income.",
+  "- ZERO-BASED: the budgets together assign 100% of the cycle's income. Put any extra where it is realistic to spend (not into categories you barely use). The engine tops up or trims proportionally to hit the total exactly.",
   "- NEVER propose a change for a category whose source is 'manual'. Omit it from 'sets' entirely.",
   "- Only propose newCategories when the data clearly shows recurring spend that has no fitting existing category. Prefer reusing existing categories.",
   "- Do not budget the Income, Savings, Investments, Transfers, Swish or Uncategorized categories in 'sets'.",
@@ -84,7 +86,7 @@ function buildPrompt(ctx: FinancialContext, income: number, guidance?: string): 
         `  { id: ${c.id}, name: "${c.name}", currentBudget: ${c.budgetMonthly ?? "null"}, medianSpend: ${c.medianMonthlySpend}, cycleSpend: [${c.cycleSpend.join(", ")}], source: "${c.budgetSource ?? "none"}" }`
     );
   const locked = ctx.categories.filter(
-    (c) => isLocked(c.name) && !NOT_BUDGETED.has(c.name) && c.name !== BUFFER_CATEGORY && c.budgetMonthly != null
+    (c) => isLocked(c.name) && !NOT_BUDGETED.has(c.name) && c.budgetMonthly != null
   );
   const lockedLines = locked.map((c) => `  - ${c.name}: ${c.budgetMonthly} kr (locked)`);
   const lockedTotal = Math.round(locked.reduce((s, c) => s + (c.budgetMonthly ?? 0), 0));
@@ -97,9 +99,8 @@ function buildPrompt(ctx: FinancialContext, income: number, guidance?: string): 
   );
   return [
     `Income this salary cycle: ${income} kr`,
-    `ZERO-BASED: locked limits total ${lockedTotal} kr, so ${toAssign} kr is left to assign across the categories below. ` +
-      `Whatever you leave unassigned goes to "${BUFFER_CATEGORY}" automatically (unplanned spending, swept to savings at cycle end). ` +
-      `The sum of your budgets must not exceed ${toAssign} kr. Keep a sensible buffer; don't pad categories just to use it up.`,
+    `ZERO-BASED: locked limits total ${lockedTotal} kr, so ${toAssign} kr is left to assign across the categories below ` +
+      `(manual ones included at their current value). Assign all of it. Ending a cycle under budget is fine: the slack is swept to savings.`,
     `All-time savings: ${ctx.savingsTotal} kr`,
     ctx.primaryGoal
       ? `Primary goal: ${ctx.primaryGoal.name}, ${ctx.primaryGoal.current}/${ctx.primaryGoal.target} kr`
@@ -173,7 +174,8 @@ export function parseLenientJson(text: string): unknown {
 /** Ask Gemini for a budget proposal. Pure — writes nothing. */
 export async function proposeBudget(guidance?: string): Promise<BudgetProposal> {
   const [ctx, { income }] = await Promise.all([getFinancialContext(), getCycleIncome()]);
-  const prompt = buildPrompt(ctx, income || ctx.monthlyIncome, guidance);
+  const cycleIncome = income || ctx.monthlyIncome;
+  const prompt = buildPrompt(ctx, cycleIncome, guidance);
   let parsed: Partial<BudgetProposal>;
   try {
     const res = await geminiModel({ system: SYSTEM, json: true, temperature: 0.3 }).generateContent(prompt);
@@ -235,6 +237,55 @@ export async function proposeBudget(guidance?: string): Promise<BudgetProposal> 
     });
   }
 
+  const newCategories: NewCategoryProposal[] = Array.isArray(parsed.newCategories)
+    ? parsed.newCategories
+        .filter((n) => n && typeof n.name === "string" && typeof n.monthly === "number")
+        .map((n) => ({
+          name: n.name,
+          color: typeof n.color === "string" ? n.color : "#6f926f",
+          monthly: Math.round(n.monthly),
+          rationale: typeof n.rationale === "string" ? n.rationale : "",
+        }))
+    : [];
+
+  // ── Zero-based fill: 100% of income, in code ──
+  // Fillable = unlocked, non-manual categories that have a budget. Everything
+  // else (locked, manual, new categories) is fixed at its value.
+  const setById = new Map(sets.filter((s) => s.categoryId != null).map((s) => [s.categoryId!, s]));
+  const fillable: Array<{ id: number; value: number }> = [];
+  let fixed = newCategories.reduce((sum, n) => sum + n.monthly, 0);
+  for (const c of ctx.categories) {
+    if (NOT_BUDGETED.has(c.name)) continue;
+    const value = setById.get(c.id)?.monthly ?? c.budgetMonthly ?? 0;
+    if (isLocked(c.name) || c.budgetSource === "manual" || value <= 0) fixed += c.budgetMonthly ?? 0;
+    else fillable.push({ id: c.id, value });
+  }
+  const target = Math.max(0, cycleIncome - fixed);
+  const filled = cycleIncome > 0 ? fillToTarget(fillable, target) : new Map(fillable.map((f) => [f.id, f.value]));
+  let didFill = false;
+  for (const f of fillable) {
+    const v = filled.get(f.id)!;
+    if (v === f.value) continue;
+    didFill = true;
+    const cat = byId.get(f.id)!;
+    const existing = setById.get(f.id);
+    if (existing) {
+      existing.fill = v - f.value;
+      existing.monthly = v;
+    } else {
+      unchanged = Math.max(0, unchanged - 1);
+      sets.push({
+        categoryId: cat.id,
+        name: cat.name,
+        monthly: v,
+        rationale: "zero-based fill",
+        current: cat.budgetMonthly,
+        median: cat.medianMonthlySpend,
+        fill: v - f.value,
+      });
+    }
+  }
+
   return {
     reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.map(String) : [],
     sets,
@@ -243,16 +294,8 @@ export async function proposeBudget(guidance?: string): Promise<BudgetProposal> 
     oneOffs: ctx.oneOffs,
     dropped,
     unchanged,
-    newCategories: Array.isArray(parsed.newCategories)
-      ? parsed.newCategories
-          .filter((n) => n && typeof n.name === "string" && typeof n.monthly === "number")
-          .map((n) => ({
-            name: n.name,
-            color: typeof n.color === "string" ? n.color : "#6f926f",
-            monthly: Math.round(n.monthly),
-            rationale: typeof n.rationale === "string" ? n.rationale : "",
-          }))
-      : [],
+    zeroBased: { income: cycleIncome, fixed: Math.round(fixed), target: Math.round(target), filled: didFill },
+    newCategories,
   };
 }
 
