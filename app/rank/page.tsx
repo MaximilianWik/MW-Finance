@@ -279,7 +279,7 @@ export default async function RankPage({
 
       {/* ── Reactor fuel (XP breakdown) ────────────────────────────────── */}
       <Panel title="REACTOR FUEL">
-        <XpBreakdown inputs={xpInputs} />
+        <XpBreakdown inputs={xpInputs} currentStreak={streak.current} budgetCheck={snap.budgetCheck} />
       </Panel>
 
       {/* ── Weekly directives ──────────────────────────────────────────── */}

@@ -1,5 +1,6 @@
 import { kr } from "@/lib/format";
 import type { XpInputs } from "@/lib/game/level";
+import type { BudgetCheck } from "@/lib/game/snapshot";
 import {
   XP_PER_100_KR_INVEST,
   XP_STREAK_BASE, XP_STREAK_STEP, XP_BUDGET_PER_100_KR,
@@ -14,7 +15,15 @@ interface Row {
   color: string;
 }
 
-export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
+export function XpBreakdown({
+  inputs,
+  currentStreak,
+  budgetCheck,
+}: {
+  inputs: XpInputs;
+  currentStreak: number;
+  budgetCheck: BudgetCheck | null;
+}) {
   const invXp    = Math.floor(inputs.investmentsTotal / 100) * XP_PER_100_KR_INVEST;
   const strXp    = computeStreakXp(inputs.bestStreak);
   const achXp    = inputs.achievementXp;
@@ -22,21 +31,33 @@ export function XpBreakdown({ inputs }: { inputs: XpInputs }) {
   const budgXp   = inputs.budgetXp;
   const total    = invXp + strXp + achXp + chalXp + budgXp;
 
-  const d         = inputs.bestStreak;
-  const rate      = streakDailyRate(d);
-  const nextBlock = d + 1; // rate increases every single day now
-  const nextRate  = rate + XP_STREAK_STEP;
+  // Uptime XP is banked on the BEST streak; the current run only adds once it
+  // passes the best.
+  const d        = inputs.bestStreak;
+  const rate     = streakDailyRate(d);
+  const nextRate = rate + XP_STREAK_STEP;
+  const cur      = currentStreak;
 
   const strDetail = d > 0
-    ? `${d}d × ${rate} XP/d · +${XP_STREAK_STEP} XP/d every day`
+    ? `best ${d}d × ${rate} XP/d · +${XP_STREAK_STEP} XP/d every day`
     : `${XP_STREAK_BASE} XP/day base · +${XP_STREAK_STEP}/day per day of streak`;
-  const strSub = d > 0
-    ? `tomorrow (day ${d + 1}): rate rises to ${nextRate} XP/d`
-    : undefined;
+  const strSub = d === 0
+    ? undefined
+    : cur >= d
+      ? `current run is your best · tomorrow (day ${d + 1}): rate rises to ${nextRate} XP/d`
+      : `current run ${cur}d = ${computeStreakXp(cur).toLocaleString("sv-SE")} XP · adds XP once it passes ${d}d (in ${d - cur + 1}d)`;
 
+  const fmt = (n: number) => n.toLocaleString("sv-SE");
+  const lastCycle = !budgetCheck
+    ? "no completed salary cycle yet"
+    : budgetCheck.spent > budgetCheck.budget
+      ? `last cycle ${budgetCheck.label}: ${kr(budgetCheck.spent)} / ${kr(budgetCheck.budget)}, over by ${kr(budgetCheck.spent - budgetCheck.budget)}, no XP`
+      : budgetCheck.evaluated
+        ? `last cycle ${budgetCheck.label}: under by ${kr(budgetCheck.budget - budgetCheck.spent)}, +${fmt(budgetCheck.xp)} XP awarded`
+        : `last cycle ${budgetCheck.label}: under by ${kr(budgetCheck.budget - budgetCheck.spent)} → +${fmt(budgetCheck.xp)} XP at next eval`;
   const budgSurplus = budgXp > 0
-    ? `${((budgXp / XP_BUDGET_PER_100_KR) * 100).toLocaleString("sv-SE")} kr saved under budget`
-    : "no completed salary cycles under budget yet";
+    ? `${fmt((budgXp / XP_BUDGET_PER_100_KR) * 100)} kr saved under budget so far · ${lastCycle}`
+    : lastCycle;
 
   const rows: Row[] = [
     { label: "Investments",
