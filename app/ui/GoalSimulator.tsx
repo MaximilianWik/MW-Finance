@@ -58,6 +58,11 @@ export function GoalSimulator({
     const base = monthsToTarget(current, target, pace, ret);
     const sim = monthsToTarget(current, target, simPace, ret);
     const dateMonths = date ? monthsBetween(today, date) : null;
+    // Return earned by the finish month: final balance − start − deposits.
+    const earned = (months: number | null, monthly: number) =>
+      ret > 0 && months != null && months > 0
+        ? Math.round(projectSeries(current, monthly, months, ret)[months] - current - monthly * months)
+        : null;
     const needed = dateMonths != null ? requiredMonthly(current, target, dateMonths, ret) : null;
 
     // Frame the chart on the line you are looking at (simulated if extra > 0,
@@ -76,6 +81,8 @@ export function GoalSimulator({
       base,
       sim,
       saved: base != null && sim != null ? base - sim : null,
+      baseEarned: earned(base, pace),
+      simEarned: earned(sim, simPace),
       dateMonths,
       needed,
       neededGap: needed != null ? needed - pace : null,
@@ -157,6 +164,7 @@ export function GoalSimulator({
           <p className="text-[0.6rem] uppercase tracking-term text-faint">at current pace</p>
           <p className="tabular-nums text-ink2">{fmtDate(r.base != null ? addMonths(today, r.base) : null)}</p>
           <p className="text-[0.65rem] text-muted">{fmtMonths(r.base)}</p>
+          {r.baseEarned != null && <p className="text-[0.65rem] text-accent2">+{kr(r.baseEarned)} from return</p>}
         </div>
         <div className={`border px-3 py-2 ${extra > 0 ? "border-accent/50" : "border-edge"}`}>
           <p className="text-[0.6rem] uppercase tracking-term text-faint">simulated</p>
@@ -165,6 +173,7 @@ export function GoalSimulator({
             {fmtMonths(r.sim)}
             {r.saved != null && r.saved > 0 && <span className="text-accent"> · {fmtMonths(r.saved)} sooner</span>}
           </p>
+          {r.simEarned != null && <p className="text-[0.65rem] text-accent2">+{kr(r.simEarned)} from return</p>}
         </div>
         <div className="border border-edge px-3 py-2">
           <p className="text-[0.6rem] uppercase tracking-term text-faint">needed per cycle {date ? `by ${fmtDate(date)}` : ""}</p>
