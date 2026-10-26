@@ -104,7 +104,7 @@ Budget periods are salary-cycle-based, not calendar-month. A salary transaction 
 - ✅ Early-warning trajectory — `[WARN] TRAJECTORY` push past day 10 when projected > 110% of budget.
 - ✅ Month-over-month and week-over-week comparisons — terminal tables with aligned Δkr / Δ% columns on `/insights`.
 - ✅ Checklist for recurring payments (paid / due / overdue / upcoming this month) — `[✓]`/`[!]` styling.
-- ✅ Salary-cycle budget periods — budget "month" runs from last LÖN salary to the next (detected as Income 18k–30k kr), not calendar month. Falls back to calendar when no salary detected.
+- ✅ Salary-cycle budget periods — budget "month" runs from last LÖN salary to the next (detected as Income 18k–80k kr), not calendar month. Falls back to calendar when no salary detected.
 - ✅ Ledger LÖN period filter — dropdown listing each detected salary cycle; queries by `from`/`to` date range.
 - ✅ Category drill-down — click any budget row to expand its transactions for the current period inline.
 - ✅ Savings total panel (`SavingsPanel`) — all-time running total (auto from Savings category + manual entries), inline add form on the overview.
@@ -131,6 +131,7 @@ Budget periods are salary-cycle-based, not calendar-month. A salary transaction 
 - AI payment categorization: runs in the batch job and also whenever user presses "sync now." **This is the aesthetic's centerpiece** — a live scrolling console log showing each transaction being categorized in real time (see example log under Design Philosophy above), with per-line `[✓]`/`[!]` results and a final `[DONE]` summary with elapsed time.
 - AI should be the one setting the actual budget. It has to identify income, understand the spending categories, habits, understand recurring payments, bills etc. Then there should be a button for AI to recalibrate budget as it learns more and recurring payments/bills are added/removed. Add new categories, understand user-added categories. Be aware of manual changes to budgets. This should also be an aesthetic centerpiece where the AI's reasoning is displayed and then logs of setting the budget.
 - The AI should power the live/adaptive budgeting: a large purchase tightens other categories (`budget_adjustments`, net-zero redistribution). And suspicious payment flagging — `[!] ANOMALY` tag, red accent, priority-5 push; persisted to `transactions.flagged_reason`.
+- ✅ Robust recalibration: median of the last 6 finished salary cycles, one-off purchases excluded, ±20% max change per run, locked categories (Savings, Bills, …) never touched, Bills limit locked to the bills checklist, inline limit editing in the MONTHLY BUDGET table.
 - There should also be a way to mark all payments to a certain receiver as recurring for variable-price recurring payments — for example electricity is recurring but at a variable price; this should be recognized and handled correctly.
 - ✅ When a certain unknown transaction from a receiver has been categorized, this should be remembered for upcoming transactions from that same sender/receiver and auto-applied to that category. e.g. a transaction of –9 000 kr to "cleo langell" marked as Bills → every future transaction to cleo langell is automatically marked as Bills. **(Done in Phase 2 PATCH propagation.)**
 
@@ -167,6 +168,7 @@ Full diagnostic-terminal treatment applies here too — no softened visual langu
 - Visual indicators of what the saved total could buy
 
 ### Phase 6 — Lifestyle Extras
+- ✅ Weekend scout on `/weekend`: Stockholm events via Gemini search, tag filters with multi-tag events, og:image thumbnails (404 sigil fallback), Pokémon GO events from Leek Duck.
 - Weekend/date suggestions: web search ahead of the weekend filtered to free/cheap Stockholm events (concerts, etc.) — show title, link, date/time, optional image; one-tap add to calendar. Each suggestion rendered as an ASCII-framed card wrapping a normal event image.
 
 ### Phase 7 — SaaS (if you go there)

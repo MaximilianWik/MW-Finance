@@ -241,6 +241,7 @@ erDiagram
     text      url
     text      description
     text      tag
+    text_arr  tags
     text      audience
     text      when_text
     date      event_date
@@ -277,8 +278,10 @@ erDiagram
 
 - **Auto-sync** from Länsförsäkringar via cron (daily + weekly) or manual trigger. Full streaming log with per-transaction categorization detail.
 - **Categorization pipeline**: self-transfer detection, MCC codes, keyword rules, merchant cache, Gemini fallback. Manual overrides propagate to all past and future transactions from the same merchant.
-- **Salary-cycle budgeting**: budget periods run from your last salary deposit to the next one (detected as Income 18k-60k kr), not calendar months.
-- **AI budget recalibration**: Gemini analyzes spending + recurring bills, proposes a full budget. Manual edits are never overwritten.
+- **Salary-cycle budgeting**: budget periods run from your last salary deposit to the next one (detected as Income 18k-80k kr), not calendar months.
+- **AI budget recalibration**: Gemini proposes a full budget from a robust baseline: the **median** of the last 6 finished salary cycles, with **one-off purchases** (>= 1 000 kr and >= 3x the category's normal purchase) left out and listed separately. Each run moves a budget at most **±20%** (enforced in code; written guidance lifts the limit). Manual edits are never overwritten. The preview log shows `Shopping 1 500 kr → 1 800 kr (+20%) · median 1 450 kr`.
+- **Locked categories**: Savings, Investments, Bills & Utilities, Income, Transfers, Swish and Uncategorized are never changed by recalibration or adaptive budgeting. The **Bills & Utilities** limit is locked to the bills checklist: the monthly cost of its active recurring payments, synced on every sync.
+- **Inline budget editing**: edit each limit directly in the MONTHLY BUDGET table (Enter saves, Esc cancels, empty = no budget). Open a row for colour and delete; add categories under the table.
 - **Conversational AI assistant**: terminal-style console on `/assistant`.
 - **Behavioral analysis**: nightly Gemini batch produces AI insights on the overview.
 - **Investment tracking**: per-account balance tracker (Lysa, Avanza, LF Fonder). Balance = seed + DBIT outflows minus CRDT inflows matching the account merchant name.
@@ -286,7 +289,9 @@ erDiagram
 - **Anomaly detection**: suspicious payments flagged `[!] ANOMALY`.
 - **Savings goals** with Vercel Blob images, time-to-goal projections, and a **salary-period sweep**: when a new salary lands, the app computes budget surplus over the just-closed period and records a *pending* sweep suggestion (sweep % of slack) toward the primary goal. You then make the real Lysa transfer and tag that transaction as the sweep from the ledger (`[→ sweep]`), which confirms the suggestion with the real amount and credits the goal.
 - **What-if simulator**: adjust category budgets and see projected month-end impact.
-- **Adaptive budgeting**: large purchases tighten other categories automatically (net-zero redistribution).
+- **Adaptive budgeting**: large purchases tighten other categories automatically (net-zero redistribution). Locked categories are never donors or recipients.
+- **Ledger cycle net**: the ledger shows the net of the selected salary cycle (Transfers, Savings and Investments excluded).
+- **Weekend scout** (`/weekend`): Gemini web search for Stockholm events, filtered by your profile, with tag filters (an event can have several tags), og:image thumbnails and a 404 sigil when no image exists. Pokémon GO events come from the Leek Duck feed (via ScrapedDuck).
 
 ### Reactor Core (Phase 5 Gamification)
 
@@ -434,11 +439,14 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `src/lib/categorize.ts` | MCC + keyword rules + Gemini classifier |
 | `src/lib/sync.ts` | Full sync orchestration |
 | `src/lib/budget.ts` | Salary-cycle budget status |
+| `src/lib/budget-rules.ts` | Locked categories, Bills limit from the bills checklist (`syncBillsBudget`) |
+| `src/lib/budget-baseline.ts` | Pure helpers: median, one-off finder, per-cycle baselines, ±20% clamp |
 | `src/lib/period.ts` | `getSalaryCycle`, `getAllSalaryCycles` |
 | `src/lib/savings.ts` | Goals, contributions, salary-period sweep (`runPeriodSweep`, `classifyTransactionAsSweep`), savings total |
 | `src/lib/investments.ts` | Investment accounts (seed + txn delta), `getInvestmentAccountsTotal` (reactor invested source) |
 | `src/lib/behavior/` | Recurring detection, anomaly flagging, adaptive budgets |
 | `src/lib/gemini/` | Context builder, assistant, budget recalibration, analysis |
+| `src/lib/lifestyle/` | Weekend event scout (`events.ts`), Pokémon GO feed (`pogo.ts`), interest profile (`profile.ts`) |
 
 ### Reactor Core game engine (`src/lib/game/`)
 | File | Role |
@@ -465,6 +473,10 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `app/ui/AchievementBadge.tsx` | Animated hexagonal badge (glow + rotating ring) |
 | `app/ui/Tip.tsx` | Click-to-toggle info tooltip |
 | `app/rank/page.tsx` | `/rank`: full reactor view, all panels |
+| `app/ui/BudgetBar.tsx` | Budget table row: inline limit edit, lock tags, drill-down, colour/delete |
+| `app/ui/NewCategoryForm.tsx` | Add-category form under the MONTHLY BUDGET table |
+| `app/ui/WeekendBoard.tsx` | Weekend event board with tag filters |
+| `app/ui/EventCard.tsx` | Event card with thumbnail or 404 sigil |
 
 ---
 
@@ -480,9 +492,10 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 | `/api/categorize` | POST | Streaming backlog re-categorization |
 | `/api/transactions` | GET, PATCH | List with filters; PATCH = category override |
 | `/api/transactions/[id]/sweep` | POST | Tag a DBIT tx as the Lysa sweep transfer (confirms pending suggestion → credits primary goal) |
-| `/api/categories` | GET, POST, PATCH, DELETE | Category management |
+| `/api/categories` | GET, POST, PATCH, DELETE | Category management (PATCH refuses the locked Bills limit with 409) |
 | `/api/recurring` | GET, POST, PATCH | Recurring payment management |
-| `/api/budget/recalibrate` | POST | Streaming AI budget proposal + apply |
+| `/api/budget/recalibrate` | POST | Streaming AI budget proposal + apply (`?preview=1` = propose only) |
+| `/api/lifestyle/run` | POST | Streaming weekend event scout |
 | `/api/investments` | GET, POST, PATCH, DELETE | Investment accounts |
 | `/api/assistant` | POST | Streaming Gemini assistant |
 | `/api/analysis/run` | POST | Nightly AI behavioral analysis |

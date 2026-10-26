@@ -9,6 +9,14 @@
 
 ## Pending DB Migration
 
+Run in Neon before deploying the multi-tag weekend events:
+
+```sql
+ALTER TABLE event_suggestions ADD COLUMN IF NOT EXISTS tags text[];
+-- optional: allow events without a link
+ALTER TABLE event_suggestions ALTER COLUMN url DROP NOT NULL;
+```
+
 One migration must be run in Neon before the investment panel works:
 
 ```sql
@@ -92,7 +100,14 @@ Shared engine: `src/lib/categorize-batch.ts` — used by both sync and on-demand
 
 ### Budget periods
 
-Salary-cycle-based, not calendar month. A salary = CRDT Income 18k-30k kr. Current cycle = last salary to today (open-ended). Falls back to calendar month if no salary detected. See `src/lib/period.ts`.
+Salary-cycle-based, not calendar month. A salary = CRDT Income 18k-80k kr. Current cycle = last salary to today (open-ended). Falls back to calendar month if no salary detected. See `src/lib/period.ts`.
+
+### Budget engine
+
+- **Effective limit** = `categories.budget_monthly` + Σ `budget_adjustments` for the cycle. The inline editor edits the base; the `+/-` tag shows the adaptive part.
+- **Locked categories** (`src/lib/budget-rules.ts`): Income, Savings, Investments, Transfers, Swish, Uncategorized, Bills & Utilities. Recalibration and adaptive redistribution never change them. Savings stays editable by hand.
+- **Bills lock**: Bills & Utilities limit = monthly cost of its active `recurring_payments` (weekly/yearly converted). `syncBillsBudget()` runs after recurring detection, on `/budgets` load and before recalibration; stamps `budget_source='bills'`. PATCH on it returns 409.
+- **Recalibration baseline** (`src/lib/budget-baseline.ts`, `context.ts`): median of the last 6 finished salary cycles per category, one-offs (>= 1 000 kr and >= 3x the category's median purchase) excluded. The AI gets the median, the per-cycle history and the one-off list. Code then drops locked categories and clamps each change to ±20% (rounded to 50 kr) unless guidance is given.
 
 ### Investment balance model
 
@@ -120,7 +135,7 @@ Sync, categorize, budget recalibrate, and AI assistant all stream `text/event-st
 | `/api/sync` | GET (cron), POST | Daily sync; Bearer-guarded |
 | `/api/sync/manual` | POST | Streaming sync; returns `ReadableStream` |
 | `/api/categorize` | POST | Streaming backlog re-categorization |
-| `/api/categories` | GET, POST, PATCH, DELETE | PATCH stamps `budgetSource='manual'`; DELETE guards core categories |
+| `/api/categories` | GET, POST, PATCH, DELETE | PATCH stamps `budgetSource='manual'` (409 on the locked Bills limit); DELETE guards core categories |
 | `/api/transactions` | GET | Full query with joins; supports filters |
 | `/api/recurring` | GET, POST, PATCH | PATCH accepts `categoryId`, `manual`, `variable` |
 | `/api/budget/recalibrate` | POST | Streaming AI budget proposal + apply |
@@ -156,7 +171,7 @@ Sync, categorize, budget recalibrate, and AI assistant all stream `text/event-st
 |---|---|
 | `/` | Overview: sync status, budget summary, AI insights, investments, recent ledger |
 | `/transactions` | Full ledger with filters, AI categorize panel |
-| `/budgets` | Budget bars (table layout), AI recalibrate panel, salary cycle nav |
+| `/budgets` | Budget table with inline limit editing + add category, AI recalibrate panel, salary cycle nav |
 | `/insights` | Salary-period comparison, bills checklist, recurring payments table |
 | `/goals` | Savings goals list |
 | `/goals/[id]` | Goal detail + contributions |
@@ -181,6 +196,8 @@ src/
     categorize-batch.ts   -- shared batch engine used by sync + /api/categorize
     period.ts             -- getSalaryCycle(), getAllSalaryCycles()
     budget.ts             -- getMonthlyBudgetStatus()
+    budget-rules.ts       -- LOCKED_CATEGORIES, isLocked(), syncBillsBudget()
+    budget-baseline.ts    -- median(), findOneOffs(), cycleBaselines(), clampChange()
     comparison.ts         -- getSalaryComparison(), getMonthComparison()
     savings.ts            -- getPrimaryGoal(), getGoals()
     transfers.ts          -- isSelfTransfer()
@@ -195,6 +212,11 @@ src/
       index.ts            -- runBehaviorPipeline(onLog?)
       recurring.ts        -- detectAndPersistRecurrings()
       suspicious.ts       -- flagSuspicious(onLog?)
+      adaptive.ts         -- runAdaptiveRedistribution() (skips locked categories)
+    lifestyle/
+      events.ts           -- weekend event scout (Gemini search, dedupe, thumbnails)
+      pogo.ts             -- Pokémon GO events from the Leek Duck feed
+      profile.ts          -- interest themes for the scout
     enablebanking/
       normalize.ts        -- normalizeMerchant(), counterparty(), mapTransaction()
 app/
@@ -202,8 +224,10 @@ app/
     typewriter.tsx          -- useTypewriter hook, TerminalLog, Spinner, lineColor
     AiConsole.tsx           -- generic streaming console (getBody prop)
     SyncButton.tsx          -- sync trigger with live log
-    BudgetBar.tsx           -- table-row budget bar (column-aligned)
-    BudgetEditor.tsx        -- category editor with color picker + delete
+    BudgetBar.tsx           -- budget table row: inline limit edit, lock tags, colour/delete
+    NewCategoryForm.tsx     -- add-category form under the budget table
+    WeekendBoard.tsx        -- weekend event board with tag filters
+    EventCard.tsx           -- event card (thumbnail or 404 sigil)
     RecalibratePanel.tsx    -- AI budget recalibrate with guidance textarea
     LedgerPanel.tsx         -- full client ledger
     RecentLedger.tsx        -- overview ledger (last 10)
@@ -234,6 +258,7 @@ middleware.ts               -- JWT session guard for all mutating API routes
 - **Gemini model must be `gemini-2.5-flash`** (`gemini-2.0-flash` deprecated). Set via `GEMINI_MODEL` env or default in `env.ts`.
 - **Gemini billing must be enabled** in Google AI Studio — free tier with `limit: 0` returns empty responses.
 - **Node/npm not available in the VM sandbox** — builds and dev server must run on the Windows host.
+- **Don't write the git index from the VM** (`git add`, `rm --cached`, `restore --staged`, `reset`): `.git/index` races with GitHub Desktop and can read as "every file deleted". Leave staging to GitHub Desktop.
 - **Enable Banking re-auth every 90 days** — `$ re-link bank` button on overview triggers `/api/auth/start`.
 
 ---
