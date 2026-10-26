@@ -17,12 +17,13 @@ interface DrillTx {
 
 /**
  * bills = budget follows the bills checklist, not editable.
+ * buffer = unassigned income (zero-based), computed, not editable.
  * fixed = editable by hand, never changed by AI recalibration or adaptive moves.
  */
-export type BudgetLock = "bills" | "fixed" | null;
+export type BudgetLock = "bills" | "buffer" | "fixed" | null;
 
-// Mirror of the server-side guard: core categories can't be deleted.
-const UNDELETABLE = new Set(["Uncategorized", "Income", "Transfers", "Savings"]);
+// Mirror of UNDELETABLE in src/lib/budget-rules.ts (server-only module).
+const UNDELETABLE = new Set(["Uncategorized", "Income", "Transfers", "Savings", "Bills & Utilities", "Buffer"]);
 
 type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "error"; msg: string };
 
@@ -62,7 +63,7 @@ export function BudgetBar({
   const over     = (row.pct ?? 0) > 1;
   const adjusted = row.adjustment !== 0;
   const canDrill = !!range;
-  const canEditLimit = editable && lock !== "bills";
+  const canEditLimit = editable && lock !== "bills" && lock !== "buffer";
 
   async function patch(body: Record<string, unknown>): Promise<string | null> {
     const res = await fetch("/api/categories", {
@@ -211,6 +212,11 @@ export function BudgetBar({
               [ BILLS ]
             </span>
           )}
+          {lock === "buffer" && (
+            <span className="tag tag-muted" title="Unassigned income. Absorbs overspending first, swept to savings at cycle end">
+              [ BUFFER ]
+            </span>
+          )}
           {lock === "fixed" && (
             <span className="tag tag-muted" title="Never changed by AI recalibration or the adaptive budget">
               [ FIXED ]
@@ -253,6 +259,7 @@ export function BudgetBar({
                     />
                   </label>
                   {lock === "bills" && <span>limit = bills checklist total</span>}
+                  {lock === "buffer" && <span>limit = income minus every other limit</span>}
                   {!UNDELETABLE.has(row.name) && (
                     <button onClick={del} className="btn btn-danger !px-1.5 !py-0.5 text-[0.6rem]">
                       delete category

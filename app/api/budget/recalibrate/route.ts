@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { proposeBudget, applyBudgetProposal, MAX_CHANGE_PCT, type BudgetSet } from "@/lib/gemini/budget";
-import { syncBillsBudget } from "@/lib/budget-rules";
+import { syncBudgetLocks, type BudgetPlan } from "@/lib/budget-rules";
+
+function planLine(p: BudgetPlan): string {
+  if (p.overBy > 0) return `[WARN] limits exceed income (${kr(p.income)}) by ${kr(p.overBy)}: Buffer = 0 kr`;
+  return `[..]   zero-based: income ${kr(p.income)} · assigned ${kr(p.assigned)} · buffer ${kr(p.buffer)}`;
+}
 import { kr } from "@/lib/format";
 
 /** "Shopping 1 500 → 1 800 kr (+20%) · median 1 450 · AI asked 2 500, capped" */
@@ -43,7 +48,8 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       const send = (line: string) => controller.enqueue(encoder.encode(line + "\n"));
       try {
-        const bills = await syncBillsBudget();
+        const { bills, plan } = await syncBudgetLocks();
+        send(planLine(plan));
         if (bills.count > 0) {
           send(`[..]   bills locked to checklist: ${kr(bills.total)} (${bills.count} bill(s))${bills.changed ? " · updated" : ""}`);
         }
@@ -81,6 +87,7 @@ export async function POST(req: NextRequest) {
             else if (a.kind === "new") send(`       [NEW] ${a.name}${amt}${reason}`);
             else send(`       [SKIP] ${a.name}${reason}`);
           });
+          send(planLine((await syncBudgetLocks()).plan));
           const secs = ((Date.now() - t0) / 1000).toFixed(1);
           send(`[DONE] budget recalibrated — ${secs}s`);
         }

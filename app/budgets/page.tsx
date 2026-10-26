@@ -6,7 +6,7 @@ import { BudgetCycleNav } from "../ui/BudgetCycleNav";
 import { Panel } from "../ui/Panel";
 import { RecalibratePanel } from "../ui/RecalibratePanel";
 import { QueryLog } from "../ui/QueryLog";
-import { BILLS_CATEGORY, isLocked, syncBillsBudget } from "@/lib/budget-rules";
+import { BILLS_CATEGORY, BUFFER_CATEGORY, NOT_BUDGETED, isLocked, syncBudgetLocks } from "@/lib/budget-rules";
 import { kr } from "@/lib/format";
 import { withQueryLog } from "@/db/query-log";
 
@@ -26,18 +26,19 @@ export default async function BudgetsPage({
   const isCurrentCycle = !cycleFrom;
 
   const t0 = Date.now();
-  const [[status, cycles], queryLog] = await withQueryLog(async () => {
-    await syncBillsBudget(); // Bills limit = bills checklist total, before we read it
-    return Promise.all([getMonthlyBudgetStatus(ref), getAllSalaryCycles()]);
+  const [[status, cycles, plan], queryLog] = await withQueryLog(async () => {
+    // Bills = checklist total, Buffer = unassigned income; both before we read.
+    const { plan } = await syncBudgetLocks();
+    return Promise.all([getMonthlyBudgetStatus(ref), getAllSalaryCycles(), plan]);
   });
   const tookMs = Date.now() - t0;
 
   const lockOf = (name: string): BudgetLock =>
-    name === BILLS_CATEGORY ? "bills" : isLocked(name) ? "fixed" : null;
+    name === BILLS_CATEGORY ? "bills" : name === BUFFER_CATEGORY ? "buffer" : isLocked(name) ? "fixed" : null;
 
   // Budgeted categories first (has a monthly budget set), then by existing sort order.
   const monthlyRows = status.rows
-    .filter((r) => r.name !== "Transfers")
+    .filter((r) => !NOT_BUDGETED.has(r.name)) // Income and Transfers aren't spending
     .sort((a, b) => {
       const aB = a.budget != null ? 1 : 0;
       const bB = b.budget != null ? 1 : 0;
@@ -60,7 +61,9 @@ export default async function BudgetsPage({
           The engine sets each budget from the median of your last finished salary cycles, so one
           heavy month barely counts, and one-off big purchases are left out. A budget moves at
           most ±20% per run. Manually-set limits are never overwritten, savings are never touched,
-          and bills follow the bills checklist. Written guidance lifts the ±20% limit.
+          and bills follow the bills checklist. Written guidance lifts the ±20% limit. Budgeting is
+          zero-based: whatever income no category is assigned sits in Buffer, which absorbs
+          overspending first and is swept to savings at cycle end.
         </p>
         <RecalibratePanel />
       </Panel>
@@ -73,6 +76,17 @@ export default async function BudgetsPage({
           <p className="text-[0.7rem] uppercase tracking-term text-faint">{status.label}</p>
           <BudgetCycleNav cycles={cycles} currentFrom={displayFrom} />
         </div>
+        {isCurrentCycle && plan.incomeSource !== "none" && (
+          <p className={`mb-3 text-[0.65rem] uppercase tracking-term ${plan.overBy > 0 ? "text-danger" : "text-faint"}`}>
+            income {kr(plan.income)}
+            {plan.incomeSource === "median" ? " (expected)" : ""} · assigned {kr(plan.assigned)} ·{" "}
+            {plan.overBy > 0 ? (
+              <>over-assigned by {kr(plan.overBy)}: lower a limit</>
+            ) : (
+              <>buffer {kr(plan.buffer)}</>
+            )}
+          </p>
+        )}
         {!isCurrentCycle && (
           <p className="mb-2 text-[0.65rem] text-faint">
             [ HISTORICAL ] budgets shown are your current limits applied to that period&apos;s spending.

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { BILLS_CATEGORY } from "@/lib/budget-rules";
+import { BILLS_CATEGORY, BUFFER_CATEGORY, UNDELETABLE, syncBudgetLocks } from "@/lib/budget-rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +29,12 @@ export async function PATCH(req: NextRequest) {
     if (cat?.name === BILLS_CATEGORY) {
       return NextResponse.json(
         { error: "Bills budget is locked to the bills checklist. Edit the recurring payments instead." },
+        { status: 409 }
+      );
+    }
+    if (cat?.name === BUFFER_CATEGORY) {
+      return NextResponse.json(
+        { error: "Buffer is the unassigned part of your income. Change another limit and it follows." },
         { status: 409 }
       );
     }
@@ -61,6 +67,7 @@ export async function PATCH(req: NextRequest) {
     .returning();
 
   if (!updated) return NextResponse.json({ error: "not found" }, { status: 404 });
+  await syncBudgetLocks(); // zero-based: Buffer follows every limit change
   return NextResponse.json({ category: updated });
 }
 
@@ -92,12 +99,13 @@ export async function POST(req: NextRequest) {
     })
     .returning();
 
+  await syncBudgetLocks();
   return NextResponse.json({ category: created }, { status: 201 });
 }
 
 // Core categories the app depends on (period detection, transfer/savings logic,
-// and the categorization fallback). These cannot be deleted.
-const UNDELETABLE = new Set(["Uncategorized", "Income", "Transfers", "Savings"]);
+// the categorization fallback, the bills lock and the zero-based Buffer) can't
+// be deleted. See UNDELETABLE in budget-rules.ts.
 
 // Delete a category. Transactions referencing it fall back to NULL (FK is
 // ON DELETE SET NULL), so history is preserved — the rows just become
@@ -124,5 +132,6 @@ export async function DELETE(req: NextRequest) {
   }
 
   await db.delete(categories).where(eq(categories.id, id));
+  await syncBudgetLocks(); // its limit is freed: Buffer takes it
   return NextResponse.json({ ok: true });
 }

@@ -8,7 +8,7 @@ import { evaluateAdaptiveForCategories } from "./adaptive";
 import { checkTrajectory } from "./trajectory";
 import { runPeriodSweep } from "@/lib/savings";
 import { runGameEval } from "@/lib/game/eval";
-import { syncBillsBudget } from "@/lib/budget-rules";
+import { syncBudgetLocks } from "@/lib/budget-rules";
 import type { NewTransaction } from "@/db/schema";
 
 /**
@@ -39,12 +39,14 @@ export async function runBehaviorPipeline(
     console.error("recurring detection failed:", e);
   }
 
-  // Bills budget follows the bills checklist (new/changed recurrings above).
+  // Bills budget follows the bills checklist (new/changed recurrings above),
+  // then Buffer takes the unassigned income (a new salary may have landed).
   try {
-    const bills = await syncBillsBudget();
+    const { bills, plan } = await syncBudgetLocks();
     if (bills.changed) onLog?.(`[SYNC] bills budget locked to checklist: ${Math.round(bills.total)} kr`);
+    if (plan.overBy > 0) onLog?.(`[WARN] limits exceed income by ${Math.round(plan.overBy)} kr`);
   } catch (e) {
-    console.error("bills budget sync failed:", e);
+    console.error("budget lock sync failed:", e);
   }
 
   // Missing-payment alerts.

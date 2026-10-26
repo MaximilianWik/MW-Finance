@@ -4,7 +4,17 @@ import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { sendNtfy } from "@/lib/notify";
 import { kr } from "@/lib/format";
 import { env } from "@/lib/env";
-import { isLocked } from "@/lib/budget-rules";
+import { isLocked, BUFFER_CATEGORY } from "@/lib/budget-rules";
+import { getSalaryCycle } from "@/lib/period";
+
+/** Assumed cycle length while the next salary hasn't landed yet. */
+const OPEN_CYCLE_DAYS = 30;
+
+function addDaysIso(isoDate: string, n: number): string {
+  const d = new Date(isoDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * Adaptive/live budgeting.
@@ -49,13 +59,6 @@ function monthRangeUTC(month: string): { from: string; to: string; daysInMonth: 
   };
 }
 
-function daysLeftInMonth(month: string): number {
-  const { to, today } = monthRangeUTC(month);
-  const t = new Date(to + "T00:00:00Z").getTime();
-  const n = new Date(today + "T00:00:00Z").getTime();
-  return Math.max(0, Math.round((t - n) / 86400_000));
-}
-
 interface CategoryState {
   categoryId: number;
   name: string;
@@ -66,9 +69,16 @@ interface CategoryState {
   remaining: number; // effective - spent (may be negative)
 }
 
-/** Load per-category state for the given month. */
-export async function loadCategoryState(month: string): Promise<CategoryState[]> {
-  const { from, to } = monthRangeUTC(month);
+/**
+ * Load per-category state for the given month key. Pass `range` to measure
+ * spend over a salary cycle (adaptive does); without it the calendar month
+ * is used (trajectory).
+ */
+export async function loadCategoryState(
+  month: string,
+  range?: { from: string; to: string }
+): Promise<CategoryState[]> {
+  const { from, to } = range ?? monthRangeUTC(month);
 
   const spentExpr = sql<number>`coalesce(-sum(case when ${transactions.signed} < 0 then ${transactions.signed} else 0 end), 0)::float`;
 
@@ -133,13 +143,21 @@ export async function runAdaptiveRedistribution(
   categoryId: number,
   today = new Date()
 ): Promise<AdaptiveResult> {
-  const month = today.toISOString().slice(0, 7);
-  if (daysLeftInMonth(month) < MIN_DAYS_LEFT) {
+  // Same key and range as the budget page (getMonthlyBudgetStatus): the
+  // salary cycle, keyed by the month it started in.
+  const todayIso = today.toISOString().slice(0, 10);
+  const cycle = await getSalaryCycle(today);
+  const month = cycle.ym;
+  const cycleEnd = cycle.to ?? addDaysIso(cycle.from, OPEN_CYCLE_DAYS - 1);
+  const daysLeft = Math.round(
+    (new Date(cycleEnd + "T00:00:00Z").getTime() - new Date(todayIso + "T00:00:00Z").getTime()) / 86400_000
+  );
+  if (daysLeft < MIN_DAYS_LEFT) {
     return { triggered: false };
   }
 
   const { triggerPercent, capPercent } = await loadSettings();
-  const state = await loadCategoryState(month);
+  const state = await loadCategoryState(month, { from: cycle.from, to: todayIso });
   const target = state.find((s) => s.categoryId === categoryId);
   if (!target || target.effective <= 0) return { triggered: false };
   if (isLocked(target.name)) return { triggered: false }; // bills/savings never get topped up
@@ -155,7 +173,12 @@ export async function runAdaptiveRedistribution(
   const donation = overshoot > 0 ? overshoot : target.spent - target.effective * (triggerPercent / 100);
   if (donation <= 0) return { triggered: false };
 
-  // Donors: positive-slack categories other than the recipient.
+  // Buffer (unassigned income) pays first, without a cap: that is its job.
+  const buffer = state.find((s) => s.name === BUFFER_CATEGORY && s.categoryId !== categoryId);
+  const fromBuffer = buffer ? Math.max(0, Math.min(donation, buffer.remaining)) : 0;
+  const rest = donation - fromBuffer;
+
+  // Then: positive-slack categories other than the recipient, each capped.
   const donors = state
     // Locked categories (Savings, Bills, …) are never donors.
     .filter((s) => s.categoryId !== categoryId && !isLocked(s.name) && s.base > 0 && s.remaining > 0)
@@ -167,12 +190,15 @@ export async function runAdaptiveRedistribution(
     .filter((s) => s.slack > 0)
     .sort((a, b) => b.slack - a.slack);
 
-  if (donors.length === 0) return { triggered: false };
+  if (donors.length === 0 && fromBuffer <= 0) return { triggered: false };
 
   const totalSlack = donors.reduce((s, d) => s + d.slack, 0);
-  const moveable = Math.min(donation, totalSlack);
+  const moveable = Math.min(rest, totalSlack);
 
   const moves: Array<{ fromCategoryId: number; fromName: string; amount: number }> = [];
+  if (buffer && fromBuffer > 0) {
+    moves.push({ fromCategoryId: buffer.categoryId, fromName: buffer.name, amount: fromBuffer });
+  }
   let remaining = moveable;
   for (const d of donors) {
     if (remaining <= 0) break;

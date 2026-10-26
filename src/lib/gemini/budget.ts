@@ -3,7 +3,7 @@ import { categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { geminiModel } from "./client";
 import { getFinancialContext, type FinancialContext } from "./context";
-import { isLocked } from "@/lib/budget-rules";
+import { isLocked, getCycleIncome, BUFFER_CATEGORY, NOT_BUDGETED } from "@/lib/budget-rules";
 import { clampChange } from "@/lib/budget-baseline";
 
 /** Max change per category per recalibration (C). Written guidance lifts it. */
@@ -76,16 +76,19 @@ const SYSTEM = [
   "- 'reasoning' = 3–6 short terminal-style lines explaining the logic. No markdown, no emoji.",
 ].join("\n");
 
-function buildPrompt(ctx: FinancialContext, guidance?: string): string {
+function buildPrompt(ctx: FinancialContext, income: number, guidance?: string): string {
   const catLines = ctx.categories
     .filter((c) => !isLocked(c.name))
     .map(
       (c) =>
         `  { id: ${c.id}, name: "${c.name}", currentBudget: ${c.budgetMonthly ?? "null"}, medianSpend: ${c.medianMonthlySpend}, cycleSpend: [${c.cycleSpend.join(", ")}], source: "${c.budgetSource ?? "none"}" }`
     );
-  const lockedLines = ctx.categories
-    .filter((c) => isLocked(c.name) && c.budgetMonthly != null)
-    .map((c) => `  - ${c.name}: ${c.budgetMonthly} kr (locked)`);
+  const locked = ctx.categories.filter(
+    (c) => isLocked(c.name) && !NOT_BUDGETED.has(c.name) && c.name !== BUFFER_CATEGORY && c.budgetMonthly != null
+  );
+  const lockedLines = locked.map((c) => `  - ${c.name}: ${c.budgetMonthly} kr (locked)`);
+  const lockedTotal = Math.round(locked.reduce((s, c) => s + (c.budgetMonthly ?? 0), 0));
+  const toAssign = Math.max(0, income - lockedTotal);
   const oneOffLines = ctx.oneOffs.map(
     (o) => `  - ${o.bookingDate} ${o.merchant ?? "?"}: ${Math.round(o.amount)} kr in ${o.categoryName} (normal purchase there ~${Math.round(o.typical)} kr)`
   );
@@ -93,7 +96,10 @@ function buildPrompt(ctx: FinancialContext, guidance?: string): string {
     (r) => `  - ${r.notes ?? r.merchant}: ${r.amount} kr ${r.cadence}${r.variableAmount ? " (variable)" : ""}`
   );
   return [
-    `Monthly income (avg over ${ctx.nCycles} cycle(s)): ${ctx.monthlyIncome} kr`,
+    `Income this salary cycle: ${income} kr`,
+    `ZERO-BASED: locked limits total ${lockedTotal} kr, so ${toAssign} kr is left to assign across the categories below. ` +
+      `Whatever you leave unassigned goes to "${BUFFER_CATEGORY}" automatically (unplanned spending, swept to savings at cycle end). ` +
+      `The sum of your budgets must not exceed ${toAssign} kr. Keep a sensible buffer; don't pad categories just to use it up.`,
     `All-time savings: ${ctx.savingsTotal} kr`,
     ctx.primaryGoal
       ? `Primary goal: ${ctx.primaryGoal.name}, ${ctx.primaryGoal.current}/${ctx.primaryGoal.target} kr`
@@ -166,8 +172,8 @@ export function parseLenientJson(text: string): unknown {
 
 /** Ask Gemini for a budget proposal. Pure — writes nothing. */
 export async function proposeBudget(guidance?: string): Promise<BudgetProposal> {
-  const ctx = await getFinancialContext();
-  const prompt = buildPrompt(ctx, guidance);
+  const [ctx, { income }] = await Promise.all([getFinancialContext(), getCycleIncome()]);
+  const prompt = buildPrompt(ctx, income || ctx.monthlyIncome, guidance);
   let parsed: Partial<BudgetProposal>;
   try {
     const res = await geminiModel({ system: SYSTEM, json: true, temperature: 0.3 }).generateContent(prompt);
