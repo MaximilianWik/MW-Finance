@@ -26,6 +26,22 @@ function addDays(iso: string, days: number): string {
   return new Date(d.getTime() + days * 86400_000).toISOString().slice(0, 10);
 }
 
+/**
+ * The bill's occurrence in the viewed month. `nextDate` moves forward by one
+ * cadence after each payment (so it is often next month), and it can also be
+ * stale (a merchant that changed name never advances). Step it back by the
+ * cadence until it is on/before the month end, then forward until it is on/after
+ * the month start. For a bill that recurs several times a month (weekly), that is
+ * the latest occurrence in the month. May land after the month end when the bill
+ * has no occurrence in this month (e.g. a yearly bill due in March).
+ */
+export function occurrenceInMonth(nextDate: string, stepDays: number, from: string, to: string): string {
+  let d = nextDate;
+  for (let i = 0; d > to && i < 600; i++) d = addDays(d, -stepDays);
+  for (let i = 0; d < from && i < 600; i++) d = addDays(d, stepDays);
+  return d;
+}
+
 function isoYm(d: Date): string {
   return d.toISOString().slice(0, 7);
 }
@@ -88,6 +104,7 @@ export async function getBillsChecklist(
 
   // Pre-compute month bounds for historical checks (same for every recurring).
   const monthBounds = isHistorical ? monthBoundsFromYm(month) : null;
+  const viewBounds = monthBoundsFromYm(month);
 
   // Build items with paid detection per recurring.
   const items: BillItem[] = [];
@@ -95,6 +112,10 @@ export async function getBillsChecklist(
   for (const r of recs) {
     let state: BillState;
     let paidOnDate: string | null = null;
+    let expectedThisMonth: string | null = null;
+
+    const cadenceFallback = r.cadence === "weekly" ? 7 : r.cadence === "yearly" ? 365 : 30;
+    const cadenceStep = r.cadenceDays ?? cadenceFallback;
 
     if (isHistorical && monthBounds) {
       // ── Historical month ──────────────────────────────────────────────────
@@ -126,18 +147,22 @@ export async function getBillsChecklist(
 
     } else if (r.nextDate) {
       // ── Current / upcoming month ──────────────────────────────────────────
-      // Check within ±MATCH_WINDOW_DAYS of the expected date so slightly
-      // early or late payments (like "expected 28 Jun, paid 30 Jun") are
-      // correctly detected.
-      const wFrom = addDays(r.nextDate, -MATCH_WINDOW_DAYS);
-      const wTo   = addDays(r.nextDate,  MATCH_WINDOW_DAYS);
+      // Anchor on this month's occurrence (not raw nextDate, which has usually
+      // already advanced to next month once paid), then check within
+      // ±MATCH_WINDOW_DAYS so slightly early or late payments still count.
+      expectedThisMonth = occurrenceInMonth(r.nextDate, cadenceStep, viewBounds.from, viewBounds.to);
+      const wFrom = addDays(expectedThisMonth, -MATCH_WINDOW_DAYS);
+      const wTo   = addDays(expectedThisMonth,  MATCH_WINDOW_DAYS);
 
       const [hit] = await db
         .select({ bookingDate: transactions.bookingDate })
         .from(transactions)
         .where(
           and(
-            eq(transactions.merchant, r.merchant),
+            or(
+              eq(transactions.merchant, r.merchant),
+              eq(transactions.counterpartyName, r.merchant)
+            )!,
             eq(transactions.direction, "DBIT"),
             gte(transactions.bookingDate, wFrom),
             lte(transactions.bookingDate, wTo)
@@ -149,9 +174,9 @@ export async function getBillsChecklist(
       if (hit?.bookingDate) {
         paidOnDate = hit.bookingDate;
         state = "paid";
-      } else if (r.nextDate.slice(0, 7) > month) {
+      } else if (expectedThisMonth.slice(0, 7) > month) {
         state = "upcoming";
-      } else if (r.nextDate <= graceCutoff) {
+      } else if (expectedThisMonth <= graceCutoff) {
         state = "overdue";
       } else {
         state = "due";
@@ -162,9 +187,6 @@ export async function getBillsChecklist(
     }
 
     // Compute what nextDate would be if advanced by one cadence.
-    const cadenceFallback = r.cadence === "weekly" ? 7 : r.cadence === "yearly" ? 365 : 30;
-    const cadenceStep = r.cadenceDays ?? cadenceFallback;
-
     let advancedNextDate: string | null = null;
     if (r.nextDate) {
       advancedNextDate = addDays(r.nextDate, cadenceStep);
@@ -184,7 +206,7 @@ export async function getBillsChecklist(
       amount: r.amount,
       cadence: r.cadence,
       cadenceDays: r.cadenceDays,
-      expectedOn: historicalExpectedOn ?? r.nextDate,
+      expectedOn: historicalExpectedOn ?? expectedThisMonth ?? r.nextDate,
       paidOnDate,
       advancedNextDate,
       state,
