@@ -88,6 +88,11 @@ export function BudgetBar({
   const ratio    = hasBudget ? row.pct ?? 0 : 0;
   const over     = (row.pct ?? 0) > 1;
   const adjusted = row.adjustment !== 0;
+  // Over your own limit, even if adaptive moves covered it: never hide this.
+  const overBase =
+    !over && row.adjustment > 0 && row.baseBudget != null && row.spent > row.baseBudget + 0.5
+      ? row.spent - row.baseBudget
+      : 0;
   const canDrill = !!range;
   const canEditLimit = editable && lock !== "bills";
 
@@ -192,7 +197,7 @@ export function BudgetBar({
                 value={limit}
                 placeholder="—"
                 aria-label={`${row.name} monthly limit`}
-                title={adjusted ? `Base limit. Adaptive adjustment this cycle: ${krSigned(row.adjustment)}` : "Monthly limit"}
+                title={adjusted ? `Your base limit. Adaptive adjustment this cycle: ${krSigned(row.adjustment)}` : "Monthly limit"}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
                   setLimit(e.target.value);
@@ -210,6 +215,14 @@ export function BudgetBar({
                   save.kind === "error" ? "!border-danger" : ""
                 }`}
               />
+              {adjusted && hasBudget && (
+                <span
+                  className={`ml-1.5 ${row.adjustment > 0 ? "text-ok" : "text-amber"}`}
+                  title={`Effective limit this cycle: base ${kr(row.baseBudget ?? 0)} ${krSigned(row.adjustment)} adaptive. The bar and % use this.`}
+                >
+                  → {kr(row.budget)}
+                </span>
+              )}
               <span className="ml-1 inline-block w-4 text-left">
                 {save.kind === "saving" && <span className="text-faint">…</span>}
                 {save.kind === "saved" && <span className="text-ok">✓</span>}
@@ -246,10 +259,22 @@ export function BudgetBar({
           {adjusted && (
             <span
               className={`tag ml-1 ${row.adjustment > 0 ? "tag-ok" : "tag-warn"}`}
-              title={`Adaptive adjustment ${row.adjustment > 0 ? "+" : ""}${kr(row.adjustment)}`}
+              title={
+                row.adjustment > 0
+                  ? `Adaptive: +${kr(row.adjustment)} moved in from other categories this cycle`
+                  : `Adaptive: ${kr(-row.adjustment)} given to other categories this cycle (pace says it is not needed)`
+              }
             >
               {row.adjustment > 0 ? "+" : ""}
               {Math.round(row.adjustment)}
+            </span>
+          )}
+          {overBase > 0 && (
+            <span
+              className="tag tag-warn ml-1"
+              title={`${kr(overBase)} over your own limit of ${kr(row.baseBudget ?? 0)}. Covered by money moved from other categories.`}
+            >
+              [ OVER BASE +{Math.round(overBase)} ]
             </span>
           )}
           {over && <span className="tag tag-danger ml-1">[ OVER ]</span>}

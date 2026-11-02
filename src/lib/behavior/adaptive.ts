@@ -22,7 +22,9 @@ function addDaysIso(isoDate: string, n: number): string {
  * When a fresh transaction pushes its category over the trigger threshold
  * (default 90 % of the effective budget) AND there are ≥ MIN_DAYS_LEFT days
  * left in the month, we redistribute the overshoot from categories with the
- * most slack. Each donor category may lose at most cap % of its base budget.
+ * most slack. Each donor category may lose at most cap % of its base budget
+ * over the whole cycle (not per move), and only gives what its own pace says
+ * it will not use: effective − spent ÷ days elapsed × cycle length.
  *
  * The redistribution is persisted as `budget_adjustments` rows: a negative
  * delta on the donor(s) and a positive delta on the recipient (net zero).
@@ -32,6 +34,8 @@ function addDaysIso(isoDate: string, n: number): string {
  */
 
 const MIN_DAYS_LEFT = 7;
+/** Pace is noise in the first days of a cycle: no donors before this. */
+const MIN_DAYS_ELAPSED = 7;
 
 interface Settings {
   triggerPercent: number;
@@ -155,6 +159,14 @@ export async function runAdaptiveRedistribution(
   if (daysLeft < MIN_DAYS_LEFT) {
     return { triggered: false };
   }
+  const dayMs = 86400_000;
+  const daysElapsed =
+    Math.round((new Date(todayIso + "T00:00:00Z").getTime() - new Date(cycle.from + "T00:00:00Z").getTime()) / dayMs) + 1;
+  const cycleDays =
+    Math.round((new Date(cycleEnd + "T00:00:00Z").getTime() - new Date(cycle.from + "T00:00:00Z").getTime()) / dayMs) + 1;
+  if (daysElapsed < MIN_DAYS_ELAPSED) {
+    return { triggered: false };
+  }
 
   const { triggerPercent, capPercent } = await loadSettings();
   const state = await loadCategoryState(month, { from: cycle.from, to: todayIso });
@@ -173,15 +185,28 @@ export async function runAdaptiveRedistribution(
   const donation = overshoot > 0 ? overshoot : target.spent - target.effective * (triggerPercent / 100);
   if (donation <= 0) return { triggered: false };
 
-  // Donors: positive-slack categories other than the recipient.
+  // Donors: categories whose pace leaves money over at cycle end.
+  //   capLeft   = cap % of base − what it already gave this cycle (net)
+  //   leftover  = effective − projected spend at the current pace
+  //   slack     = min(leftover, capLeft, remaining now)
+  // Locked categories (Savings, Bills, …) never donate; a category that has
+  // received money (net adj > 0) does not give it back.
   const donors = state
-    // Locked categories (Savings, Bills, …) are never donors.
-    .filter((s) => s.categoryId !== categoryId && !isLocked(s.name) && s.base > 0 && s.remaining > 0)
-    .map((s) => ({
-      ...s,
-      cap: (capPercent / 100) * s.base,
-      slack: Math.min(s.remaining, (capPercent / 100) * s.base),
-    }))
+    .filter(
+      (s) =>
+        s.categoryId !== categoryId &&
+        !isLocked(s.name) &&
+        s.base > 0 &&
+        s.adj <= 0 &&
+        s.remaining > 0 &&
+        s.spent / s.effective < triggerPercent / 100
+    )
+    .map((s) => {
+      const capLeft = (capPercent / 100) * s.base - Math.max(0, -s.adj);
+      const projected = (s.spent / daysElapsed) * cycleDays;
+      const leftover = s.effective - projected;
+      return { ...s, slack: Math.min(leftover, capLeft, s.remaining) };
+    })
     .filter((s) => s.slack > 0)
     .sort((a, b) => b.slack - a.slack);
 
