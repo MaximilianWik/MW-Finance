@@ -1,11 +1,14 @@
+import { db } from "@/db";
+import { gameState } from "@/db/schema";
 import { getDailyPace, getDailySpendMap, todayIso, shiftIso } from "./pace";
 
 export interface DayRecord {
   date: string;      // YYYY-MM-DD
   spend: number;
   pace: number;
-  clean: boolean;    // spend <= pace (including zero-spend days)
-  breach: boolean;   // spend > pace
+  clean: boolean;    // spend <= pace (including zero-spend days), or shielded
+  breach: boolean;   // spend > pace and no shield absorbed it
+  shielded: boolean; // spend > pace, absorbed by a shield (streak kept)
   noSpend: boolean;  // zero spend (clean subset, shown differently)
 }
 
@@ -31,7 +34,11 @@ export async function getDayHistory(days = 84): Promise<DayRecord[]> {
       86400_000
   ) + 1;
 
-  const spendMap = await getDailySpendMap(start, today);
+  const [spendMap, [gs]] = await Promise.all([
+    getDailySpendMap(start, today),
+    db.select({ shieldedDays: gameState.shieldedDays }).from(gameState).limit(1),
+  ]);
+  const shieldedSet = new Set(gs?.shieldedDays ?? []);
   const eps = 0.5;
   const records: DayRecord[] = [];
 
@@ -39,12 +46,15 @@ export async function getDayHistory(days = 84): Promise<DayRecord[]> {
     const date = shiftIso(start, i);
     const isFuture = date > today;
     const spend = isFuture ? 0 : (spendMap.get(date) ?? 0);
+    const over = !isFuture && spend > pace + eps;
+    const shielded = over && shieldedSet.has(date);
     records.push({
       date,
       spend,
       pace,
-      clean:   isFuture || spend <= pace + eps,
-      breach:  !isFuture && spend > pace + eps,
+      clean:   isFuture || !over || shielded,
+      breach:  over && !shielded,
+      shielded,
       noSpend: !isFuture && spend <= eps,
     });
   }

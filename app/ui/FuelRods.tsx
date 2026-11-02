@@ -16,7 +16,7 @@ const BASE_Y = PAD_TOP + ROD_MAX_H;
 const PACE_FRAC = 0.16; // min-containment threshold line, as fraction of ROD_MAX_H
 const MAX_RODS = 42;
 
-type RodState = "nospend" | "under" | "breach" | "empty";
+type RodState = "nospend" | "under" | "breach" | "shielded" | "empty";
 
 interface Rod {
   rec: DayRecord;
@@ -28,6 +28,7 @@ const FILL: Record<RodState, string> = {
   nospend: "url(#rodCyan)",
   under:   "url(#rodGreen)",
   breach:  "url(#rodRed)",
+  shielded: "url(#rodViolet)",
   empty:   "#16161c",
 };
 
@@ -35,11 +36,13 @@ const READOUT_COLOR: Record<RodState, string> = {
   nospend: "#5cc8e8",
   under:   "#4ec96a",
   breach:  "#e85252",
+  shielded: "#a08cff",
   empty:   "#454552",
 };
 
 function classify(r: DayRecord, today: string): Rod {
   if (!r.date || r.date > today) return { rec: r, state: "empty", fill: 0 };
+  if (r.shielded) return { rec: r, state: "shielded", fill: PACE_FRAC * 0.85 }; // over pace, but a shield held it
   if (r.breach)  return { rec: r, state: "breach",  fill: PACE_FRAC * 0.85 }; // hot stub below the line
   if (r.noSpend) return { rec: r, state: "nospend", fill: 1 };
   const margin = r.pace > 0 ? Math.max(0, Math.min(1, (r.pace - r.spend) / r.pace)) : 0;
@@ -57,6 +60,7 @@ function readout(rod: Rod): string {
   if (state === "empty") return `${rec.date ? dayLabel(rec.date) : "—"} · no data`;
   const label = dayLabel(rec.date);
   if (state === "breach")  return `${label} · BREACH +${kr(rec.spend - rec.pace)} over pace`;
+  if (state === "shielded") return `${label} · +${kr(rec.spend - rec.pace)} over pace · SHIELD ABSORBED · uptime kept`;
   if (state === "nospend") return `${label} · no spend · CONTAINED`;
   return `${label} · ${kr(rec.spend)} of ${kr(rec.pace)} pace · CONTAINED`;
 }
@@ -64,7 +68,8 @@ function readout(rod: Rod): string {
 /**
  * Reactor fuel-rod bank: the last 42 days rendered as glowing vertical fuel rods
  * inside a containment vessel. Column height = containment margin (headroom under
- * daily pace). Full cyan = zero spend, green = under pace, red hot stub = breach.
+ * daily pace). Full cyan = zero spend, green = under pace, red hot stub = breach,
+ * violet stub with a ◆ cap = breach absorbed by a shield.
  * Hover or tap a rod for its detail readout; click pins it.
  */
 export function FuelRods({
@@ -93,6 +98,7 @@ export function FuelRods({
   const pastRecords = records.filter((r) => !!r.date && r.date <= today);
   const cleanCount  = pastRecords.filter((r) => r.clean).length;
   const breachCount = pastRecords.filter((r) => r.breach).length;
+  const shieldedCount = pastRecords.filter((r) => r.shielded).length;
 
   const activeIdx = pinned ?? hovered;
   const active = activeIdx != null ? rods[activeIdx] : null;
@@ -144,6 +150,9 @@ export function FuelRods({
           <linearGradient id="rodRed" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#ff9a4a" /><stop offset="100%" stopColor="#b81f1f" />
           </linearGradient>
+          <linearGradient id="rodViolet" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#c7b9ff" /><stop offset="100%" stopColor="#5b47c9" />
+          </linearGradient>
           <linearGradient id="coolant" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#2a8fb0" stopOpacity="0.55" />
             <stop offset="100%" stopColor="#0e2a36" stopOpacity="0.15" />
@@ -173,6 +182,7 @@ export function FuelRods({
           const h = rod.fill * ROD_MAX_H;
           const y = BASE_Y - h;
           const isBreach = rod.state === "breach";
+          const isShielded = rod.state === "shielded";
           const isNoSpend = rod.state === "nospend";
 
           return (
@@ -200,6 +210,16 @@ export function FuelRods({
                   x={x + 1} y={PAD_TOP + 2} width={RW - 2} height={5} rx={1.5}
                   fill="#e85252"
                 />
+              )}
+
+              {/* Shield cap: the breach was absorbed, the rod stays in */}
+              {isShielded && (
+                <text
+                  x={x + RW / 2} y={PAD_TOP + 10} textAnchor="middle"
+                  fontSize="9" fill="#a08cff"
+                >
+                  {"\u25c6"}
+                </text>
               )}
 
               {/* Rising coolant bubbles on zero-spend rods */}
@@ -234,6 +254,7 @@ export function FuelRods({
           { color: "#5cc8e8", label: "no spend" },
           { color: "#4ec96a", label: "under pace" },
           { color: "#e85252", label: "breach" },
+          { color: "#a08cff", label: "shielded" },
           { color: "#16161c", label: "no data" },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1.5">
@@ -241,7 +262,7 @@ export function FuelRods({
             <span className="text-faint">{label}</span>
           </span>
         ))}
-        <span className="ml-auto text-faint/70">{cleanCount} clean · {breachCount} breach</span>
+        <span className="ml-auto text-faint/70">{cleanCount} clean · {breachCount} breach{shieldedCount > 0 ? ` · ${shieldedCount} shielded` : ""}</span>
       </div>
     </div>
   );
