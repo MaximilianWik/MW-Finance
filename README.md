@@ -206,6 +206,8 @@ erDiagram
     int       best_streak
     date      last_eval_date
     int       shields
+    text[]    shielded_days
+    int       last_streak
     int       directive_streak
     text      last_directive_week
     int       budget_xp
@@ -333,7 +335,7 @@ budget: 3 XP per 100 kr under budget at end of salary cycle
 | OMNIVERSE | 150 000 | Nested fractal realities, hue-shifting mandala |
 | OBLIVION | 250 000 | Spiked flashing crimson blades around an ominous void core |
 
-**Shields:** earn 1 per completed 7-day streak block (max 3). A breach consumes a shield rather than resetting uptime.
+**Shields:** earn 1 per 7 clean days added to the current run (max 3 banked; not only on a new record). A breach day uses a shield instead of resetting uptime. Absorbed days are stored in `game_state.shielded_days` and count as clean on every later read. Because bank booking dates lag, the eval also absorbs breaches up to 5 days before the last eval, and running it twice on one day uses no extra shield.
 
 **Weekly directives (5 challenges):** Hold Containment, Dark Reactor, Cold Kitchen, Deploy Capital, Fuel the Reserve. Resolve on eval or nightly after sync.
 
@@ -456,7 +458,7 @@ Click `$ sync now` on the overview, complete BankID, and transactions start flow
 |---|---|
 | `level.ts` | XP formula (scaling streak, investment-only capital), 12 tiers, `computeXp`, `levelFromXp` |
 | `pace.ts` | Daily pace (budget / cycle days), daily spend map, week/ISO-week helpers |
-| `streak.ts` | Containment uptime, `getStreakAsOf` for shield absorption |
+| `streak.ts` | Containment uptime (shielded days count clean), `absorbBreaches` for shield use |
 | `pot.ts` | Stored charge capacitor (weekly under-pace surplus) |
 | `history.ts` | 42/84-day containment log data (`getDayHistory`) |
 | `velocity.ts` | Next-milestone tracker (closest not-yet-unlocked achievement by % remaining) |

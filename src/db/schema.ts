@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ─── Bank sessions (one per successful consent) ─────────────────────────────
 export const bankSessions = pgTable("bank_sessions", {
@@ -310,6 +311,11 @@ export const gameState = pgTable("game_state", {
   bestStreak:        integer("best_streak").notNull().default(0),
   lastEvalDate:      date("last_eval_date"),
   shields:           integer("shields").notNull().default(0),
+  // Days a shield absorbed (ISO dates). The streak walk treats them as clean,
+  // so an absorbed breach stays absorbed on every later read.
+  shieldedDays:      text("shielded_days").array().notNull().default(sql`'{}'::text[]`),
+  // Effective streak at the last eval; shields are earned per 7 days on top of it.
+  lastStreak:        integer("last_streak").notNull().default(0),
   directiveStreak:   integer("directive_streak").notNull().default(0),
   lastDirectiveWeek: text("last_directive_week"),
   // Budget discipline: accumulated XP from salary cycles ended under budget.

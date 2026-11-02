@@ -9,6 +9,13 @@
 
 ## Pending DB Migration
 
+Run in Neon before deploying the shield fix:
+
+```sql
+ALTER TABLE game_state ADD COLUMN IF NOT EXISTS shielded_days text[] NOT NULL DEFAULT '{}';
+ALTER TABLE game_state ADD COLUMN IF NOT EXISTS last_streak integer NOT NULL DEFAULT 0;
+```
+
 Run in Neon before deploying the goals revamp (investment-funded goals):
 
 ```sql

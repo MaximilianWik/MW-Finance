@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { gameState, transactions, categories } from "@/db/schema";
-import { getStreak, getStreakAsOf } from "./streak";
+import { getStreak, absorbBreaches } from "./streak";
 import { getPot } from "./pot";
 import { evaluateChallenges, getChallengeXp, getChallengesCompleted } from "./challenges";
 import { evaluateAchievements, getAchievementXp } from "./achievements";
@@ -26,6 +26,7 @@ export interface GameEvalResult {
 
 const STREAK_MILESTONES = new Set([7, 14, 30, 50, 100]);
 const MAX_SHIELDS = 3;
+const ABSORB_LAG_DAYS = 5; // bank booking lag: breaches this far before the last eval can still be absorbed
 const kr = (n: number) => `${Math.round(n).toLocaleString("sv-SE")} kr`;
 
 async function detectInvestmentSpike(): Promise<boolean> {
@@ -79,50 +80,52 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
   let budgetXp          = gs?.budgetXp          ?? 0;
   let lastBudgetPeriod  = gs?.lastBudgetPeriod  ?? null;
   const storedBest      = gs?.bestStreak        ?? 0;
+  const lastStreak      = gs?.lastStreak        ?? 0;
 
-  // 2. Raw streak.
-  const streak = await getStreak();
   const today  = todayIso();
   const currentWeek = isoWeek(today);
 
-  let effectiveStreak = streak.current;
-  let shielded = false;
+  // 2. Absorb breaches with shields, then compute the streak. Breaches since
+  // the last eval count, with a margin for bank booking lag; absorbed days
+  // are stored, so later runs (and the UI) keep them clean.
+  const since = shiftIso(gs?.lastEvalDate ?? today, -ABSORB_LAG_DAYS);
+  const absorb = await absorbBreaches(shields, gs?.shieldedDays ?? [], since);
+  shields = absorb.shields;
+  const shieldedDays = absorb.shieldedDays;
+  for (const a of absorb.absorbed) {
+    log(`[!] BREACH DETECTED ${a.day}: ${kr(a.spend)} vs pace ${kr(absorb.pace)}`);
+    log(`[SHIELD] CONTAINMENT ABSORBED. Shield consumed. ${shields} shield(s) remaining.`);
+  }
+  const shielded = absorb.absorbed.length > 0;
 
-  if (streak.breachToday) {
-    if (shields > 0) {
-      shields--;
-      shielded = true;
-      const yesterday = shiftIso(today, -1);
-      const prevStreak = await getStreakAsOf(yesterday);
-      effectiveStreak = prevStreak + 1;
-      log(`[!] BREACH DETECTED: ${kr(streak.todaySpend)} vs pace ${kr(streak.pace)}`);
-      log(`[SHIELD] CONTAINMENT ABSORBED. Shield consumed. ${shields} shield(s) remaining.`);
-      log(`[CORE] Uptime maintained at ${effectiveStreak}d via shield.`);
-    } else {
-      effectiveStreak = 0;
-      log(`[!] CONTAINMENT BREACH: ${kr(streak.todaySpend)} vs pace ${kr(streak.pace)}`);
-      log(`[CORE] UPTIME RESET. No shields remaining. Streak: 0d.`);
-    }
+  const streak = await getStreak({ shieldedDays });
+  const effectiveStreak = streak.current;
+  const reset = effectiveStreak < lastStreak; // a breach broke the run since last eval
+
+  if (reset) {
+    log(`[!] CONTAINMENT BREACH. No shield left to absorb it. Uptime ${lastStreak}d -> ${effectiveStreak}d.`);
+  } else if (shielded) {
+    log(`[CORE] Uptime maintained at ${effectiveStreak}d via shield.`);
   } else {
     log(`[OK] Containment stable. Uptime: ${effectiveStreak}d.`);
   }
 
-  // 3. Update best + award shields for newly completed 7-day blocks.
-  const newBest = Math.max(storedBest, effectiveStreak);
-  const prevBlocks = Math.floor(storedBest / 7);
-  const newBlocks  = Math.floor(newBest  / 7);
-  if (newBlocks > prevBlocks) {
-    const toAward = Math.min(MAX_SHIELDS, newBlocks - prevBlocks);
+  // 3. Award 1 shield per 7 clean days added to the current run since the
+  // last eval (not only on a new record). A reset run counts from 0.
+  const base = effectiveStreak >= lastStreak ? lastStreak : 0;
+  const earned = Math.floor(effectiveStreak / 7) - Math.floor(base / 7);
+  if (earned > 0) {
     const hadShields = shields;
-    shields = Math.min(MAX_SHIELDS, shields + toAward);
+    shields = Math.min(MAX_SHIELDS, shields + earned);
     const awarded = shields - hadShields;
     if (awarded > 0) {
-      log(`[SHIELD] ${awarded} shield(s) awarded for ${newBest}d uptime. Total: ${shields}/${MAX_SHIELDS}.`);
-      await sendNtfy(`Reactor shield charged (${shields}/${MAX_SHIELDS}). ${newBest}-day uptime milestone.`, {
+      log(`[SHIELD] ${awarded} shield(s) awarded for ${effectiveStreak}d uptime. Total: ${shields}/${MAX_SHIELDS}.`);
+      await sendNtfy(`Reactor shield charged (${shields}/${MAX_SHIELDS}). ${effectiveStreak}-day uptime.`, {
         title: "Reactor · shield", tags: ["shield"], priority: 3, click: env.appUrl,
       });
     }
   }
+  const newBest = Math.max(storedBest, effectiveStreak);
   if (newBest > storedBest) {
     log(`[STREAK] New best: ${newBest}d.`);
   }
@@ -176,7 +179,7 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
     investmentsTotal: investments,
     bestStreak: newBest, achievementXp, challengeXp, budgetXp,
   });
-  const level = levelFromXp(xp, streak.breachToday && !shielded);
+  const level = levelFromXp(xp, streak.breachToday);
 
   const unlocked = await evaluateAchievements({
     investmentsTotal: investments,
@@ -193,15 +196,15 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
 
   // 7. Write game state.
   await db.insert(gameState)
-    .values({ key: "singleton", bestStreak: newBest, shields, directiveStreak, lastDirectiveWeek, budgetXp, lastBudgetPeriod, lastEvalDate: sql`current_date`, updatedAt: new Date() })
+    .values({ key: "singleton", bestStreak: newBest, shields, shieldedDays, lastStreak: effectiveStreak, directiveStreak, lastDirectiveWeek, budgetXp, lastBudgetPeriod, lastEvalDate: sql`current_date`, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: gameState.key,
-      set: { bestStreak: newBest, shields, directiveStreak, lastDirectiveWeek, budgetXp, lastBudgetPeriod, lastEvalDate: sql`current_date`, updatedAt: new Date() },
+      set: { bestStreak: newBest, shields, shieldedDays, lastStreak: effectiveStreak, directiveStreak, lastDirectiveWeek, budgetXp, lastBudgetPeriod, lastEvalDate: sql`current_date`, updatedAt: new Date() },
     });
 
   // 8. Breach + milestone ntfy.
-  if (streak.breachToday && !shielded) {
-    await sendNtfy(`[!] CONTAINMENT BREACH. ${kr(streak.todaySpend)} vs pace ${kr(streak.pace)}. Uptime reset.`, {
+  if (reset) {
+    await sendNtfy(`[!] CONTAINMENT BREACH. No shield left. Uptime ${lastStreak}d -> ${effectiveStreak}d.`, {
       title: "Reactor · breach", tags: ["rotating_light"], priority: 4, click: env.appUrl,
     });
   } else if (newBest > storedBest && STREAK_MILESTONES.has(newBest)) {
@@ -214,7 +217,7 @@ export async function runGameEval(onLog?: (line: string) => void): Promise<GameE
 
   return {
     currentStreak: effectiveStreak, bestStreak: newBest, shields,
-    breach: streak.breachToday && !shielded ? false : streak.breachToday,
+    breach: reset,
     shielded, directiveStreak, challengesCompleted,
     achievementsUnlocked: unlocked.map((a) => a.id), tier: level.tier.name,
   };
